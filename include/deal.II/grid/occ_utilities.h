@@ -18,19 +18,22 @@
 #ifndef __deal2__occ_utilities_h
 #define __deal2__occ_utilities_h
 
-#if DEAL_II_WITH_OPENCASCADE
+#ifdef DEAL_II_WITH_OPENCASCADE
 
 #include <string>
 #include <TopoDS_Shape.hxx>
-
+#include <IFSelect_ReturnStatus.hxx>
 #include <Geom_Plane.hxx>
 #include <Geom_Curve.hxx>
 #include <gp_Pnt.hxx>
 
 #include <base/point.h>
 
+DEAL_II_NAMESPACE_OPEN
 
 /**
+ * @addtogroup OpenCASCADE
+ * @{
  * We collect in this namespace all utilities which operate on
  * OpenCASCADE entities. OpenCASCADE splits every object into a
  * topological description and a geometrical entity. The basic
@@ -43,7 +46,7 @@
  * where parents refer to their children, and there are no back
  * references. Abstract structure is implemented as C++ classes from
  * the TopoDS package. A TopoDS_Shape is manipulated by value and
- * contains 3 fields – location, orientation and a myTShape handle (of
+ * contains 3 fields: location, orientation and a myTShape handle (of
  * the TopoDS_TShape type). According to OpenCASCADE documentation,
  * myTShape and Location are used to share data between various shapes
  * and thus save huge amounts of memory. For example, an edge
@@ -79,9 +82,20 @@
  *
  * @author Luca Heltai, Andrea Mola, 2011--2014.
  */
-
 namespace OpenCASCADE 
 {
+  /**
+   * Count the subobjects of a shape. This function just outputs some
+   * information about the TopoDS_Shape passed as argument. It counts
+   * the number of faces, edges and vertices (the only topological
+   * entities associated with actual geometries) which are contained
+   * in the given shape.
+   */
+  void count_elements(const TopoDS_Shape &shape,
+		      unsigned int &n_faces,
+		      unsigned int &n_edges,
+		      unsigned int &n_vertices);
+  
   /**
    * Read IGES files and translate their content into openCascade
    * topological entities. The option scale_factor is used to
@@ -90,7 +104,7 @@ namespace OpenCASCADE
    * millimiters. The return object is a TopoDS_Shape which contains
    * all objects from the file. 
    */
-  TopoDS_Shape read_IGES(const std::string filename, 
+  TopoDS_Shape read_IGES(const std::string &filename, 
 			 const double scale_factor=1e-3);
   
   /**
@@ -135,7 +149,7 @@ namespace OpenCASCADE
   {
     gp_Pnt P(p(0), p(1), p(2));
     return P;
-  } 
+  }
   
   /**
    * Sort two points according to their scalar product with
@@ -146,7 +160,7 @@ namespace OpenCASCADE
 			    const dealii::Point<3> direction=Point<3>(),
 			    const double tolerance=1e-10) 
   {
-    const double rel_tol=max(p1.norm(), p2.norm())*tolerance;
+    const double rel_tol=std::max(p1.norm(), p2.norm())*tolerance;
     if(direction.norm())
       return (p1*direction < p2*direction-rel_tol);
     else 
@@ -161,12 +175,15 @@ namespace OpenCASCADE
     return false;
   }
   
-  DeclException1(ExcOpenCASCADEStatus(IFSelect_ReturnStatus, 
-				      "Error! OpenCASCADE function returned " 
-				      << arg1));
+  DeclException1(ExcOpenCASCADEStatus, IFSelect_ReturnStatus,<<"Error! OpenCASCADE function returned "<<arg1);
 				      
 }
+/*@}*/
 
-#endif
+DEAL_II_NAMESPACE_CLOSE
 
+#endif // DEAL_II_WITH_OPENCASCADE
+
+/*------------------------------ occ_utilities.h ------------------------------*/
 #endif
+/*------------------------------ occ_utilities.h ------------------------------*/

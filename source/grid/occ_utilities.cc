@@ -1,5 +1,7 @@
 #include <deal.II/grid/occ_utilities.h>
 
+#ifdef DEAL_II_WITH_OPENCASCADE
+
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -60,29 +62,37 @@
 // #include <BRepBuilderAPI_MakeVertex.hxx>
 // #include <GCPnts_AbscissaPoint.hxx>
 // #include <GeomLProp_CLProps.hxx>
+
 #include <deal.II/base/utilities.h>
+#include <deal.II/base/exceptions.h>
 
 #include <boost/bind.hpp>
 
-
-
 #include <BRep_Builder.hxx>
 
-#define FALSE 0
-#define TRUE 1
 
-
-#include <deal.II/base/exceptions.h>
 #include <vector>
 #include <algorithm>
 
-using namespace dealii;
-using namespace std;
+DEAL_II_NAMESPACE_OPEN
 
-namespace OpenCascade 
+namespace OpenCASCADE
 {
-  
-  TopoDS_Shape read_IGES(const string filename, 
+  void count_elements(const TopoDS_Shape &shape,
+		      unsigned int &n_faces,
+		      unsigned int &n_edges,
+		      unsigned int &n_vertices) {
+    TopExp_Explorer exp;
+    n_faces=0, n_edges=0, n_vertices=0;
+    for(exp.Init(shape, TopAbs_FACE); exp.More(); exp.Next(), ++n_faces) {
+    }
+    for(exp.Init(shape, TopAbs_EDGE); exp.More(); exp.Next(), ++n_edges) {
+    }
+    for(exp.Init(shape, TopAbs_VERTEX); exp.More(); exp.Next(), ++n_vertices) {
+    }    
+  }
+
+  TopoDS_Shape read_IGES(const string &filename, 
 			 const double scale_factor)
   {
     IGESControl_Reader reader;
@@ -234,4 +244,6 @@ namespace OpenCascade
 
 } // end namespace
 
+DEAL_II_NAMESPACE_CLOSE
 
+#endif
