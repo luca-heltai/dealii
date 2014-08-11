@@ -1,0 +1,68 @@
+
+Shape : 25, FORWARD
+
+Dump of 25 TShapes
+
+-----------------
+
+Flags : Free, Modified, Checked, Orientable, Closed, Infinite, Convex
+
+TShape # 1 : COMPOUND  1100000 0x111897598
+    +16 +9 +2 
+TShape # 2 : FACE      0111000 0x111894ea8
+    +3 
+TShape # 3 : WIRE      0101100 0x111897108
+    -12 +7 +5 -4 
+TShape # 4 : EDGE      0101000 0x111897090
+    +13 -6 
+TShape # 5 : EDGE      0101000 0x111896ec0
+    +8 -6 
+TShape # 6 : VERTEX    0101101 0x111894e08
+    
+TShape # 7 : EDGE      0101000 0x111896cf0
+    +15 -8 
+TShape # 8 : VERTEX    0101101 0x111894b98
+    
+TShape # 9 : FACE      0111000 0x111894f00
+    +10 
+TShape # 10 : WIRE      0101100 0x111896888
+    -23 +14 +12 -11 
+TShape # 11 : EDGE      0101000 0x111896838
+    +24 -13 
+TShape # 12 : EDGE      0101000 0x111896668
+    +15 -13 
+TShape # 13 : VERTEX    0101101 0x111893af0
+    
+TShape # 14 : EDGE      0101000 0x111896498
+    +25 -15 
+TShape # 15 : VERTEX    0101101 0x111880050
+    
+TShape # 16 : FACE      0111000 0x111893eb0
+    +17 
+TShape # 17 : WIRE      0101100 0x111895eb0
+    -23 +21 +19 -18 
+TShape # 18 : EDGE      0101000 0x111895e60
+    +24 -20 
+TShape # 19 : EDGE      0101000 0x111895d20
+    +22 -20 
+TShape # 20 : VERTEX    0101101 0x111894d48
+    
+TShape # 21 : EDGE      0101000 0x111895c70
+    +25 -22 
+TShape # 22 : VERTEX    0101101 0x111894858
+    
+TShape # 23 : EDGE      0101000 0x111895c20
+    +25 -24 
+TShape # 24 : VERTEX    0101101 0x111894c38
+    
+TShape # 25 : VERTEX    0101101 0x111894c98
+    
+
+
+
+ -------
+ Dump of 0 Locations
+ -------
+
+
+DEAL::Missing file correctly threw an exception.
