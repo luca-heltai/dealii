@@ -42,9 +42,15 @@ namespace OpenCASCADE
    * TopoDS_Shape itself. In debug mode there is a sanity check to
    * make sure that the surrounding points (the ones used in
    * project_to_manifold()) actually live on the Manifold, i.e.,
-   * calling opencascade_projection() on those points leaves them
+   * calling OpenCASCADE::closest_point() on those points leaves them
    * untouched. If this is not the case, an ExcPointNotOnManifold is
    * thrown.
+   *
+   * This could happen, for example, if you are trying to use a shape
+   * of type TopoDS_Edge when projecting on a face. In this case, the
+   * vertices of the face would be collapsed to the edge, and your
+   * surrounding points would not be on lying on the given shape,
+   * raising an exception.
    * 
    * @author Luca Heltai, Andrea Mola, 2011--2014.
    */
@@ -54,26 +60,40 @@ namespace OpenCASCADE
     NormalProjectionBoundary(const TopoDS_Shape sh, 
 			     const double tolerance=1e-7);
     
-    
+    /**
+     * Perform the actual projection onto the manifold. This function,
+     * in debug mode, checks that each of the #surrounding_points is
+     * within tolerance from the given TopoDS_Shape. If this is not
+     * the case, an exception is thrown.
+     *
+     * The projected point is computed using OpenCASCADE normal
+     * projection algorithms.
+     */
     virtual Point<spacedim>
     project_to_manifold (const std::vector<Point<spacedim> > &surrounding_points,
 			 const Point<spacedim> &candidate) const;
 
-
+    /**
+     * Exception thrown when the point specified as argument does not
+     * lie between #tolerance from the given TopoDS_Shape.
+     */
     DeclException1 (ExcPointNotOnManifold,
 		    Point<spacedim>,
 		    <<"The point [ "<<arg1<<" ] is not on the manifold.");
 
   private:
     /**
-     * Compute the actual projection using OpenCASCADE. 
-     */
-    Point<spacedim> 
-    opencascade_projection(const Point<spacedim> &candidate) const;
-    
+     * The topological shape which is used internally to project
+     * points. You can construct one such a shape by calling the
+     * OpenCASCADE::read_IGES() function, which will create a
+     * TopoDS_Shape with the geometry contained in the IGES file.
+     */ 
     const TopoDS_Shape sh;
+
+    /**
+     * Relative tolerance used by this class to compute distances.
+     */
     const double tolerance;
-    
   };
 
 }
