@@ -125,9 +125,10 @@ namespace OpenCASCADE
   
   /**
    * Creates a 3D smooth BSpline curve passing through the points in
-   * the assigned vector. The points are reordered internally
-   * according to their scalar product with the direction, if
-   * direction is different from zero, otherwise they are used as
+   * the assigned vector, and store it in the returned TopoDS_Shape
+   * (which is of type TopoDS_Edge). The points are reordered
+   * internally according to their scalar product with the direction,
+   * if direction is different from zero, otherwise they are used as
    * passed. Notice that this function changes the input points if
    * required by the algorithm.
    *
@@ -136,11 +137,16 @@ namespace OpenCASCADE
    * parameter #closed is set to true, then the curve will be C2 at
    * all points execpt the first (where only C1 continuity will be
    * given), and it will be a closed curve.
+   *
+   * The curve is garanteed to be at distance #tolerance from the
+   * input points. If the algorithm fails in generating such a curve,
+   * an exception is thrown.
    */
-  TopoDS_Shape interpolation_curve(std::vector<dealii::Point<3> >  &curve_points,
-				   const dealii::Point<3> direction=dealii::Point<3>(), 
-				   const bool closed=false,
-				   const double tolerance=1e-7);
+  TopoDS_Edge interpolation_curve(std::vector<dealii::Point<3> >  &curve_points,
+				  const dealii::Point<3> direction=dealii::Point<3>(), 
+				  const bool closed=false,
+				  const double tolerance=1e-7);
+
 
   /**
    * Get the closest point to the given topological shape. If the
@@ -173,7 +179,8 @@ namespace OpenCASCADE
   /**
    * Sort two points according to their scalar product with
    * direction. If the norm of the direction is zero, then use
-   * lexycographical ordering.
+   * lexycographical ordering. The optional parameter is used as a
+   * relative tolerance when comparing objects.
    */
   inline bool point_compare(const dealii::Point<3> &p1, const dealii::Point<3> &p2,
 			    const dealii::Point<3> direction=Point<3>(),
