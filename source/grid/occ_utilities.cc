@@ -1,7 +1,9 @@
 #include <deal.II/grid/occ_utilities.h>
+#include <deal.II/base/config.h>
 
 #ifdef DEAL_II_WITH_OPENCASCADE
 
+#include <deal.II/base/point.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -21,9 +23,9 @@
 
 // #include <XSControl_Reader.hxx>
 // #include <TopTools_SequenceOfShape.hxx>
-// #include <Handle_Standard_Transient.hxx>
-// #include <TColStd_SequenceOfTransient.hxx>
-// #include <TColStd_HSequenceOfTransient.hxx>
+#include <Handle_Standard_Transient.hxx>
+#include <TColStd_SequenceOfTransient.hxx>
+#include <TColStd_HSequenceOfTransient.hxx>
 #include <TopExp_Explorer.hxx>
 // #include <gp_Pnt.hxx>
 // #include <gp_Vec.hxx>
@@ -33,24 +35,24 @@
 // #include <Standard_Integer.hxx>
 // #include <BRep_Tool.hxx>
 // #include <Geom_Surface.hxx>
-// #include <Geom_Plane.hxx>
+#include <Geom_Plane.hxx>
 // #include <Prs3d_ShapeTool.hxx>
 // #include <GeomAPI_IntSS.hxx>
 // #include <Bnd_Box.hxx>
 // #include <gp_Trsf.hxx>
 // #include <gp_Ax3.hxx>
 // #include <gp_Pln.hxx>
-// #include <BRepBuilderAPI_Transform.hxx>
-// #include <GeomConvert_CompCurveToBSplineCurve.hxx>
-// #include <BRepBuilderAPI_MakeEdge.hxx>
+#include <BRepBuilderAPI_Transform.hxx>
+#include <GeomConvert_CompCurveToBSplineCurve.hxx>
+#include <BRepBuilderAPI_MakeEdge.hxx>
 // #include <TColGeom_Array1OfCurve.hxx>
-// #include <TColgp_HArray1OfPnt.hxx>
+#include <TColgp_HArray1OfPnt.hxx>
 // #include <Geom_Curve.hxx>
-// #include <Geom_BoundedCurve.hxx>
+#include <Geom_BoundedCurve.hxx>
 // #include <Geom_TrimmedCurve.hxx>
 // #include <Geom_BSplineCurve.hxx>
-// #include <GeomAPI_Interpolate.hxx>
-// #include <BRepAlgo_Section.hxx>
+#include <GeomAPI_Interpolate.hxx>
+#include <BRepAlgo_Section.hxx>
 // #include <GeomLib_Tool.hxx>
 // #include <TColGeom_Array2OfBezierSurface.hxx>
 // #include <ProjLib_ProjectOnPlane.hxx>
@@ -92,27 +94,54 @@ namespace OpenCASCADE
     }    
   }
 
-  TopoDS_Shape read_IGES(const string &filename, 
+  inline gp_Pnt Pnt(const dealii::Point<3> &p)
+  {
+    gp_Pnt P(p(0), p(1), p(2));
+    return P;
+  }
+  
+  inline bool point_compare(const dealii::Point<3> &p1, const dealii::Point<3> &p2,
+			    const dealii::Point<3> direction=Point<3>(),
+			    const double tolerance=1e-10)
+  {
+    const double rel_tol=std::max(p1.norm(), p2.norm())*tolerance;
+    if(direction.norm())
+      return (p1*direction < p2*direction-rel_tol);
+    else 
+      for(unsigned int d=2; d>=0; --d) 
+	if(p1[d] < p2[d]-rel_tol)
+	  return true;
+	else if(p2[d] < p1[d]-rel_tol)
+	  return false;
+	  
+    // If we got here, for all d, none of the conditions above was
+    // satisfied. The two points are equal up to tolerance
+    return false;
+  }
+  
+
+  TopoDS_Shape read_IGES(const std::string &filename, 
 			 const double scale_factor)
   {
     IGESControl_Reader reader;
     IFSelect_ReturnStatus stat;
     stat = reader.ReadFile(filename.c_str()); 
-    Assert(stat == IFSelect_RetDone, ExcOpenCASCADEStatus(stat));
+    Assert(stat == IFSelect_RetDone, 
+	   ExcMessage("Error in reading file!"));
 	   
     Standard_Boolean failsonly = Standard_False;
     IFSelect_PrintCount mode = IFSelect_ItemsByEntity;
     reader.PrintCheckLoad (failsonly, mode);
-    Standard_Integer nIgesFaces,nTransFaces;
 
     Handle(TColStd_HSequenceOfTransient) myList = reader.GiveList("iges-faces");
 				     //selects all IGES faces in the
 				     //file and puts them into a list
 				     //called MyList,
-    nIgesFaces = myList->Length(); 
-    nTransFaces = reader.TransferList(myList);
+    Standard_Integer // nIgesFaces = myList->Length(), 
+      nTransFaces = reader.TransferList(myList);
 
-    AssertThrow(nTransFaces > 0, ExcMessage("Read nothing from file."));
+    AssertThrow(nTransFaces > 0, 
+		ExcMessage("Read nothing from file."));
 
 				     // Handle IGES Scale here.
     gp_Pnt Origin;
@@ -155,7 +184,6 @@ namespace OpenCASCADE
      gp_Pnt PFin(0.0,0.0,0.0);
      gp_Pnt PMid(0.0,0.0,0.0); 
      TopExp_Explorer edgeExplorer(edges , TopAbs_EDGE);
-     unsigned int count = 0;
      while (edgeExplorer.More())
        {
 	 edge = TopoDS::Edge(edgeExplorer.Current());
@@ -177,7 +205,7 @@ namespace OpenCASCADE
      GeomConvert_CompCurveToBSplineCurve
        convert_bspline(intersections[0], Convert_TgtThetaOver2);
      bool check = false, one_added = true, one_failed=true;
-     vector<bool> added(numIntersEdges, false);
+     std::vector<bool> added(numIntersEdges, false);
      added[0] = true;
      while(one_added == true) 
        {
@@ -207,7 +235,7 @@ namespace OpenCASCADE
        cout<<"Intersection with plane is at least a C1 curve"<<endl;
      else
        cout<<"Intersection with plane is not a C1 curve "<<endl;
-     
+     return out_shape;
    }
 
 
@@ -222,14 +250,14 @@ namespace OpenCASCADE
     if(direction*direction > 0) 
       {
 	std::sort(curve_points.begin(), curve_points.end(),
-		  boost::bind(&point_compare, _1, _2, direction));
+		  boost::bind(&OpenCASCADE::point_compare, _1, _2, direction, tolerance));
       }
 
 				     // set up array of vertices
     Handle(TColgp_HArray1OfPnt) vertices = new TColgp_HArray1OfPnt(1,n_vertices);
     for (unsigned int vertex=0; vertex<n_vertices; ++vertex)
       {
-	vertices->SetValue(vertex+1,OpenCascade::Pnt(curve_points[vertex]));
+	vertices->SetValue(vertex+1,Pnt(curve_points[vertex]));
       }
 
 
