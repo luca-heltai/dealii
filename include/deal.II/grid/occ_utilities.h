@@ -24,6 +24,7 @@
 
 #include <string>
 #include <TopoDS_Shape.hxx>
+#include <TopoDS_Edge.hxx>
 #include <IFSelect_ReturnStatus.hxx>
 #include <Geom_Plane.hxx>
 #include <Geom_Curve.hxx>
