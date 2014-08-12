@@ -132,10 +132,14 @@ namespace OpenCASCADE
    * required by the algorithm.
    *
    * This class is used to interpolate a BsplineCurve passing through
-   * an array of points, with a C2 Continuity.
+   * an array of points, with a C2 Continuity. If the optional
+   * parameter #closed is set to true, then the curve will be C2 at
+   * all points execpt the first (where only C1 continuity will be
+   * given), and it will be a closed curve.
    */
   TopoDS_Shape interpolation_curve(std::vector<dealii::Point<3> >  &curve_points,
 				   const dealii::Point<3> direction=dealii::Point<3>(), 
+				   const bool closed=false,
 				   const double tolerance=1e-7);
 
   /**
