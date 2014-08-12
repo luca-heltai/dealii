@@ -27,6 +27,7 @@ SET(_src
   manifold.cc
   manifold_lib.cc
   occ_utilities.cc
+  occ_boundary_lib.cc
   persistent_tria.cc
   tria_accessor.cc
   tria_boundary.cc
@@ -46,6 +47,7 @@ SET(_inst
   intergrid_map.inst.in
   manifold.inst.in
   manifold_lib.inst.in
+  occ_boundary_lib.inst.in
   tria_accessor.inst.in
   tria_boundary.inst.in
   tria_boundary_lib.inst.in
