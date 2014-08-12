@@ -105,10 +105,10 @@ namespace OpenCASCADE
 			    const double tolerance=1e-10)
   {
     const double rel_tol=std::max(p1.norm(), p2.norm())*tolerance;
-    if(direction.norm())
+    if(direction.norm() > 0.0)
       return (p1*direction < p2*direction-rel_tol);
     else 
-      for(unsigned int d=2; d>=0; --d) 
+      for(int d=2; d>=0; --d) 
 	if(p1[d] < p2[d]-rel_tol)
 	  return true;
 	else if(p2[d] < p1[d]-rel_tol)
