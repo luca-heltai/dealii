@@ -9,10 +9,10 @@
 #include <iostream>
 #include <set>
 
-#include <IGESControl_Reader.hxx>
 #include <IGESControl_Controller.hxx>
+#include <IGESControl_Reader.hxx>
+#include <IGESControl_Writer.hxx>
 
-// #include <IGESControl_Writer.hxx>
 #include <TopoDS.hxx>
 #include <TopoDS_Shape.hxx>
 // #include <TopoDS_Shell.hxx>
