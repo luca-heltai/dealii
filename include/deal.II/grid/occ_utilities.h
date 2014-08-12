@@ -18,6 +18,8 @@
 #ifndef __deal2__occ_utilities_h
 #define __deal2__occ_utilities_h
 
+#include <deal.II/base/config.h>
+
 #ifdef DEAL_II_WITH_OPENCASCADE
 
 #include <string>
@@ -27,7 +29,7 @@
 #include <Geom_Curve.hxx>
 #include <gp_Pnt.hxx>
 
-#include <base/point.h>
+#include <deal.II/base/point.h>
 
 DEAL_II_NAMESPACE_OPEN
 
@@ -155,13 +157,13 @@ namespace OpenCASCADE
   /**
    * Convert OpenCASCADE point into a Point<3>.
    */
-  Point<3> Pnt(const gp_Pnt &p);
+  inline Point<3> Pnt(const gp_Pnt &p);
 
 
   /**
    * Convert Point<3> into OpenCASCADE point.
    */
-  gp_Pnt Pnt(const Point<3> &p);
+  inline gp_Pnt Pnt(const Point<3> &p);
 
   
   /**

@@ -1,5 +1,4 @@
 #include <deal.II/grid/occ_utilities.h>
-#include <deal.II/base/config.h>
 
 #ifdef DEAL_II_WITH_OPENCASCADE
 
@@ -106,8 +105,8 @@ namespace OpenCASCADE
   }
   
   inline bool point_compare(const dealii::Point<3> &p1, const dealii::Point<3> &p2,
-			    const dealii::Point<3> direction=Point<3>(),
-			    const double tolerance=1e-10)
+			    const dealii::Point<3> direction,
+			    const double tolerance)
   {
     const double rel_tol=std::max(p1.norm(), p2.norm())*tolerance;
     if(direction.norm() > 0.0)
