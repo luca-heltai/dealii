@@ -128,6 +128,9 @@ namespace OpenCASCADE
    * direction is different from zero, otherwise they are used as
    * passed. Notice that this function changes the input points if
    * required by the algorithm.
+   *
+   * This class is used to interpolate a BsplineCurve passing through
+   * an array of points, with a C2 Continuity.
    */
   TopoDS_Shape interpolation_curve(std::vector<dealii::Point<3> >  &curve_points,
 				   const dealii::Point<3> direction=dealii::Point<3>(), 
@@ -145,11 +148,7 @@ namespace OpenCASCADE
   /**
    * Convert Point<3> into OpenCASCADE point.
    */
-  inline gp_Pnt Pnt(const dealii::Point<3> &p)
-  {
-    gp_Pnt P(p(0), p(1), p(2));
-    return P;
-  }
+  inline gp_Pnt Pnt(const dealii::Point<3> &p);
   
   /**
    * Sort two points according to their scalar product with
@@ -158,22 +157,7 @@ namespace OpenCASCADE
    */
   inline bool point_compare(const dealii::Point<3> &p1, const dealii::Point<3> &p2,
 			    const dealii::Point<3> direction=Point<3>(),
-			    const double tolerance=1e-10) 
-  {
-    const double rel_tol=std::max(p1.norm(), p2.norm())*tolerance;
-    if(direction.norm())
-      return (p1*direction < p2*direction-rel_tol);
-    else 
-      for(unsigned int d=2; d>=0; --d) 
-	if(p1[d] < p2[d]-rel_tol)
-	  return true;
-	else if(p2[d] < p1[d]-rel_tol)
-	  return false;
-	  
-    // If we got here, for all d, none of the conditions above was
-    // satisfied. The two points are equal up to tolerance
-    return false;
-  }
+			    const double tolerance=1e-10);
   
   DeclException1(ExcOpenCASCADEStatus, IFSelect_ReturnStatus,<<"Error! OpenCASCADE function returned "<<arg1);
 				      
