@@ -137,18 +137,32 @@ namespace OpenCASCADE
 				   const double tolerance=1e-7);
 
   /**
+   * Get the closest point to the given topological shape. If the
+   * shape is not elementary, all its subshapes are iterated, faces
+   * first, then edges, and the closest point is returned together
+   * with the shape which contains it, and the u v coordinates of the
+   * point. If the returned shape is an edge, then only the u
+   * coordinate is filled with sensible information, and the v
+   * coordinate is set to zero.
+   */
+  Point<3> closest_point(const TopoDS_Shape in_shape, 
+			 const Point<3> origin,
+			 TopoDS_Shape &out_shape,
+			 double &u, 
+			 double &v, 
+			 const double tolerance=1e-7);
+
+  /**
    * Convert OpenCASCADE point into a Point<3>.
    */
-  inline dealii::Point<3> Pnt(const gp_Pnt &p)
-  {
-    dealii::Point<3> P(p.X(), p.Y(), p.Z());
-    return P;
-  }
+  Point<3> Pnt(const gp_Pnt &p);
+
 
   /**
    * Convert Point<3> into OpenCASCADE point.
    */
-  inline gp_Pnt Pnt(const dealii::Point<3> &p);
+  gp_Pnt Pnt(const Point<3> &p);
+
   
   /**
    * Sort two points according to their scalar product with
@@ -158,8 +172,6 @@ namespace OpenCASCADE
   inline bool point_compare(const dealii::Point<3> &p1, const dealii::Point<3> &p2,
 			    const dealii::Point<3> direction=Point<3>(),
 			    const double tolerance=1e-10);
-  
-  DeclException1(ExcOpenCASCADEStatus, IFSelect_ReturnStatus,<<"Error! OpenCASCADE function returned "<<arg1);
 				      
 }
 /*@}*/
