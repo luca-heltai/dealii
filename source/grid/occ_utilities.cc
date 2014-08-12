@@ -160,6 +160,18 @@ namespace OpenCASCADE
     return trans.Shape();   // this is the actual translation
   }
   
+  void write_IGES(const TopoDS_Shape &shape, 
+		  const std::string &filename) {
+    
+    IGESControl_Controller::Init();
+    IGESControl_Writer ICW ("MM", 0);
+    Standard_Boolean ok = ICW.AddShape (shape);
+    Assert(ok, ExcMessage("Failed to add shape to IGES controller."));
+    ICW.ComputeModel();
+    Standard_Boolean OK = ICW.Write (filename.c_str());
+    Assert(OK, ExcMessage("Failed to write IGES file."));
+  }
+  
 
    TopoDS_Shape intersect_plane(const TopoDS_Shape &in_shape,
 				const double c_x,
