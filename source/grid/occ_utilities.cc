@@ -246,6 +246,7 @@ namespace OpenCASCADE
 
   TopoDS_Shape interpolation_curve(std::vector<Point<3> > &curve_points,
 				   const Point<3> direction,
+				   const double closed,
 				   const double tolerance)
   {
 
@@ -265,7 +266,7 @@ namespace OpenCASCADE
       }
 
 
-    GeomAPI_Interpolate bspline_generator(vertices, false, tolerance);
+    GeomAPI_Interpolate bspline_generator(vertices, closed, tolerance);
     bspline_generator.Perform();
     Assert( (bspline_generator.IsDone()), ExcMessage("Interpolated bspline generation failed"));
     
