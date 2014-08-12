@@ -108,7 +108,7 @@ namespace OpenCASCADE
 			    const dealii::Point<3> direction,
 			    const double tolerance)
   {
-    const double rel_tol=std::max(p1.norm(), p2.norm())*tolerance;
+    const double rel_tol=std::max(tolerance, std::max(p1.norm(), p2.norm())*tolerance);
     if(direction.norm() > 0.0)
       return (p1*direction < p2*direction-rel_tol);
     else 
@@ -244,9 +244,9 @@ namespace OpenCASCADE
 
 
 
-  TopoDS_Shape interpolation_curve(std::vector<Point<3> > &curve_points,
+  TopoDS_Edge interpolation_curve(std::vector<Point<3> > &curve_points,
 				   const Point<3> direction,
-				   const double closed,
+				   const bool closed,
 				   const double tolerance)
   {
 
@@ -271,7 +271,7 @@ namespace OpenCASCADE
     Assert( (bspline_generator.IsDone()), ExcMessage("Interpolated bspline generation failed"));
     
     Handle(Geom_BSplineCurve) bspline = bspline_generator.Curve();
-    TopoDS_Shape out_shape = BRepBuilderAPI_MakeEdge(bspline);
+    TopoDS_Edge out_shape = BRepBuilderAPI_MakeEdge(bspline);
     return out_shape;
   }
 
