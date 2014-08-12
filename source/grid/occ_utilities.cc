@@ -29,8 +29,8 @@
 #include <TopExp_Explorer.hxx>
 // #include <gp_Pnt.hxx>
 // #include <gp_Vec.hxx>
-// #include <GeomAPI_ProjectPointOnSurf.hxx>
-// #include <GeomAPI_ProjectPointOnCurve.hxx>
+#include <GeomAPI_ProjectPointOnSurf.hxx>
+#include <GeomAPI_ProjectPointOnCurve.hxx>
 // #include <Standard_Real.hxx>
 // #include <Standard_Integer.hxx>
 // #include <BRep_Tool.hxx>
@@ -58,7 +58,7 @@
 // #include <ProjLib_ProjectOnPlane.hxx>
 // #include <Adaptor3d_HCurve.hxx>
 // #include <GeomAdaptor_HCurve.hxx>
-// #include <ShapeAnalysis_Surface.hxx>
+#include <ShapeAnalysis_Surface.hxx>
 // #include <GeomLProp_SLProps.hxx>
 // #include <BRepExtrema_DistShapeShape.hxx>
 // #include <BRepBuilderAPI_MakeVertex.hxx>
@@ -94,10 +94,15 @@ namespace OpenCASCADE
     }    
   }
 
-  inline gp_Pnt Pnt(const dealii::Point<3> &p)
+  gp_Pnt Pnt(const Point<3> &p)
   {
-    gp_Pnt P(p(0), p(1), p(2));
-    return P;
+    return gp_Pnt(p(0), p(1), p(2));
+  }
+
+  
+  Point<3> Pnt(const gp_Pnt &p)
+  {
+    return Point<3>(p.X(), p.Y(), p.Z());
   }
   
   inline bool point_compare(const dealii::Point<3> &p1, const dealii::Point<3> &p2,
@@ -268,6 +273,74 @@ namespace OpenCASCADE
     Handle(Geom_BSplineCurve) bspline = bspline_generator.Curve();
     TopoDS_Shape out_shape = BRepBuilderAPI_MakeEdge(bspline);
     return out_shape;
+  }
+
+
+  Point<3> closest_point(const TopoDS_Shape in_shape, 
+			 const Point<3> origin,
+			 TopoDS_Shape &out_shape,
+			 double &u, 
+			 double &v, 
+			 const double tolerance) {
+    
+    TopExp_Explorer exp;
+    gp_Pnt Pproj = Pnt(origin);
+
+    double minDistance = 1e7;
+    gp_Pnt tmp_proj(0.0,0.0,0.0);
+    
+    unsigned int counter = 0;
+    u=0; v=0;
+    
+    for(exp.Init(in_shape, TopAbs_FACE); exp.More(); exp.Next()) {
+      TopoDS_Face face = TopoDS::Face(exp.Current());
+      
+      // the projection function needs a surface, so we obtain the
+      // surface upon which the face is defined
+      Handle(Geom_Surface) SurfToProj = BRep_Tool::Surface(face);
+      
+      ShapeAnalysis_Surface projector(SurfToProj);
+      gp_Pnt2d proj_params = projector.ValueOfUV(Pnt(origin), tolerance);
+      
+      SurfToProj->D0(proj_params.X(),proj_params.Y(),tmp_proj);
+      
+      double distance = Pnt(tmp_proj).distance(origin);
+      if (distance < minDistance)
+	{
+	  minDistance = distance;
+	  Pproj = tmp_proj;
+	  out_shape = face;
+	  u=proj_params.X();
+	  v=proj_params.Y();
+	  ++counter;
+	}
+    }
+
+    for(exp.Init(in_shape, TopAbs_EDGE); exp.More(); exp.Next()) {
+      TopoDS_Edge edge = TopoDS::Edge(exp.Current());
+
+      TopLoc_Location L;
+      Standard_Real First;
+      Standard_Real Last;
+      
+      // the projection function needs a Curve, so we obtain the
+      // curve upon which the edge is defined
+      Handle(Geom_Curve) CurveToProj = BRep_Tool::Curve(edge,L,First,Last);
+
+      GeomAPI_ProjectPointOnCurve Proj(Pnt(origin),CurveToProj);
+      unsigned int num_proj_points = Proj.NbPoints();
+      if ((num_proj_points > 0) && (Proj.LowerDistance() < minDistance))
+	{
+	  minDistance = Proj.LowerDistance();
+	  Pproj = Proj.NearestPoint();
+	  out_shape = edge;
+	  u=Proj.LowerDistanceParameter();
+	  ++counter;
+	}
+    }
+    
+    Assert(counter > 0, ExcMessage("Could not find projection points."));
+    return Pnt(Pproj);
   }
 
 } // end namespace
