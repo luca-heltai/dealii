@@ -39,14 +39,14 @@ int main ()
 	  << ne << " edges, and " 
 	  << nv << " vertices." << std::endl;
 
-  try 
-    {
-      TopoDS_Shape sh_fail = read_IGES("iges_files/nonexistent.iges");
-    }
-  catch(...)
-    {
-      deallog << "Missing file correctly threw an exception." << std::endl;
-    }
+  // try 
+  //   {
+  //     TopoDS_Shape sh_fail = read_IGES("iges_files/nonexistent.iges");
+  //   }
+  // catch(...)
+  //   {
+  //     deallog << "Missing file correctly threw an exception." << std::endl;
+  //   }
   
   return 0;
 }
