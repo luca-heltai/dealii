@@ -32,6 +32,7 @@
 #include <GeomAPI_ProjectPointOnSurf.hxx>
 #include <GeomAPI_ProjectPointOnCurve.hxx>
 #include <IntCurvesFace_ShapeIntersector.hxx>
+#include <BRepAdaptor_Curve.hxx>
 // #include <Standard_Real.hxx>
 // #include <Standard_Integer.hxx>
 // #include <BRep_Tool.hxx>
@@ -59,6 +60,7 @@
 // #include <ProjLib_ProjectOnPlane.hxx>
 // #include <Adaptor3d_HCurve.hxx>
 // #include <GeomAdaptor_HCurve.hxx>
+#include <GCPnts_AbscissaPoint.hxx>
 #include <ShapeAnalysis_Surface.hxx>
 // #include <GeomLProp_SLProps.hxx>
 // #include <BRepExtrema_DistShapeShape.hxx>
@@ -106,9 +108,9 @@ namespace OpenCASCADE
     return Point<3>(p.X(), p.Y(), p.Z());
   }
   
-  inline bool point_compare(const dealii::Point<3> &p1, const dealii::Point<3> &p2,
-			    const dealii::Point<3> direction,
-			    const double tolerance)
+  bool point_compare(const dealii::Point<3> &p1, const dealii::Point<3> &p2,
+		     const dealii::Point<3> direction,
+		     const double tolerance)
   {
     const double rel_tol=std::max(tolerance, std::max(p1.norm(), p2.norm())*tolerance);
     if(direction.norm() > 0.0)
@@ -379,6 +381,12 @@ namespace OpenCASCADE
     Assert(counter > 0, ExcMessage("Could not find projection points."));
     return Pnt(Pproj);
   }
+
+  double length(const TopoDS_Edge &sh) {
+    BRepAdaptor_Curve curve(sh);
+    return GCPnts_AbscissaPoint::Length(curve);
+  }
+    
 
 } // end namespace
 

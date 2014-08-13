@@ -25,6 +25,8 @@
 #include <deal.II/grid/occ_utilities.h>
 #include <deal.II/grid/tria_boundary.h>
 
+#include <BRepAdaptor_Curve.hxx>
+
 DEAL_II_NAMESPACE_OPEN
 
 namespace OpenCASCADE 
@@ -109,6 +111,10 @@ namespace OpenCASCADE
   template <int dim, int spacedim>
   class AxisProjectionBoundary : public Boundary<dim,spacedim> {
     public:
+    /**
+     * Construct a Boundary object which will project points on the
+     * TopoDS_Shape #sh, along the given #direction.
+     */
     AxisProjectionBoundary(const TopoDS_Shape sh, 
 			   const Point<3> direction, 
 			   const double tolerance=1e-7);
@@ -145,7 +151,64 @@ namespace OpenCASCADE
      */
     const double tolerance;
   };
+  
+  /**
+   * A Boundary object based on OpenCASCADE TopoDS_Edge objects where
+   * new points are located at the arclength average of the
+   * surrounding points. If the given TopoDS_Edge can be casted to a
+   * periodic (closed) curve, then this information is used internally
+   * to set the periodicity of the base ChartManifold class.
+   *
+   * This class can only work on TopoDS_Edge objects, and it only
+   * makes sense when spacedim is three. In debug mode there is a
+   * sanity check to make sure that the surrounding points actually
+   * live on the Manifold, i.e., calling OpenCASCADE::closest_point()
+   * on those points leaves them untouched. If this is not the case,
+   * an ExcPointNotOnManifold is thrown.
+   * 
+   * @author Luca Heltai, Andrea Mola, 2011--2014.
+   */
+  template <int dim, int spacedim>
+  class ArclengthProjectionLineManifold : public  ChartManifold<dim,spacedim,1> 
+  {
+    public:
+    /**
+     * Default constructor with a TopoDS_Edge.
+     */
+    ArclengthProjectionLineManifold(const TopoDS_Edge &sh,
+				    const double tolerance=1e-7);
+    
+    /**
+     * Given a point on real space, find its arclength
+     * parameter. Throws an error in debug mode, if the point is not
+     * on the TopoDS_Edge given at construction time.
+     */
+    virtual Point<1>
+    pull_back(const Point<spacedim> &space_point) const;
 
+    /**
+     * Given an arclength parameter, find its image in real space.
+     */
+    virtual Point<spacedim>
+    push_forward(const Point<1> &chart_point) const;
+    
+  private:
+    /**
+     * The internal OpenCASCADE curve on which we perform the analysis. 
+     */
+    mutable BRepAdaptor_Curve curve;
+    
+    /**
+     * Relative tolerance used in all internal computations. 
+     */
+    const double tolerance;
+
+    /**
+     * The total length of the curve. This is also used as a period if
+     * the edge is periodic.
+     */
+    const double length;
+  };
 }
 
 /*@}*/

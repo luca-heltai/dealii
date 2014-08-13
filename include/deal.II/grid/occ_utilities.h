@@ -156,6 +156,10 @@ namespace OpenCASCADE
 				  const bool closed=false,
 				  const double tolerance=1e-7);
 
+  /**
+   * Computes the length of an edge.
+   */
+  double length(const TopoDS_Edge &edge);
 
   /**
    * Get the closest point to the given topological shape. If the
@@ -189,13 +193,13 @@ namespace OpenCASCADE
   /**
    * Convert OpenCASCADE point into a Point<3>.
    */
-  inline Point<3> Pnt(const gp_Pnt &p);
+  Point<3> Pnt(const gp_Pnt &p);
 
 
   /**
    * Convert Point<3> into OpenCASCADE point.
    */
-  inline gp_Pnt Pnt(const Point<3> &p);
+  gp_Pnt Pnt(const Point<3> &p);
 
   
   /**
@@ -204,9 +208,9 @@ namespace OpenCASCADE
    * lexycographical ordering. The optional parameter is used as a
    * relative tolerance when comparing objects.
    */
-  inline bool point_compare(const dealii::Point<3> &p1, const dealii::Point<3> &p2,
-			    const dealii::Point<3> direction=Point<3>(),
-			    const double tolerance=1e-10);
+  bool point_compare(const dealii::Point<3> &p1, const dealii::Point<3> &p2,
+		     const dealii::Point<3> direction=Point<3>(),
+		     const double tolerance=1e-10);
 
 
   /**
