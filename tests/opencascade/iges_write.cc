@@ -32,7 +32,7 @@ int main ()
   // deallog.attach(logfile);
   // deallog.depth_console(0);
   
-  TopoDS_Shape sh = read_IGES(SOURCE_DIR "/iges_files/goteborg.iges");
+  TopoDS_Shape sh = read_IGES(SOURCE_DIR "/iges_files/wigley.iges");
   unsigned int nf=0, ne=0, nv=0;
   count_elements(sh, nf, ne, nv);
   // deallog << "Shape contains " << nf << " faces, "
