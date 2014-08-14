@@ -31,11 +31,9 @@ namespace OpenCASCADE
     double u=0, v=0;
     for(unsigned int i=0; i<surrounding_points.size(); ++i)
       Assert(closest_point(sh, surrounding_points[i], out_shape, u, v)
-	     .distance(surrounding_points[i]) < (surrounding_points[i].norm()>0 ? 
-						 tolerance*surrounding_points[i].norm() :
-						 tolerance),
-	     // ExcPointNotOnManifold(surrounding_points[i]));
-	     ExcMessage("Points are not on manifold"));
+	     .distance(surrounding_points[i]) < 
+	     std::max(tolerance*surrounding_points[i].norm(), tolerance),
+	     ExcPointNotOnManifold(surrounding_points[i]));
     
     return closest_point(sh, candidate, out_shape, u, v);
   }
