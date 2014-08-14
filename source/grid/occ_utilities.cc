@@ -357,25 +357,26 @@ namespace OpenCASCADE
 
     for(exp.Init(in_shape, TopAbs_EDGE); exp.More(); exp.Next()) {
       TopoDS_Edge edge = TopoDS::Edge(exp.Current());
-
-      TopLoc_Location L;
-      Standard_Real First;
-      Standard_Real Last;
+      if(!BRep_Tool::Degenerated(edge)) {
+	  TopLoc_Location L;
+	  Standard_Real First;
+	  Standard_Real Last;
       
-      // the projection function needs a Curve, so we obtain the
-      // curve upon which the edge is defined
-      Handle(Geom_Curve) CurveToProj = BRep_Tool::Curve(edge,L,First,Last);
+	  // the projection function needs a Curve, so we obtain the
+	  // curve upon which the edge is defined
+	  Handle(Geom_Curve) CurveToProj = BRep_Tool::Curve(edge,L,First,Last);
 
-      GeomAPI_ProjectPointOnCurve Proj(Pnt(origin),CurveToProj);
-      unsigned int num_proj_points = Proj.NbPoints();
-      if ((num_proj_points > 0) && (Proj.LowerDistance() < minDistance))
-	{
-	  minDistance = Proj.LowerDistance();
-	  Pproj = Proj.NearestPoint();
-	  out_shape = edge;
-	  u=Proj.LowerDistanceParameter();
-	  ++counter;
-	}
+	  GeomAPI_ProjectPointOnCurve Proj(Pnt(origin),CurveToProj);
+	  unsigned int num_proj_points = Proj.NbPoints();
+	  if ((num_proj_points > 0) && (Proj.LowerDistance() < minDistance))
+	    {
+	      minDistance = Proj.LowerDistance();
+	      Pproj = Proj.NearestPoint();
+	      out_shape = edge;
+	      u=Proj.LowerDistanceParameter();
+	      ++counter;
+	    }
+      }
     }
     
     Assert(counter > 0, ExcMessage("Could not find projection points."));
