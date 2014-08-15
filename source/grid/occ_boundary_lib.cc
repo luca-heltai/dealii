@@ -4,9 +4,12 @@
 
 #include <GCPnts_AbscissaPoint.hxx>
 #include <BRepAdaptor_Curve.hxx>
+#include <BRepAdaptor_CompCurve.hxx>
 #include <GCPnts_AbscissaPoint.hxx>
 #include <ShapeAnalysis_Curve.hxx>
 #include <BRep_Tool.hxx>
+#include <TopoDS.hxx>
+#include <Adaptor3d_HCurve.hxx>
 
 DEAL_II_NAMESPACE_OPEN
 
@@ -67,23 +70,26 @@ namespace OpenCASCADE
     
     return axis_intersection(sh, candidate, direction, tolerance);
   }
-
+  
+  double shape_length(const TopoDS_Shape &sh) {
+    Handle_Adaptor3d_HCurve adapt = curve_adaptor(sh);
+    return GCPnts_AbscissaPoint::Length(adapt->GetCurve());
+  }
   
   /*============================== ArclengthProjectionLineManifold ==============================*/
   
   template <int dim, int spacedim>
-  ArclengthProjectionLineManifold<dim,spacedim>::ArclengthProjectionLineManifold(const TopoDS_Edge &sh,
+  ArclengthProjectionLineManifold<dim,spacedim>::ArclengthProjectionLineManifold(const TopoDS_Shape &sh,
 										 const double tolerance):
     
     ChartManifold<dim,spacedim,1>(sh.Closed() ? 
-				  Point<1>(OpenCASCADE::length(sh)) :
+				  Point<1>(shape_length(sh)) :
 				  Point<1>()),
-    curve(sh), 
+    curve(curve_adaptor(sh)), 
     tolerance(tolerance),
-    length(OpenCASCADE::length(sh))
+    length(shape_length(sh))
   {
     Assert(spacedim == 3, ExcImpossibleInDim(spacedim));
-    Assert(!BRep_Tool::Degenerated(sh), ExcEdgeIsDegenerate());
   }
 
   
@@ -93,9 +99,9 @@ namespace OpenCASCADE
     ShapeAnalysis_Curve curve_analysis;
     gp_Pnt proj;
     double t;
-    double dist = curve_analysis.Project(curve, Pnt(space_point), tolerance, proj, t, true);
+    double dist = curve_analysis.Project(curve->GetCurve(), Pnt(space_point), tolerance, proj, t, true);
     Assert(dist < tolerance*length, ExcPointNotOnManifold(space_point));
-    return Point<1>(GCPnts_AbscissaPoint::Length(curve,curve.FirstParameter(),t));
+    return Point<1>(GCPnts_AbscissaPoint::Length(curve->GetCurve(),curve->GetCurve().FirstParameter(),t));
   }
 
   
@@ -103,8 +109,8 @@ namespace OpenCASCADE
   template <int dim, int spacedim>
   Point<spacedim> 
   ArclengthProjectionLineManifold<dim,spacedim>::push_forward(const Point<1> &chart_point) const {
-    GCPnts_AbscissaPoint AP(curve, chart_point[0], curve.FirstParameter());
-    gp_Pnt P = curve.Value(AP.Parameter());
+    GCPnts_AbscissaPoint AP(curve->GetCurve(), chart_point[0], curve->GetCurve().FirstParameter());
+    gp_Pnt P = curve->GetCurve().Value(AP.Parameter());
     return Pnt(P);
   }
   

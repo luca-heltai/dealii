@@ -36,8 +36,10 @@
 #include <TopoDS_Wire.hxx>
 #include <IFSelect_ReturnStatus.hxx>
 #include <gp_Pnt.hxx>
+#include <Handle_Adaptor3d_HCurve.hxx>
 
 #include <deal.II/base/point.h>
+
 
 DEAL_II_NAMESPACE_OPEN
 
@@ -173,11 +175,6 @@ namespace OpenCASCADE
 				  const double tolerance=1e-7);
 
   /**
-   * Computes the length of an edge.
-   */
-  double length(const TopoDS_Edge &edge);
-
-  /**
    * Extract all subshapes from a TopoDS_Shape, and store the results
    * into standard containers. If the shape does not contain a certain
    * type of shape, the respective container will be empty.
@@ -264,7 +261,15 @@ namespace OpenCASCADE
 		     const dealii::Point<3> direction=Point<3>(),
 		     const double tolerance=1e-10);
 
+  /**
+   * Return a Geometrical curve representation for the given
+   * TopoDS_Shape. This function will fail when the given shape is
+   * not of topological dimension one.
+   */
+  Handle_Adaptor3d_HCurve curve_adaptor(const TopoDS_Shape &shape);
 
+
+  
   /**
    * Exception thrown when the point specified as argument does not
    * lie between #tolerance from the given TopoDS_Shape.
@@ -295,6 +300,12 @@ namespace OpenCASCADE
    * Trying to make curve operations on a degenerate edge.
    */ 
   DeclException0(ExcEdgeIsDegenerate);
+
+  /**
+   * Trying to make operations on the wrong type of shapes.
+   */ 
+  DeclException0(ExcUnsupportedShape);
+
 } 
 /*@}*/
 
