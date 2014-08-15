@@ -384,8 +384,12 @@ namespace OpenCASCADE
   }
 
   double length(const TopoDS_Edge &sh) {
-    BRepAdaptor_Curve curve(sh);
-    return GCPnts_AbscissaPoint::Length(curve);
+    if(!BRep_Tool::Degenerated(sh)) {
+      BRepAdaptor_Curve curve(sh);
+      return GCPnts_AbscissaPoint::Length(curve);
+    } else {
+      return 0;
+    }
   }
     
 
