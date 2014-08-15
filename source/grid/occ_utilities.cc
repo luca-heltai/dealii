@@ -33,6 +33,8 @@
 #include <GeomAPI_ProjectPointOnCurve.hxx>
 #include <IntCurvesFace_ShapeIntersector.hxx>
 #include <BRepAdaptor_Curve.hxx>
+#include <BRepAdaptor_HCurve.hxx>
+#include <BRepAdaptor_HCompCurve.hxx>
 #include <BRepAdaptor_Surface.hxx>
 
 // #include <Standard_Real.hxx>
@@ -438,15 +440,6 @@ namespace OpenCASCADE
     return Pnt(Pproj);
   }
 
-  double length(const TopoDS_Edge &sh) {
-    if(!BRep_Tool::Degenerated(sh)) {
-      BRepAdaptor_Curve curve(sh);
-      return GCPnts_AbscissaPoint::Length(curve);
-    } else {
-      return 0;
-    }
-  }
-  
   void create_triangulation(const TopoDS_Face &face,
                             Triangulation<2,3> &tria) {
     BRepAdaptor_Surface surf(face);
@@ -471,7 +464,21 @@ namespace OpenCASCADE
     cells.push_back(cell);
     tria.create_triangulation(vertices, cells, t);
   }
-  
+
+  Handle_Adaptor3d_HCurve curve_adaptor(const TopoDS_Shape &shape) {
+    Assert( (shape.ShapeType() == TopAbs_WIRE) ||
+	    (shape.ShapeType() == TopAbs_EDGE),
+	    ExcUnsupportedShape());
+    if(shape.ShapeType() == TopAbs_WIRE)
+      return (Handle(BRepAdaptor_HCompCurve(new BRepAdaptor_HCompCurve(TopoDS::Wire(shape)))));
+    else if(shape.ShapeType() == TopAbs_EDGE)
+      return (Handle(BRepAdaptor_HCurve(new BRepAdaptor_HCurve(TopoDS::Edge(shape)))));
+    
+    Assert(false, ExcInternalError());
+    return Handle(BRepAdaptor_HCurve(new BRepAdaptor_HCurve()));
+  }
+    
+
 
 } // end namespace
 
