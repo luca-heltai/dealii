@@ -24,10 +24,15 @@
 
 #include <string>
 #include <TopoDS_Shape.hxx>
+#include <TopoDS_Face.hxx>
 #include <TopoDS_Edge.hxx>
+#include <TopoDS_Vertex.hxx>
+#include <TopoDS_Compound.hxx>
+#include <TopoDS_CompSolid.hxx>
+#include <TopoDS_Solid.hxx>
+#include <TopoDS_Shell.hxx>
+#include <TopoDS_Wire.hxx>
 #include <IFSelect_ReturnStatus.hxx>
-#include <Geom_Plane.hxx>
-#include <Geom_Curve.hxx>
 #include <gp_Pnt.hxx>
 
 #include <deal.II/base/point.h>
@@ -129,7 +134,17 @@ namespace OpenCASCADE
 				const double c_z,
 				const double c,
 				const double tolerance=1e-7);
-
+  
+  /**
+   * Try to join all edges contained in the given TopoDS_Shape into a
+   * single TopoDS_Edge, containing as few BSPlines as possible. If
+   * the input shape contains faces, they will be ignored by this
+   * function. If the contained edges cannot be joined into a single
+   * one, i.e., they form disconnected curves, an exception will be
+   * thrown.
+   */
+  TopoDS_Edge join_edges(const TopoDS_Shape &in_shape,
+			 const double tolerance=1e-7);
   
   /**
    * Creates a 3D smooth BSpline curve passing through the points in
@@ -159,6 +174,29 @@ namespace OpenCASCADE
    * Computes the length of an edge.
    */
   double length(const TopoDS_Edge &edge);
+
+  /**
+   * Extract all subshapes from a TopoDS_Shape, and store the results
+   * into standard containers. If the shape does not contain a certain
+   * type of shape, the respective container will be empty.
+   */ 
+  void extract_geometrical_shapes(const TopoDS_Shape &shape,
+				  std::vector<TopoDS_Face> &faces,
+				  std::vector<TopoDS_Edge> &edges,
+				  std::vector<TopoDS_Vertex> &vertices);
+
+  /**
+   * Extract all compound shapes from a TopoDS_Shape, and store the
+   * results into standard containers. If the shape does not contain a
+   * certain type of compound, the respective container will be empty.
+   */ 
+  void extract_compound_shapes(const TopoDS_Shape &shape,
+			       std::vector<TopoDS_Compound> &compounds,
+			       std::vector<TopoDS_CompSolid> &compsolids,
+			       std::vector<TopoDS_Solid> &solids,
+			       std::vector<TopoDS_Shell> &shells,
+			       std::vector<TopoDS_Wire> &wires);
+  
 
   /**
    * Get the closest point to the given topological shape. If the

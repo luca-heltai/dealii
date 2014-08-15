@@ -89,14 +89,76 @@ namespace OpenCASCADE
 		      unsigned int &n_vertices) {
     TopExp_Explorer exp;
     n_faces=0, n_edges=0, n_vertices=0;
-    for(exp.Init(shape, TopAbs_FACE); exp.More(); exp.Next(), ++n_faces) {
-    }
-    for(exp.Init(shape, TopAbs_EDGE); exp.More(); exp.Next(), ++n_edges) {
-    }
-    for(exp.Init(shape, TopAbs_VERTEX); exp.More(); exp.Next(), ++n_vertices) {
-    }    
+    for(exp.Init(shape, TopAbs_FACE); 
+	exp.More(); exp.Next(), ++n_faces) 
+      {}
+    for(exp.Init(shape, TopAbs_EDGE); 
+	exp.More(); exp.Next(), ++n_edges) 
+      {}
+    for(exp.Init(shape, TopAbs_VERTEX); 
+	exp.More(); exp.Next(), ++n_vertices) 
+      {}    
   }
 
+  void extract_geometrical_shapes(const TopoDS_Shape &shape,
+				  std::vector<TopoDS_Face> &faces,
+				  std::vector<TopoDS_Edge> &edges,
+				  std::vector<TopoDS_Vertex> &vertices) {
+    faces.resize(0);
+    edges.resize(0);
+    vertices.resize(0);
+
+    TopExp_Explorer exp;
+    for(exp.Init(shape, TopAbs_FACE); exp.More(); exp.Next()) 
+      {
+	faces.push_back(TopoDS::Face(exp.Current()));
+      }
+    for(exp.Init(shape, TopAbs_EDGE); exp.More(); exp.Next()) 
+      {
+	edges.push_back(TopoDS::Edge(exp.Current()));
+      }
+    for(exp.Init(shape, TopAbs_VERTEX); exp.More(); exp.Next()) 
+      {
+	vertices.push_back(TopoDS::Vertex(exp.Current()));
+      }    
+  }
+
+
+  void extract_compound_shapes(const TopoDS_Shape &shape,
+			       std::vector<TopoDS_Compound> &compounds,
+			       std::vector<TopoDS_CompSolid> &compsolids,
+			       std::vector<TopoDS_Solid> &solids,
+			       std::vector<TopoDS_Shell> &shells,
+			       std::vector<TopoDS_Wire> &wires) {
+    compounds.resize(0);
+    compsolids.resize(0);
+    solids.resize(0);
+    shells.resize(0);
+    wires.resize(0);
+
+    TopExp_Explorer exp;
+    for(exp.Init(shape, TopAbs_COMPOUND); exp.More(); exp.Next()) 
+      {
+	compounds.push_back(TopoDS::Compound(exp.Current()));
+      }
+    for(exp.Init(shape, TopAbs_COMPSOLID); exp.More(); exp.Next()) 
+      {
+	compsolids.push_back(TopoDS::CompSolid(exp.Current()));
+      }
+    for(exp.Init(shape, TopAbs_SOLID); exp.More(); exp.Next()) 
+      {
+	solids.push_back(TopoDS::Solid(exp.Current()));
+      }    
+    for(exp.Init(shape, TopAbs_SHELL); exp.More(); exp.Next()) 
+      {
+	shells.push_back(TopoDS::Shell(exp.Current()));
+      }    
+    for(exp.Init(shape, TopAbs_WIRE); exp.More(); exp.Next()) 
+      {
+	wires.push_back(TopoDS::Wire(exp.Current()));
+      }    
+  }
+  
   gp_Pnt Pnt(const Point<3> &p)
   {
     return gp_Pnt(p(0), p(1), p(2));
@@ -142,16 +204,16 @@ namespace OpenCASCADE
     reader.PrintCheckLoad (failsonly, mode);
 
     Handle(TColStd_HSequenceOfTransient) myList = reader.GiveList("iges-faces");
-				     //selects all IGES faces in the
-				     //file and puts them into a list
-				     //called MyList,
+    //selects all IGES faces in the
+    //file and puts them into a list
+    //called MyList,
     Standard_Integer // nIgesFaces = myList->Length(), 
       nTransFaces = reader.TransferList(myList);
 
     AssertThrow(nTransFaces > 0, 
 		ExcMessage("Read nothing from file."));
 
-				     // Handle IGES Scale here.
+    // Handle IGES Scale here.
     gp_Pnt Origin;
     gp_Trsf scale;
     scale.SetScale (Origin, scale_factor);
@@ -175,89 +237,80 @@ namespace OpenCASCADE
   }
   
 
-   TopoDS_Shape intersect_plane(const TopoDS_Shape &in_shape,
-				const double c_x,
-				const double c_y,
-				const double c_z,
-				const double c,
-				const double tolerance) 
-   {
-     TopoDS_Shape out_shape;
-     Handle(Geom_Plane) plane = new Geom_Plane(c_x,c_y,c_z,c);
+  TopoDS_Shape intersect_plane(const TopoDS_Shape &in_shape,
+			      const double c_x,
+			      const double c_y,
+			      const double c_z,
+			      const double c,
+			      const double tolerance) 
+  {
+    Handle(Geom_Plane) plane = new Geom_Plane(c_x,c_y,c_z,c);
+    BRepAlgo_Section section(in_shape, plane);
+    TopoDS_Shape edges = section.Shape();
+    return edges;
+  }
 
-     // This is to loop on the faces,
-     // that extracts all
-     // intersections.
-   
-     //TopExp_Explorer faceExplorer(in_shape , TopAbs_FACE);
-
-     std::vector<Handle_Geom_BoundedCurve> intersections;
- 
-     BRepAlgo_Section section(in_shape, plane);
-     TopoDS_Shape edges = section.Shape();
-
-     TopoDS_Edge edge;
-     TopLoc_Location L;
-     Standard_Real First;
-     Standard_Real Last;   
-     gp_Pnt PIn(0.0,0.0,0.0);
-     gp_Pnt PFin(0.0,0.0,0.0);
-     gp_Pnt PMid(0.0,0.0,0.0); 
-     TopExp_Explorer edgeExplorer(edges , TopAbs_EDGE);
-     while (edgeExplorer.More())
-       {
-	 edge = TopoDS::Edge(edgeExplorer.Current());
-	 Handle(Geom_Curve) curve = BRep_Tool::Curve(edge,L,First,Last);
-	 intersections.push_back(Handle(Geom_BoundedCurve)::DownCast(curve));
-	 edgeExplorer.Next();
-       }
+  TopoDS_Edge join_edges(const TopoDS_Shape &in_shape,
+			 const double tolerance) {  
+    TopoDS_Edge out_shape;
+    TopoDS_Shape edges = in_shape;
+    std::vector<Handle_Geom_BoundedCurve> intersections; 
+    TopLoc_Location L;
+    Standard_Real First;
+    Standard_Real Last;   
+    gp_Pnt PIn(0.0,0.0,0.0);
+    gp_Pnt PFin(0.0,0.0,0.0);
+    gp_Pnt PMid(0.0,0.0,0.0); 
+    TopExp_Explorer edgeExplorer(edges , TopAbs_EDGE);
+    TopoDS_Edge edge;
+    while (edgeExplorer.More())
+      {
+  	edge = TopoDS::Edge(edgeExplorer.Current());
+  	Handle(Geom_Curve) curve = BRep_Tool::Curve(edge,L,First,Last);
+  	intersections.push_back(Handle(Geom_BoundedCurve)::DownCast(curve));
+  	edgeExplorer.Next();
+      }
   
-     // Now we build a single bspline out of all the geometrical
-     // curves
-     unsigned int numIntersEdges = intersections.size();  
-     for (unsigned int i = 0;i<intersections.size();++i)
-       {
-	 if (intersections[i]->Value(intersections[i]->FirstParameter()).X() > 
-	     intersections[i]->Value(intersections[i]->LastParameter()).X()  )
-	   intersections[i]->Reverse();
-       }
+    // Now we build a single bspline out of all the geometrical
+    // curves, in Lexycographical order
+    unsigned int numIntersEdges = intersections.size();  
+    Assert(numIntersEdges>0, ExcMessage("No curves to process!"));
 
-     GeomConvert_CompCurveToBSplineCurve
-       convert_bspline(intersections[0], Convert_TgtThetaOver2);
-     bool check = false, one_added = true, one_failed=true;
-     std::vector<bool> added(numIntersEdges, false);
-     added[0] = true;
-     while(one_added == true) 
-       {
-	 one_added = false;
-	 one_failed = false;
-	 for (unsigned int i=1; i<numIntersEdges; ++i)
-	   if(added[i] == false) 
-	     { 
-	       Handle(Geom_Curve) curve = intersections[i];
-	       Handle(Geom_BoundedCurve) bcurve = Handle(Geom_BoundedCurve)::DownCast(curve);
-	       check = convert_bspline.Add(bcurve,tolerance,0,1,0);
-	       one_failed = one_failed || (check == false);
-	       one_added = one_added || (check == true);
-	       added[i] = check;
-	       //cout<<i<<" -->  "<<added[i]<<"  "<<false<<endl;
-	     }
-       }
+    GeomConvert_CompCurveToBSplineCurve convert_bspline(intersections[0]);
+
+    bool check = false, one_added = true, one_failed=true;
+    std::vector<bool> added(numIntersEdges, false);
+    added[0] = true;
+    while(one_added == true) 
+      {
+  	one_added = false;
+  	one_failed = false;
+  	for (unsigned int i=1; i<numIntersEdges; ++i)
+  	  if(added[i] == false) 
+  	    { 
+  	      Handle(Geom_Curve) curve = intersections[i];
+  	      Handle(Geom_BoundedCurve) bcurve = Handle(Geom_BoundedCurve)::DownCast(curve);
+  	      check = convert_bspline.Add(bcurve,tolerance,0,1,0);
+	      if(check == false) { // If we failed, try again with the reversed curve
+		curve->Reverse();
+		Handle(Geom_BoundedCurve) bcurve = Handle(Geom_BoundedCurve)::DownCast(curve);
+		check = convert_bspline.Add(bcurve,tolerance,0,1,0);
+	      }
+  	      one_failed = one_failed || (check == false);
+  	      one_added = one_added || (check == true);
+  	      added[i] = check;
+  	    }
+      }
  
-     Assert(one_failed == false,
-	    ExcMessage("Bspline convertion of intersection with plane has failed."));
+    Assert(one_failed == false,
+  	   ExcMessage("Joining some of the Edges failed."));
 
-     Handle(Geom_Curve) bspline = convert_bspline.BSplineCurve();
+    Handle(Geom_Curve) bspline = convert_bspline.BSplineCurve();
 
-     out_shape = BRepBuilderAPI_MakeEdge(bspline);
-
-     if (bspline->IsCN(1))
-       cout<<"Intersection with plane is at least a C1 curve"<<endl;
-     else
-       cout<<"Intersection with plane is not a C1 curve "<<endl;
-     return out_shape;
-   }
-
+    out_shape = BRepBuilderAPI_MakeEdge(bspline);
+    return out_shape;
+  }
+  
 
   Point<3> axis_intersection(const TopoDS_Shape in_shape, 
 			     const Point<3> origin, 
@@ -284,9 +337,9 @@ namespace OpenCASCADE
   }
 
   TopoDS_Edge interpolation_curve(std::vector<Point<3> > &curve_points,
-				   const Point<3> direction,
-				   const bool closed,
-				   const double tolerance)
+				  const Point<3> direction,
+				  const bool closed,
+				  const double tolerance)
   {
 
     unsigned int n_vertices = curve_points.size();
@@ -297,7 +350,7 @@ namespace OpenCASCADE
 		  boost::bind(&OpenCASCADE::point_compare, _1, _2, direction, tolerance));
       }
 
-				     // set up array of vertices
+    // set up array of vertices
     Handle(TColgp_HArray1OfPnt) vertices = new TColgp_HArray1OfPnt(1,n_vertices);
     for (unsigned int vertex=0; vertex<n_vertices; ++vertex)
       {
@@ -358,24 +411,24 @@ namespace OpenCASCADE
     for(exp.Init(in_shape, TopAbs_EDGE); exp.More(); exp.Next()) {
       TopoDS_Edge edge = TopoDS::Edge(exp.Current());
       if(!BRep_Tool::Degenerated(edge)) {
-	  TopLoc_Location L;
-	  Standard_Real First;
-	  Standard_Real Last;
+	TopLoc_Location L;
+	Standard_Real First;
+	Standard_Real Last;
       
-	  // the projection function needs a Curve, so we obtain the
-	  // curve upon which the edge is defined
-	  Handle(Geom_Curve) CurveToProj = BRep_Tool::Curve(edge,L,First,Last);
+	// the projection function needs a Curve, so we obtain the
+	// curve upon which the edge is defined
+	Handle(Geom_Curve) CurveToProj = BRep_Tool::Curve(edge,L,First,Last);
 
-	  GeomAPI_ProjectPointOnCurve Proj(Pnt(origin),CurveToProj);
-	  unsigned int num_proj_points = Proj.NbPoints();
-	  if ((num_proj_points > 0) && (Proj.LowerDistance() < minDistance))
-	    {
-	      minDistance = Proj.LowerDistance();
-	      Pproj = Proj.NearestPoint();
-	      out_shape = edge;
-	      u=Proj.LowerDistanceParameter();
-	      ++counter;
-	    }
+	GeomAPI_ProjectPointOnCurve Proj(Pnt(origin),CurveToProj);
+	unsigned int num_proj_points = Proj.NbPoints();
+	if ((num_proj_points > 0) && (Proj.LowerDistance() < minDistance))
+	  {
+	    minDistance = Proj.LowerDistance();
+	    Pproj = Proj.NearestPoint();
+	    out_shape = edge;
+	    u=Proj.LowerDistanceParameter();
+	    ++counter;
+	  }
       }
     }
     
