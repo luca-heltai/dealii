@@ -52,10 +52,9 @@ DEAL_II_NAMESPACE_OPEN
  * contains 3 fields: location, orientation and a myTShape handle (of
  * the TopoDS_TShape type). According to OpenCASCADE documentation,
  * myTShape and Location are used to share data between various shapes
- * and thus save huge amounts of memory. For example, an edge
- * belonging to two faces has equal Locations and myTShape fields but
- * different Orientations (Forward in context of one face and Reversed
- * in one of the other).
+ * to save memory. For example, an edge belonging to two faces has
+ * equal Locations and myTShape fields but different Orientations
+ * (Forward in context of one face and Reversed in one of the other).
  *
  * Valid shapes include collection of other shapes, solids, faces,
  * edges, vertices, etc.
@@ -88,11 +87,11 @@ DEAL_II_NAMESPACE_OPEN
 namespace OpenCASCADE 
 {
   /**
-   * Count the subobjects of a shape. This function just outputs some
-   * information about the TopoDS_Shape passed as argument. It counts
-   * the number of faces, edges and vertices (the only topological
-   * entities associated with actual geometries) which are contained
-   * in the given shape.
+   * Count the subobjects of a shape. This function is useful to
+   * gather information about the TopoDS_Shape passed as argument. It
+   * counts the number of faces, edges and vertices (the only
+   * topological entities associated with actual geometries) which are
+   * contained in the given shape.
    */
   void count_elements(const TopoDS_Shape &shape,
 		      unsigned int &n_faces,
@@ -238,6 +237,11 @@ namespace OpenCASCADE
 		  IFSelect_ReturnStatus, 
 		  <<"An OpenCASCADE routine failed with return status "
 		  <<arg1);
+		  
+  /**
+   * Trying to make curve operations on a degenerate edge.
+   */ 
+  DeclException0(ExcEdgeIsDegenerate);
 } 
 /*@}*/
 

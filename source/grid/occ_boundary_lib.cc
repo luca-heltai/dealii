@@ -6,6 +6,7 @@
 #include <BRepAdaptor_Curve.hxx>
 #include <GCPnts_AbscissaPoint.hxx>
 #include <ShapeAnalysis_Curve.hxx>
+#include <BRep_Tool.hxx>
 
 DEAL_II_NAMESPACE_OPEN
 
@@ -82,6 +83,7 @@ namespace OpenCASCADE
     length(OpenCASCADE::length(sh))
   {
     Assert(spacedim == 3, ExcImpossibleInDim(spacedim));
+    Assert(!BRep_Tool::Degenerated(sh), ExcEdgeIsDegenerate());
   }
 
   
