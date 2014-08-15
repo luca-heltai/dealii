@@ -22,6 +22,8 @@
 
 #ifdef DEAL_II_WITH_OPENCASCADE
 
+#include <deal.II/grid/tria.h>
+
 #include <string>
 #include <TopoDS_Shape.hxx>
 #include <TopoDS_Face.hxx>
@@ -184,6 +186,19 @@ namespace OpenCASCADE
 				  std::vector<TopoDS_Face> &faces,
 				  std::vector<TopoDS_Edge> &edges,
 				  std::vector<TopoDS_Vertex> &vertices);
+  
+  /**
+   * Create a triangulation from a single face. This class extract the
+   * first u and v parameter of the parametric surface making up this
+   * face, and creates a Triangulation<2,3> containing a single coarse
+   * cell reflecting this face. If the surface is not a trimmed
+   * surface, the vertices of this cell will coincide with the
+   * TopoDS_Vertex vertices of the original TopoDS_Face. This,
+   * however, is often not the case, and the user should be careful on
+   * how this mesh is used.
+   */
+  void create_triangulation(const TopoDS_Face &face, 
+			    Triangulation<2,3> &tria);
 
   /**
    * Extract all compound shapes from a TopoDS_Shape, and store the
