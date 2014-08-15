@@ -33,6 +33,8 @@
 #include <GeomAPI_ProjectPointOnCurve.hxx>
 #include <IntCurvesFace_ShapeIntersector.hxx>
 #include <BRepAdaptor_Curve.hxx>
+#include <BRepAdaptor_Surface.hxx>
+
 // #include <Standard_Real.hxx>
 // #include <Standard_Integer.hxx>
 // #include <BRep_Tool.hxx>
@@ -444,7 +446,32 @@ namespace OpenCASCADE
       return 0;
     }
   }
+  
+  void create_triangulation(const TopoDS_Face &face,
+                            Triangulation<2,3> &tria) {
+    BRepAdaptor_Surface surf(face);
+    const double u0 = surf.FirstUParameter();
+    const double u1 = surf.LastUParameter();
+    const double v0 = surf.FirstVParameter();
+    const double v1 = surf.LastVParameter();
     
+    std::vector<CellData<2> > cells;
+    std::vector<Point<3> > vertices;
+    SubCellData t;
+    
+    vertices.push_back(Pnt(surf.Value(u0,v0)));
+    vertices.push_back(Pnt(surf.Value(u1,v0)));
+    vertices.push_back(Pnt(surf.Value(u0,v1)));
+    vertices.push_back(Pnt(surf.Value(u1,v1)));
+    
+    CellData<2> cell;
+    for(unsigned int i=0; i<4; ++i) 
+      cell.vertices[i] = i;
+      
+    cells.push_back(cell);
+    tria.create_triangulation(vertices, cells, t);
+  }
+  
 
 } // end namespace
 
