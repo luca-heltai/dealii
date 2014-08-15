@@ -26,6 +26,7 @@
 #include <deal.II/grid/tria_boundary.h>
 
 #include <BRepAdaptor_Curve.hxx>
+#include <Adaptor3d_Curve.hxx>
 
 DEAL_II_NAMESPACE_OPEN
 
@@ -105,6 +106,12 @@ namespace OpenCASCADE
    * calling OpenCASCADE::closest_point() on those points leaves them
    * untouched. If this is not the case, an ExcPointNotOnManifold is
    * thrown.
+   *
+   * Notice that this type of Boundary descriptor may fail to give
+   * results if the triangulation to be refined is close to the
+   * boundary of the given TopoDS_Shape, or when the direction you use
+   * at construction time does not intersect the shape. An exception
+   * is thrown when this appens. 
    * 
    * @author Luca Heltai, Andrea Mola, 2011--2014.
    */
@@ -153,18 +160,24 @@ namespace OpenCASCADE
   };
   
   /**
-   * A Boundary object based on OpenCASCADE TopoDS_Edge objects where
-   * new points are located at the arclength average of the
-   * surrounding points. If the given TopoDS_Edge can be casted to a
-   * periodic (closed) curve, then this information is used internally
-   * to set the periodicity of the base ChartManifold class.
+   * A Boundary object based on OpenCASCADE TopoDS_Shape objects which
+   * have topological dimension equal to one (TopoDS_Edge or
+   * TopoDS_Wire) where new points are located at the arclength
+   * average of the surrounding points. If the given TopoDS_Shape can
+   * be casted to a periodic (closed) curve, then this information is
+   * used internally to set the periodicity of the base ChartManifold
+   * class.
    *
-   * This class can only work on TopoDS_Edge objects, and it only
-   * makes sense when spacedim is three. In debug mode there is a
-   * sanity check to make sure that the surrounding points actually
-   * live on the Manifold, i.e., calling OpenCASCADE::closest_point()
-   * on those points leaves them untouched. If this is not the case,
-   * an ExcPointNotOnManifold is thrown.
+   * This class can only work on TopoDS_Edge or TopoDS_Wire objects,
+   * and it only makes sense when spacedim is three. If you use an
+   * object of topological dimension different from one, an exception
+   * is throw.
+   *
+   * In debug mode there is an additiona sanity check to make sure
+   * that the surrounding points actually live on the Manifold, i.e.,
+   * calling OpenCASCADE::closest_point() on those points leaves them
+   * untouched. If this is not the case, an ExcPointNotOnManifold is
+   * thrown.
    * 
    * @author Luca Heltai, Andrea Mola, 2011--2014.
    */
@@ -175,7 +188,7 @@ namespace OpenCASCADE
     /**
      * Default constructor with a TopoDS_Edge.
      */
-    ArclengthProjectionLineManifold(const TopoDS_Edge &sh,
+    ArclengthProjectionLineManifold(const TopoDS_Shape &sh,
 				    const double tolerance=1e-7);
     
     /**
@@ -194,10 +207,11 @@ namespace OpenCASCADE
     
   private:
     /**
-     * The internal OpenCASCADE curve on which we perform the analysis. 
+     * A Curve adaptor. This is the one which is used in the
+     * computations, and it points to the right one above.
      */
-    mutable BRepAdaptor_Curve curve;
-    
+    Handle_Adaptor3d_HCurve curve;
+
     /**
      * Relative tolerance used in all internal computations. 
      */
