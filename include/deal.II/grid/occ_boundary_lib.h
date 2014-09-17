@@ -30,12 +30,12 @@
 
 DEAL_II_NAMESPACE_OPEN
 
-namespace OpenCASCADE 
+namespace OpenCASCADE
 {
   /**
    * @addtogroup OpenCASCADE
    * @{
-   * 
+   *
    * A Boundary object based on OpenCASCADE TopoDS_Shape where new
    * points are first computed using the FlatManifold class, and then
    * projected in the normal direction using OpenCASCADE utilities.
@@ -54,15 +54,16 @@ namespace OpenCASCADE
    * vertices of the face would be collapsed to the edge, and your
    * surrounding points would not be on lying on the given shape,
    * raising an exception.
-   * 
+   *
    * @author Luca Heltai, Andrea Mola, 2011--2014.
    */
   template <int dim, int spacedim>
-  class NormalProjectionBoundary : public Boundary<dim,spacedim> {
-    public:
-    NormalProjectionBoundary(const TopoDS_Shape sh, 
-			     const double tolerance=1e-7);
-    
+  class NormalProjectionBoundary : public Boundary<dim,spacedim>
+  {
+  public:
+    NormalProjectionBoundary(const TopoDS_Shape sh,
+                             const double tolerance=1e-7);
+
     /**
      * Perform the actual projection onto the manifold. This function,
      * in debug mode, checks that each of the #surrounding_points is
@@ -74,7 +75,7 @@ namespace OpenCASCADE
      */
     virtual Point<spacedim>
     project_to_manifold (const std::vector<Point<spacedim> > &surrounding_points,
-			 const Point<spacedim> &candidate) const;
+                         const Point<spacedim> &candidate) const;
 
 
   private:
@@ -83,7 +84,7 @@ namespace OpenCASCADE
      * points. You can construct one such a shape by calling the
      * OpenCASCADE::read_IGES() function, which will create a
      * TopoDS_Shape with the geometry contained in the IGES file.
-     */ 
+     */
     const TopoDS_Shape sh;
 
     /**
@@ -111,21 +112,22 @@ namespace OpenCASCADE
    * results if the triangulation to be refined is close to the
    * boundary of the given TopoDS_Shape, or when the direction you use
    * at construction time does not intersect the shape. An exception
-   * is thrown when this appens. 
-   * 
+   * is thrown when this appens.
+   *
    * @author Luca Heltai, Andrea Mola, 2011--2014.
    */
   template <int dim, int spacedim>
-  class AxisProjectionBoundary : public Boundary<dim,spacedim> {
-    public:
+  class AxisProjectionBoundary : public Boundary<dim,spacedim>
+  {
+  public:
     /**
      * Construct a Boundary object which will project points on the
      * TopoDS_Shape #sh, along the given #direction.
      */
-    AxisProjectionBoundary(const TopoDS_Shape sh, 
-			   const Point<3> direction, 
-			   const double tolerance=1e-7);
-    
+    AxisProjectionBoundary(const TopoDS_Shape sh,
+                           const Point<3> direction,
+                           const double tolerance=1e-7);
+
     /**
      * Perform the actual projection onto the manifold. This function,
      * in debug mode, checks that each of the #surrounding_points is
@@ -137,7 +139,7 @@ namespace OpenCASCADE
      */
     virtual Point<spacedim>
     project_to_manifold (const std::vector<Point<spacedim> > &surrounding_points,
-			 const Point<spacedim> &candidate) const;
+                         const Point<spacedim> &candidate) const;
 
   private:
     /**
@@ -145,11 +147,11 @@ namespace OpenCASCADE
      * points. You can construct one such a shape by calling the
      * OpenCASCADE::read_IGES() function, which will create a
      * TopoDS_Shape with the geometry contained in the IGES file.
-     */ 
+     */
     const TopoDS_Shape sh;
 
     /**
-     * Direction used to project new points on the shape. 
+     * Direction used to project new points on the shape.
      */
     const Point<3> direction;
 
@@ -158,7 +160,7 @@ namespace OpenCASCADE
      */
     const double tolerance;
   };
-  
+
   /**
    * A Boundary object based on OpenCASCADE TopoDS_Shape objects which
    * have topological dimension equal to one (TopoDS_Edge or
@@ -178,19 +180,19 @@ namespace OpenCASCADE
    * calling OpenCASCADE::closest_point() on those points leaves them
    * untouched. If this is not the case, an ExcPointNotOnManifold is
    * thrown.
-   * 
+   *
    * @author Luca Heltai, Andrea Mola, 2011--2014.
    */
   template <int dim, int spacedim>
-  class ArclengthProjectionLineManifold : public  ChartManifold<dim,spacedim,1> 
+  class ArclengthProjectionLineManifold : public  ChartManifold<dim,spacedim,1>
   {
-    public:
+  public:
     /**
      * Default constructor with a TopoDS_Edge.
      */
     ArclengthProjectionLineManifold(const TopoDS_Shape &sh,
-				    const double tolerance=1e-7);
-    
+                                    const double tolerance=1e-7);
+
     /**
      * Given a point on real space, find its arclength
      * parameter. Throws an error in debug mode, if the point is not
@@ -204,7 +206,7 @@ namespace OpenCASCADE
      */
     virtual Point<spacedim>
     push_forward(const Point<1> &chart_point) const;
-    
+
   private:
     /**
      * A Curve adaptor. This is the one which is used in the
@@ -213,7 +215,7 @@ namespace OpenCASCADE
     Handle_Adaptor3d_HCurve curve;
 
     /**
-     * Relative tolerance used in all internal computations. 
+     * Relative tolerance used in all internal computations.
      */
     const double tolerance;
 
