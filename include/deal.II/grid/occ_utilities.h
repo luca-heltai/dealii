@@ -161,11 +161,11 @@ namespace OpenCASCADE
    *
    * This class is used to interpolate a BsplineCurve passing through
    * an array of points, with a C2 Continuity. If the optional
-   * parameter #closed is set to true, then the curve will be C2 at
+   * parameter @p closed is set to true, then the curve will be C2 at
    * all points execpt the first (where only C1 continuity will be
    * given), and it will be a closed curve.
    *
-   * The curve is garanteed to be at distance #tolerance from the
+   * The curve is garanteed to be at distance @p tolerance from the
    * input points. If the algorithm fails in generating such a curve,
    * an exception is thrown.
    */
@@ -227,11 +227,11 @@ namespace OpenCASCADE
                          const double tolerance=1e-7);
 
   /**
-   * Intersect a line passing through the given #origin point along
-   * #direction and the given topological shape. If there is more than
+   * Intersect a line passing through the given @p origin point along
+   * @p direction and the given topological shape. If there is more than
    * one intersection, it will return the closest one.
    *
-   * The optional #tolerance parameter is used to compute distances.
+   * The optional @p tolerance parameter is used to compute distances.
    */
   Point<3> axis_intersection(const TopoDS_Shape in_shape,
                              const Point<3> origin,
@@ -272,7 +272,7 @@ namespace OpenCASCADE
 
   /**
    * Exception thrown when the point specified as argument does not
-   * lie between #tolerance from the given TopoDS_Shape.
+   * lie between @p tolerance from the given TopoDS_Shape.
    */
   DeclException1 (ExcPointNotOnManifold,
                   Point<3>,
