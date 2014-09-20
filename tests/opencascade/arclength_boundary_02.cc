@@ -77,12 +77,8 @@ int main()
   tria.refine_global(2);
 
 
-  // You can open the generated file with paraview.
+  // You can open the generated file with gmsh
   GridOut gridout;
   gridout.write_msh (tria, logfile);
-
-  std::ofstream of("/fast_scratch/heltai/fast_build/grid.msh");
-  gridout.write_msh(tria, of);
-  
   return 0;
 }
