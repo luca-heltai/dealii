@@ -66,7 +66,7 @@ namespace OpenCASCADE
 
     /**
      * Perform the actual projection onto the manifold. This function,
-     * in debug mode, checks that each of the #surrounding_points is
+     * in debug mode, checks that each of the @p surrounding_points is
      * within tolerance from the given TopoDS_Shape. If this is not
      * the case, an exception is thrown.
      *
@@ -122,7 +122,7 @@ namespace OpenCASCADE
   public:
     /**
      * Construct a Boundary object which will project points on the
-     * TopoDS_Shape #sh, along the given #direction.
+     * TopoDS_Shape @p sh, along the given @p direction.
      */
     AxisProjectionBoundary(const TopoDS_Shape sh,
                            const Point<3> direction,
@@ -130,7 +130,7 @@ namespace OpenCASCADE
 
     /**
      * Perform the actual projection onto the manifold. This function,
-     * in debug mode, checks that each of the #surrounding_points is
+     * in debug mode, checks that each of the @p surrounding_points is
      * within tolerance from the given TopoDS_Shape. If this is not
      * the case, an exception is thrown.
      *
@@ -175,7 +175,7 @@ namespace OpenCASCADE
    * object of topological dimension different from one, an exception
    * is throw.
    *
-   * In debug mode there is an additiona sanity check to make sure
+   * In debug mode there is an additional sanity check to make sure
    * that the surrounding points actually live on the Manifold, i.e.,
    * calling OpenCASCADE::closest_point() on those points leaves them
    * untouched. If this is not the case, an ExcPointNotOnManifold is
