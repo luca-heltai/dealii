@@ -64,8 +64,5 @@ int main ()
   GridOut gridout;
   gridout.write_msh(tria, logfile);
   
-  std::ofstream of("/fast_scratch/heltai/fast_build/mesh.msh");
-  gridout.write_msh(tria, of);
-  
   return 0;
 }                  
