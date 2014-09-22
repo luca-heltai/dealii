@@ -52,7 +52,7 @@ int main ()
   extract_geometrical_shapes(sh, faces, edges, vertices);
 
   // Create a boundary projector on the first face.
-  NormalProjectionBoundary<2,3> boundary(faces[0]);
+  NormalProjectionBoundary<2,3> boundary(faces[0], 1e-9);
   
   // Create a Triangulation with a single cell
   Triangulation<2,3> tria;
