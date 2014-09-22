@@ -13,6 +13,7 @@
  * the top level of the deal.II distribution.
  *
  * ---------------------------------------------------------------------
+ *  Authors: Andrea Mola, Luca Heltai, 2014
  */
 
 
