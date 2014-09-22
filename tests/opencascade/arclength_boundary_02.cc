@@ -1,16 +1,12 @@
-//----------------------------  occ_circle_projection.cc  ---------------------------
-//    $Id: testsuite.html 13373 2006-07-13 13:12:08Z kanschat $
-//    Version: $Name$ 
+//-----------------------------------------------------------
 //
-//    Copyright (C) 2005 by the deal.II authors 
+//    Copyright (C) 2014 by the deal.II authors
 //
-//    This file is subject to QPL and may not be  distributed
+//    This file is subject to LGPL and may not be distributed
 //    without copyright and license information. Please refer
 //    to the file deal.II/doc/license.html for the  text  and
 //    further information on this license.
-//
-//----------------------------  occ_circle_projection.cc  ---------------------------
-
+//-----------------------------------------------------------
 
 // Create a Triangulation, interpolate its boundary points to a close
 // smooth BSpline, and use that as a Boundary Descriptor.
