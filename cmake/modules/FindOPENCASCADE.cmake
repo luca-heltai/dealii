@@ -76,8 +76,8 @@ SET(OPENCASCADE_LIBRARIES
 
 SET(_libraries "")
 FOREACH(_library ${OPENCASCADE_LIBRARIES})
-  LIST(APPEND _libraries ${_library})
-  DEAL_II_FIND_LIBRARY(${_library}
+  LIST(APPEND _libraries OPENCASCADE_${_library})
+  DEAL_II_FIND_LIBRARY(OPENCASCADE_${_library}
     NAMES ${_library}
     HINTS ${OPENCASCADE_DIR}
     PATH_SUFFIXES lib${LIB_SUFFIX} lib64 lib
