@@ -3,6 +3,10 @@
 #ifdef DEAL_II_WITH_OPENCASCADE
 
 #include <deal.II/base/point.h>
+#include <deal.II/base/utilities.h>
+#include <deal.II/base/exceptions.h>
+
+#include <boost/bind.hpp>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -15,70 +19,40 @@
 
 #include <TopoDS.hxx>
 #include <TopoDS_Shape.hxx>
-// #include <TopoDS_Shell.hxx>
 #include <TopoDS_Face.hxx>
 #include <TopoDS_Edge.hxx>
-#include <BRepTools.hxx>
+#include <TopExp_Explorer.hxx>
 
-// #include <XSControl_Reader.hxx>
-// #include <TopTools_SequenceOfShape.hxx>
 #include <Handle_Standard_Transient.hxx>
+
 #include <TColStd_SequenceOfTransient.hxx>
 #include <TColStd_HSequenceOfTransient.hxx>
-#include <TopExp_Explorer.hxx>
+#include <TColgp_HArray1OfPnt.hxx>
+
 #include <gp_Pnt.hxx>
 #include <gp_Lin.hxx>
 #include <gp_Vec.hxx>
 #include <GeomAPI_ProjectPointOnSurf.hxx>
 #include <GeomAPI_ProjectPointOnCurve.hxx>
 #include <IntCurvesFace_ShapeIntersector.hxx>
+
+#include <BRepTools.hxx>
 #include <BRepAdaptor_Curve.hxx>
 #include <BRepAdaptor_HCurve.hxx>
 #include <BRepAdaptor_HCompCurve.hxx>
 #include <BRepAdaptor_Surface.hxx>
-
-// #include <Standard_Real.hxx>
-// #include <Standard_Integer.hxx>
-// #include <BRep_Tool.hxx>
-// #include <Geom_Surface.hxx>
-#include <Geom_Plane.hxx>
-// #include <Prs3d_ShapeTool.hxx>
-// #include <GeomAPI_IntSS.hxx>
-// #include <Bnd_Box.hxx>
-// #include <gp_Trsf.hxx>
-// #include <gp_Ax3.hxx>
-// #include <gp_Pln.hxx>
+#include <BRep_Builder.hxx>
 #include <BRepBuilderAPI_Transform.hxx>
-#include <GeomConvert_CompCurveToBSplineCurve.hxx>
 #include <BRepBuilderAPI_MakeEdge.hxx>
-// #include <TColGeom_Array1OfCurve.hxx>
-#include <TColgp_HArray1OfPnt.hxx>
-// #include <Geom_Curve.hxx>
-#include <Geom_BoundedCurve.hxx>
-// #include <Geom_TrimmedCurve.hxx>
-// #include <Geom_BSplineCurve.hxx>
-#include <GeomAPI_Interpolate.hxx>
 #include <BRepAlgo_Section.hxx>
-// #include <GeomLib_Tool.hxx>
-// #include <TColGeom_Array2OfBezierSurface.hxx>
-// #include <ProjLib_ProjectOnPlane.hxx>
-// #include <Adaptor3d_HCurve.hxx>
-// #include <GeomAdaptor_HCurve.hxx>
+
+#include <Geom_Plane.hxx>
+#include <Geom_BoundedCurve.hxx>
+#include <GeomAPI_Interpolate.hxx>
+#include <GeomConvert_CompCurveToBSplineCurve.hxx>
+
 #include <GCPnts_AbscissaPoint.hxx>
 #include <ShapeAnalysis_Surface.hxx>
-// #include <GeomLProp_SLProps.hxx>
-// #include <BRepExtrema_DistShapeShape.hxx>
-// #include <BRepBuilderAPI_MakeVertex.hxx>
-// #include <GCPnts_AbscissaPoint.hxx>
-// #include <GeomLProp_CLProps.hxx>
-
-#include <deal.II/base/utilities.h>
-#include <deal.II/base/exceptions.h>
-
-#include <boost/bind.hpp>
-
-#include <BRep_Builder.hxx>
-
 
 #include <vector>
 #include <algorithm>
@@ -214,7 +188,7 @@ namespace OpenCASCADE
     //selects all IGES faces in the
     //file and puts them into a list
     //called MyList,
-    Standard_Integer // nIgesFaces = myList->Length(),
+    Standard_Integer 
     nTransFaces = reader.TransferList(myList);
 
     AssertThrow(nTransFaces > 0,

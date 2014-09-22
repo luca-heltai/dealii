@@ -1,19 +1,16 @@
-
-//----------------------------  iges_read.cc  ---------------------------
-//    $Id: testsuite.html 13373 2006-07-13 13:12:08Z kanschat $
-//    Version: $Name$ 
+//-----------------------------------------------------------
 //
-//    Copyright (C) 2005 by the deal.II authors 
+//    Copyright (C) 2014 by the deal.II authors 
 //
-//    This file is subject to QPL and may not be  distributed
+//    This file is subject to LGPL and may not be distributed
 //    without copyright and license information. Please refer
 //    to the file deal.II/doc/license.html for the  text  and
 //    further information on this license.
 //
-//----------------------------  iges_read.cc  ---------------------------
+//-----------------------------------------------------------
 
-
-// Read goteborg.iges and dump its topological structure to the logfile.
+// Read goteborg.iges and dump its topological structure to the
+// logfile.
 
 #include "../tests.h"
 #include <fstream>
@@ -51,15 +48,6 @@ int main ()
     deallog << "Error!" << std::endl;
   if(nv != vertices.size())
     deallog << "Error!" << std::endl;
-  
-  // try 
-  //   {
-  //     TopoDS_Shape sh_fail = read_IGES("iges_files/nonexistent.iges");
-  //   }
-  // catch(...)
-  //   {
-  //     deallog << "Missing file correctly threw an exception." << std::endl;
-  //   }
   
   return 0;
 }

@@ -1,19 +1,15 @@
-
-//----------------------------  iges_read.cc  ---------------------------
-//    $Id: testsuite.html 13373 2006-07-13 13:12:08Z kanschat $
-//    Version: $Name$ 
+//-----------------------------------------------------------
 //
-//    Copyright (C) 2005 by the deal.II authors 
+//    Copyright (C) 2014 by the deal.II authors 
 //
-//    This file is subject to QPL and may not be  distributed
+//    This file is subject to LGPL and may not be distributed
 //    without copyright and license information. Please refer
 //    to the file deal.II/doc/license.html for the  text  and
 //    further information on this license.
 //
-//----------------------------  iges_read.cc  ---------------------------
+//-----------------------------------------------------------
 
-
-// Read goteborg.iges and dump its topological structure to the logfile.
+// Create a bspline, and write it as an IGES file.
 
 #include "../tests.h"
 #include <fstream>
@@ -28,10 +24,6 @@ using namespace OpenCASCADE;
 
 int main () 
 {
-  // std::ofstream logfile("output");
-  // deallog.attach(logfile);
-  // deallog.depth_console(0);
-  
   // Create a bspline passign through the points
   std::vector<Point<3> > pts;
   pts.push_back(Point<3>(0,0,0));
