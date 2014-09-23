@@ -188,8 +188,7 @@ namespace OpenCASCADE
     //selects all IGES faces in the
     //file and puts them into a list
     //called MyList,
-    Standard_Integer 
-    nTransFaces = reader.TransferList(myList);
+    Standard_Integer nTransFaces = reader.TransferList(myList);
 
     AssertThrow(nTransFaces > 0,
                 ExcMessage("Read nothing from file."));
