@@ -59,7 +59,7 @@ namespace OpenCASCADE
     sh(sh),
     tolerance(tolerance)
   {
-    Assert(spacedim == 3, ExcImpossibleInDim(spacedim));
+    Assert(spacedim == 3, ExcNotImplemented());
   }
 
 
@@ -88,7 +88,7 @@ namespace OpenCASCADE
     direction(direction),
     tolerance(tolerance)
   {
-    Assert(spacedim == 3, ExcImpossibleInDim(spacedim));
+    Assert(spacedim == 3, ExcNotImplemented());
   }
 
 
@@ -122,7 +122,7 @@ namespace OpenCASCADE
     tolerance(tolerance),
     length(shape_length(sh))
   {
-    Assert(spacedim == 3, ExcImpossibleInDim(spacedim));
+    Assert(spacedim == 3, ExcNotImplemented());
   }
 
 
