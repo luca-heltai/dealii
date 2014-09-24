@@ -21,21 +21,22 @@ namespace OpenCASCADE
 {
 
 
-  namespace {
+  namespace
+  {
     /**
      * Return a Geometrical curve representation for the given
      * TopoDS_Shape. This function will fail when the given shape is
      * not of topological dimension one.
      */
-    Handle_Adaptor3d_HCurve curve_adaptor(const TopoDS_Shape &shape) 
+    Handle_Adaptor3d_HCurve curve_adaptor(const TopoDS_Shape &shape)
     {
       Assert( (shape.ShapeType() == TopAbs_WIRE) ||
-	      (shape.ShapeType() == TopAbs_EDGE),
-	      ExcUnsupportedShape());
+              (shape.ShapeType() == TopAbs_EDGE),
+              ExcUnsupportedShape());
       if (shape.ShapeType() == TopAbs_WIRE)
-	return (Handle(BRepAdaptor_HCompCurve(new BRepAdaptor_HCompCurve(TopoDS::Wire(shape)))));
+        return (Handle(BRepAdaptor_HCompCurve(new BRepAdaptor_HCompCurve(TopoDS::Wire(shape)))));
       else if (shape.ShapeType() == TopAbs_EDGE)
-	return (Handle(BRepAdaptor_HCurve(new BRepAdaptor_HCurve(TopoDS::Edge(shape)))));
+        return (Handle(BRepAdaptor_HCurve(new BRepAdaptor_HCurve(TopoDS::Edge(shape)))));
 
       Assert(false, ExcInternalError());
       return Handle(BRepAdaptor_HCurve(new BRepAdaptor_HCurve()));
@@ -81,7 +82,7 @@ namespace OpenCASCADE
   /*============================== DirectionalProjectionBoundary ==============================*/
   template <int dim, int spacedim>
   DirectionalProjectionBoundary<dim,spacedim>::DirectionalProjectionBoundary(const TopoDS_Shape &sh,
-									     const Tensor<1,spacedim> &direction,
+      const Tensor<1,spacedim> &direction,
       const double tolerance) :
     sh(sh),
     direction(direction),
