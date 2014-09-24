@@ -36,7 +36,6 @@
 #include <TopoDS_Wire.hxx>
 #include <IFSelect_ReturnStatus.hxx>
 #include <gp_Pnt.hxx>
-#include <Handle_Adaptor3d_HCurve.hxx>
 
 #include <deal.II/base/point.h>
 
@@ -260,14 +259,6 @@ namespace OpenCASCADE
   bool point_compare(const dealii::Point<3> &p1, const dealii::Point<3> &p2,
                      const dealii::Point<3> direction=Point<3>(),
                      const double tolerance=1e-10);
-
-  /**
-   * Return a Geometrical curve representation for the given
-   * TopoDS_Shape. This function will fail when the given shape is
-   * not of topological dimension one.
-   */
-  Handle_Adaptor3d_HCurve curve_adaptor(const TopoDS_Shape &shape);
-
 
 
   /**

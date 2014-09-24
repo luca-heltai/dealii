@@ -52,7 +52,7 @@ int main ()
   
   TopoDS_Face face = BRepFill::Face (edge1, edge2);
 
-  AxisProjectionBoundary<2,3> manifold(face, Point<3>(0,0,1));
+  DirectionalProjectionBoundary<2,3> manifold(face, Point<3>(0,0,1));
   
   Triangulation<2,3> tria;
   GridGenerator::hyper_cube(tria);

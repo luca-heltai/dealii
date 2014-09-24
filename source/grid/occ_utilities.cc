@@ -450,22 +450,6 @@ namespace OpenCASCADE
     tria.create_triangulation(vertices, cells, t);
   }
 
-  Handle_Adaptor3d_HCurve curve_adaptor(const TopoDS_Shape &shape)
-  {
-    Assert( (shape.ShapeType() == TopAbs_WIRE) ||
-            (shape.ShapeType() == TopAbs_EDGE),
-            ExcUnsupportedShape());
-    if (shape.ShapeType() == TopAbs_WIRE)
-      return (Handle(BRepAdaptor_HCompCurve(new BRepAdaptor_HCompCurve(TopoDS::Wire(shape)))));
-    else if (shape.ShapeType() == TopAbs_EDGE)
-      return (Handle(BRepAdaptor_HCurve(new BRepAdaptor_HCurve(TopoDS::Edge(shape)))));
-
-    Assert(false, ExcInternalError());
-    return Handle(BRepAdaptor_HCurve(new BRepAdaptor_HCurve()));
-  }
-
-
-
 } // end namespace
 
 DEAL_II_NAMESPACE_CLOSE
