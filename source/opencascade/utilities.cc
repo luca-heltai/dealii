@@ -1,4 +1,4 @@
-#include <deal.II/grid/occ_utilities.h>
+#include <deal.II/opencascade/utilities.h>
 
 #ifdef DEAL_II_WITH_OPENCASCADE
 
