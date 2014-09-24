@@ -30,10 +30,10 @@
 
 DEAL_II_NAMESPACE_OPEN
 
-  /**
-   * @addtogroup OpenCASCADE
-   * @{
-   */
+/**
+ * @addtogroup OpenCASCADE
+ * @{
+ */
 
 namespace OpenCASCADE
 {
@@ -64,7 +64,7 @@ namespace OpenCASCADE
   class NormalProjectionBoundary : public Boundary<dim,spacedim>
   {
   public:
-    
+
     /**
      * The standard constructor takes a generic TopoDS_Shape @p sh,
      * and a tolerance used to compute distances internally.
@@ -137,8 +137,8 @@ namespace OpenCASCADE
      * TopoDS_Shape @p sh, along the given @p direction.
      */
     DirectionalProjectionBoundary(const TopoDS_Shape &sh,
-				  const Tensor<1,spacedim> &direction,
-				  const double tolerance=1e-7);
+                                  const Tensor<1,spacedim> &direction,
+                                  const double tolerance=1e-7);
 
     /**
      * Perform the actual projection onto the manifold. This function,
