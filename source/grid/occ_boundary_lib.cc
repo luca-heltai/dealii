@@ -5,20 +5,55 @@
 #include <GCPnts_AbscissaPoint.hxx>
 #include <BRepAdaptor_Curve.hxx>
 #include <BRepAdaptor_CompCurve.hxx>
+#include <BRepAdaptor_HCurve.hxx>
+#include <BRepAdaptor_HCompCurve.hxx>
 #include <GCPnts_AbscissaPoint.hxx>
 #include <ShapeAnalysis_Curve.hxx>
 #include <BRep_Tool.hxx>
 #include <TopoDS.hxx>
 #include <Adaptor3d_HCurve.hxx>
+#include <Handle_Adaptor3d_HCurve.hxx>
 
 DEAL_II_NAMESPACE_OPEN
+
 
 namespace OpenCASCADE
 {
 
+
+  namespace {
+    /**
+     * Return a Geometrical curve representation for the given
+     * TopoDS_Shape. This function will fail when the given shape is
+     * not of topological dimension one.
+     */
+    Handle_Adaptor3d_HCurve curve_adaptor(const TopoDS_Shape &shape) 
+    {
+      Assert( (shape.ShapeType() == TopAbs_WIRE) ||
+	      (shape.ShapeType() == TopAbs_EDGE),
+	      ExcUnsupportedShape());
+      if (shape.ShapeType() == TopAbs_WIRE)
+	return (Handle(BRepAdaptor_HCompCurve(new BRepAdaptor_HCompCurve(TopoDS::Wire(shape)))));
+      else if (shape.ShapeType() == TopAbs_EDGE)
+	return (Handle(BRepAdaptor_HCurve(new BRepAdaptor_HCurve(TopoDS::Edge(shape)))));
+
+      Assert(false, ExcInternalError());
+      return Handle(BRepAdaptor_HCurve(new BRepAdaptor_HCurve()));
+    }
+
+
+
+    // Helper internal functions.
+    double shape_length(const TopoDS_Shape &sh)
+    {
+      Handle_Adaptor3d_HCurve adapt = curve_adaptor(sh);
+      return GCPnts_AbscissaPoint::Length(adapt->GetCurve());
+    }
+  }
+
   /*============================== NormalProjectionBoundary ==============================*/
   template <int dim, int spacedim>
-  NormalProjectionBoundary<dim,spacedim>::NormalProjectionBoundary(const TopoDS_Shape sh,
+  NormalProjectionBoundary<dim,spacedim>::NormalProjectionBoundary(const TopoDS_Shape &sh,
       const double tolerance) :
     sh(sh),
     tolerance(tolerance)
@@ -43,10 +78,10 @@ namespace OpenCASCADE
     return closest_point(sh, candidate, out_shape, u, v);
   }
 
-  /*============================== AxisProjectionBoundary ==============================*/
+  /*============================== DirectionalProjectionBoundary ==============================*/
   template <int dim, int spacedim>
-  AxisProjectionBoundary<dim,spacedim>::AxisProjectionBoundary(const TopoDS_Shape sh,
-      const Point<3> direction,
+  DirectionalProjectionBoundary<dim,spacedim>::DirectionalProjectionBoundary(const TopoDS_Shape &sh,
+									     const Tensor<1,spacedim> &direction,
       const double tolerance) :
     sh(sh),
     direction(direction),
@@ -57,7 +92,7 @@ namespace OpenCASCADE
 
 
   template <int dim, int spacedim>
-  Point<spacedim>  AxisProjectionBoundary<dim,spacedim>::
+  Point<spacedim>  DirectionalProjectionBoundary<dim,spacedim>::
   project_to_manifold (const std::vector<Point<spacedim> > &surrounding_points,
                        const Point<spacedim> &candidate) const
   {
@@ -71,12 +106,6 @@ namespace OpenCASCADE
              ExcPointNotOnManifold(surrounding_points[i]));
 
     return axis_intersection(sh, candidate, direction, tolerance);
-  }
-
-  double shape_length(const TopoDS_Shape &sh)
-  {
-    Handle_Adaptor3d_HCurve adapt = curve_adaptor(sh);
-    return GCPnts_AbscissaPoint::Length(adapt->GetCurve());
   }
 
   /*============================== ArclengthProjectionLineManifold ==============================*/

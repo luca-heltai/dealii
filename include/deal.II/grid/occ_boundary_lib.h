@@ -30,15 +30,18 @@
 
 DEAL_II_NAMESPACE_OPEN
 
-namespace OpenCASCADE
-{
   /**
    * @addtogroup OpenCASCADE
    * @{
-   *
-   * A Boundary object based on OpenCASCADE TopoDS_Shape where new
-   * points are first computed using the FlatManifold class, and then
-   * projected in the normal direction using OpenCASCADE utilities.
+   */
+
+namespace OpenCASCADE
+{
+  /**
+   * A Boundary object based on OpenCASCADE TopoDS_Shape where where
+   * new points are first computed by averaging the surrounding points
+   * in the same way as FlatManifold does, and then projecting in the
+   * normal direction using OpenCASCADE utilities.
    *
    * This class makes no assumptions on the shape you pass to it, and
    * the topological dimension of the Manifold is inferred from the
@@ -52,8 +55,8 @@ namespace OpenCASCADE
    * This could happen, for example, if you are trying to use a shape
    * of type TopoDS_Edge when projecting on a face. In this case, the
    * vertices of the face would be collapsed to the edge, and your
-   * surrounding points would not be on lying on the given shape,
-   * raising an exception.
+   * surrounding points would not be lying on the given shape, raising
+   * an exception.
    *
    * @author Luca Heltai, Andrea Mola, 2011--2014.
    */
@@ -61,7 +64,15 @@ namespace OpenCASCADE
   class NormalProjectionBoundary : public Boundary<dim,spacedim>
   {
   public:
-    NormalProjectionBoundary(const TopoDS_Shape sh,
+    
+    /**
+     * The standard constructor takes a generic TopoDS_Shape @p sh,
+     * and a tolerance used to compute distances internally.
+     *
+     * The TopoDS_Shape can be of arbitrary, i.e., a collection of
+     * shapes, faces, edges or a single face or edge.
+     */
+    NormalProjectionBoundary(const TopoDS_Shape &sh,
                              const double tolerance=1e-7);
 
     /**
@@ -81,7 +92,7 @@ namespace OpenCASCADE
   private:
     /**
      * The topological shape which is used internally to project
-     * points. You can construct one such a shape by calling the
+     * points. You can construct such a shape by calling the
      * OpenCASCADE::read_IGES() function, which will create a
      * TopoDS_Shape with the geometry contained in the IGES file.
      */
@@ -95,9 +106,10 @@ namespace OpenCASCADE
 
   /**
    * A Boundary object based on OpenCASCADE TopoDS_Shape where new
-   * points are first computed using the FlatManifold class, and then
-   * projected along the direction given at construction time, using
-   * OpenCASCADE utilities.
+   * points are first computed by averaging the surrounding points in
+   * the same way as FlatManifold does, and then projecting in onto
+   * the manifold along the direction specified at construction time
+   * using OpenCASCADE utilities.
    *
    * This class makes no assumptions on the shape you pass to it, and
    * the topological dimension of the Manifold is inferred from the
@@ -117,16 +129,16 @@ namespace OpenCASCADE
    * @author Luca Heltai, Andrea Mola, 2011--2014.
    */
   template <int dim, int spacedim>
-  class AxisProjectionBoundary : public Boundary<dim,spacedim>
+  class DirectionalProjectionBoundary : public Boundary<dim,spacedim>
   {
   public:
     /**
      * Construct a Boundary object which will project points on the
      * TopoDS_Shape @p sh, along the given @p direction.
      */
-    AxisProjectionBoundary(const TopoDS_Shape sh,
-                           const Point<3> direction,
-                           const double tolerance=1e-7);
+    DirectionalProjectionBoundary(const TopoDS_Shape &sh,
+				  const Tensor<1,spacedim> &direction,
+				  const double tolerance=1e-7);
 
     /**
      * Perform the actual projection onto the manifold. This function,
@@ -134,7 +146,7 @@ namespace OpenCASCADE
      * within tolerance from the given TopoDS_Shape. If this is not
      * the case, an exception is thrown.
      *
-     * The projected point is computed using OpenCASCADE normal
+     * The projected point is computed using OpenCASCADE directional
      * projection algorithms.
      */
     virtual Point<spacedim>
