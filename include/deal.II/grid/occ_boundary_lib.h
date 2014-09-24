@@ -156,7 +156,7 @@ namespace OpenCASCADE
   private:
     /**
      * The topological shape which is used internally to project
-     * points. You can construct one such a shape by calling the
+     * points. You can construct such a shape by calling the
      * OpenCASCADE::read_IGES() function, which will create a
      * TopoDS_Shape with the geometry contained in the IGES file.
      */
