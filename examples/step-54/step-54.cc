@@ -86,6 +86,9 @@ namespace Step54
     TriangulationOnCAD(const unsigned int fe_degree = 1,
                const unsigned int mapping_degree = 1);
 
+    
+    ~TriangulationOnCAD();
+
     void run();
 
   private:
@@ -141,7 +144,14 @@ namespace Step54
     mapping(mapping_degree, true)
   {}
 
-
+  TriangulationOnCAD::~TriangulationOnCAD()
+  {
+  tria.set_manifold(1);
+  tria.set_manifold(2);
+  delete line_projector;
+  delete normal_projector;
+  delete axis_projector;
+  }
 
   void TriangulationOnCAD::read_parameters (const std::string &filename)
   {
@@ -241,15 +251,13 @@ namespace Step54
                                          shells,
                                          wires);
 
-    cout<<wires.size()<<endl;
-
 
     line_projector = new OpenCASCADE::ArclengthProjectionLineManifold<2,3>(wires[0]);
     normal_projector = new OpenCASCADE::NormalProjectionBoundary<2,3>(bow_surface);
     axis_projector = new OpenCASCADE::AxisProjectionBoundary<2,3>(bow_surface, Point<3>(0.0,1.0,0.0));
 
     tria.set_manifold(2, *line_projector);
-    tria.set_boundary(1,*axis_projector);
+    tria.set_manifold(1,*axis_projector);
   }
 
 
