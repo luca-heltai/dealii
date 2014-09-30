@@ -117,7 +117,6 @@ namespace Step54
     OpenCASCADE::NormalProjectionBoundary<2,3> *normal_projector;
     OpenCASCADE::DirectionalProjectionBoundary<2,3> *directional_projector;
 
-
   };
 
 
