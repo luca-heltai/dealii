@@ -177,8 +177,8 @@ namespace OpenCASCADE
     IGESControl_Reader reader;
     IFSelect_ReturnStatus stat;
     stat = reader.ReadFile(filename.c_str());
-    Assert(stat == IFSelect_RetDone,
-           ExcMessage("Error in reading file!"));
+    AssertThrow(stat == IFSelect_RetDone,
+                ExcMessage("Error in reading file!"));
 
     Standard_Boolean failsonly = Standard_False;
     IFSelect_PrintCount mode = IFSelect_ItemsByEntity;
@@ -211,10 +211,10 @@ namespace OpenCASCADE
     IGESControl_Controller::Init();
     IGESControl_Writer ICW ("MM", 0);
     Standard_Boolean ok = ICW.AddShape (shape);
-    Assert(ok, ExcMessage("Failed to add shape to IGES controller."));
+    AssertThrow(ok, ExcMessage("Failed to add shape to IGES controller."));
     ICW.ComputeModel();
     Standard_Boolean OK = ICW.Write (filename.c_str());
-    Assert(OK, ExcMessage("Failed to write IGES file."));
+    AssertThrow(OK, ExcMessage("Failed to write IGES file."));
   }
 
 
