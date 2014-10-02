@@ -99,14 +99,28 @@ namespace OpenCASCADE
   {
     TopoDS_Shape out_shape;
     double u=0, v=0;
+    Point<3> average_normal(0.0,0.0,0.0);
     for (unsigned int i=0; i<surrounding_points.size(); ++i)
-      Assert(closest_point(sh, surrounding_points[i], out_shape, u, v)
-             .distance(surrounding_points[i]) < (surrounding_points[i].norm()>0 ?
-                                                 tolerance*surrounding_points[i].norm() :
-                                                 tolerance),
-             ExcPointNotOnManifold(surrounding_points[i]));
+        {
+        Point<3> surface_normal;
+        double mean_curvature;
+        Assert(closest_point_and_diff_forms(sh, surrounding_points[i], surface_normal, mean_curvature)
+               .distance(surrounding_points[i]) < (surrounding_points[i].norm()>0 ?
+                                                   tolerance*surrounding_points[i].norm() :
+                                                   tolerance),
+               ExcPointNotOnManifold(surrounding_points[i]));
+        average_normal += surface_normal;
+        }
 
-    return line_intersection(sh, candidate, direction, tolerance);
+    average_normal/surrounding_points.size();
+
+
+    // if for any reason the normals have zero average, just use the direction
+    // specified at the construction of the projector. Otherwise use "local" normal estimate    
+    if (average_normal.norm() > 0.9)
+       return axis_intersection(sh, candidate, direction, tolerance);
+    else
+       return axis_intersection(sh, candidate, average_normal, tolerance);
   }
 
   /*============================== ArclengthProjectionLineManifold ==============================*/
