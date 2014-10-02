@@ -50,6 +50,7 @@
 #include <Geom_BoundedCurve.hxx>
 #include <GeomAPI_Interpolate.hxx>
 #include <GeomConvert_CompCurveToBSplineCurve.hxx>
+#include <GeomLProp_SLProps.hxx>
 
 #include <GCPnts_AbscissaPoint.hxx>
 #include <ShapeAnalysis_Surface.hxx>
@@ -366,6 +367,7 @@ namespace OpenCASCADE
     gp_Pnt tmp_proj(0.0,0.0,0.0);
 
     unsigned int counter = 0;
+    unsigned int face_counter = 0;
     u=0;
     v=0;
 
@@ -392,37 +394,90 @@ namespace OpenCASCADE
             v=proj_params.Y();
             ++counter;
           }
+        ++face_counter;
       }
 
-    for (exp.Init(in_shape, TopAbs_EDGE); exp.More(); exp.Next())
-      {
-        TopoDS_Edge edge = TopoDS::Edge(exp.Current());
-        if (!BRep_Tool::Degenerated(edge))
-          {
-            TopLoc_Location L;
-            Standard_Real First;
-            Standard_Real Last;
-
-            // the projection function needs a Curve, so we obtain the
-            // curve upon which the edge is defined
-            Handle(Geom_Curve) CurveToProj = BRep_Tool::Curve(edge,L,First,Last);
-
-            GeomAPI_ProjectPointOnCurve Proj(Pnt(origin),CurveToProj);
-            unsigned int num_proj_points = Proj.NbPoints();
-            if ((num_proj_points > 0) && (Proj.LowerDistance() < minDistance))
+    // face counter tells us if the shape contained faces: if it does, there is no need
+    // to loop on edges. Even if the closest point lies on the boundary of a parametric surface,
+    // we need in fact to retain the face and both u and v, if we want to use this method to
+    // retrieve the surface normal
+    if (face_counter)    
+       for (exp.Init(in_shape, TopAbs_EDGE); exp.More(); exp.Next())
+         {
+           TopoDS_Edge edge = TopoDS::Edge(exp.Current());
+           if (!BRep_Tool::Degenerated(edge))
               {
-                minDistance = Proj.LowerDistance();
-                Pproj = Proj.NearestPoint();
-                out_shape = edge;
-                u=Proj.LowerDistanceParameter();
-                ++counter;
+              TopLoc_Location L;
+              Standard_Real First;
+              Standard_Real Last;
+
+              // the projection function needs a Curve, so we obtain the
+              // curve upon which the edge is defined
+              Handle(Geom_Curve) CurveToProj = BRep_Tool::Curve(edge,L,First,Last);
+
+              GeomAPI_ProjectPointOnCurve Proj(Pnt(origin),CurveToProj);
+              unsigned int num_proj_points = Proj.NbPoints();
+              if ((num_proj_points > 0) && (Proj.LowerDistance() < minDistance))
+                 {
+                 minDistance = Proj.LowerDistance();
+                 Pproj = Proj.NearestPoint();
+                 out_shape = edge;
+                 u=Proj.LowerDistanceParameter();
+                 ++counter;
+                 }
               }
-          }
-      }
+         }
 
     Assert(counter > 0, ExcMessage("Could not find projection points."));
     return Pnt(Pproj);
   }
+
+
+  Point<3> closest_point_and_differential_forms(const TopoDS_Shape in_shape,
+                                                const Point<3> origin,
+                                                Point<3> &surface_normal,
+                                                double &mean_curvature,
+                                                const double tolerance)
+
+  {
+
+    TopoDS_Shape out_shape;
+    double u, v;
+
+    Point<3> result = closest_point(in_shape,
+                                    origin,
+                                    out_shape,
+                                    u,
+                                    v,
+                                    tolerance);
+
+    // just a check here: the number of faces in out_shape must be 1, otherwise
+    // something is wrong
+    unsigned int n_faces, n_edges, n_vertices;   
+    count_elements(out_shape,
+                   n_faces,
+                   n_edges,
+                   n_vertices);
+    Assert(n_faces == 0, ExcMessage("Could not find normal: the shape containing the closest point has 0 faces."));
+    Assert(n_faces > 1, ExcMessage("Could not find normal: the shape containing the closest point has more than 1 face."));
+    
+
+    TopExp_Explorer exp;
+    exp.Init(in_shape, TopAbs_FACE);
+    TopoDS_Face face = TopoDS::Face(exp.Current());
+
+    Handle(Geom_Surface) SurfToProj = BRep_Tool::Surface(face);
+    GeomLProp_SLProps props(SurfToProj, u, v, 1, tolerance);
+    gp_Dir Normal = props.Normal(); 
+    Standard_Real Mean_Curvature = props.MeanCurvature();
+
+    surface_normal = Point<3>(Normal.X(),Normal.Y(),Normal.Z());
+    mean_curvature = double(Mean_Curvature);
+
+    return result;
+  }
+
+
 
   void create_triangulation(const TopoDS_Face &face,
                             Triangulation<2,3> &tria)
