@@ -315,9 +315,28 @@ namespace OpenCASCADE
     IntCurvesFace_ShapeIntersector Inters;
     Inters.Load(in_shape,tolerance);
 
-    Inters.PerformNearest(line,-RealLast(),+RealLast());
+    // Keep in mind: PerformNearest sounds pretty but DOESN'T WORK!!!
+    // The closest point must be found by hand
+    Inters.Perform(line,-RealLast(),+RealLast());
     Assert(Inters.IsDone(), ExcMessage("Could not project point."));
-    return Pnt(Inters.Pnt(1));
+
+    double minDistance = 1e7;
+    double distance; 
+    int lowest_dist_int = 0;
+    Point<3> result;
+    for (int i=0; i<Inters.NbPnt(); ++i)
+        {
+        distance = Pnt(origin).Distance(Inters.Pnt(i+1));
+        //cout<<"Point "<<i<<": "<<Pnt(Inters.Pnt(i+1))<<"  distance: "<<distance<<endl;
+        if (distance < minDistance)
+           {
+           minDistance = distance;
+           result = Pnt(Inters.Pnt(i+1));
+           lowest_dist_int = i+1;
+           }
+        }
+
+    return result;
   }
 
   TopoDS_Edge interpolation_curve(std::vector<Point<3> > &curve_points,
@@ -401,7 +420,7 @@ namespace OpenCASCADE
     // to loop on edges. Even if the closest point lies on the boundary of a parametric surface,
     // we need in fact to retain the face and both u and v, if we want to use this method to
     // retrieve the surface normal
-    if (face_counter)    
+    if (face_counter==0)    
        for (exp.Init(in_shape, TopAbs_EDGE); exp.More(); exp.Next())
          {
            TopoDS_Edge edge = TopoDS::Edge(exp.Current());
@@ -458,8 +477,9 @@ namespace OpenCASCADE
                    n_faces,
                    n_edges,
                    n_vertices);
-    Assert(n_faces == 0, ExcMessage("Could not find normal: the shape containing the closest point has 0 faces."));
-    Assert(n_faces > 1, ExcMessage("Could not find normal: the shape containing the closest point has more than 1 face."));
+    
+    Assert(n_faces > 0, ExcMessage("Could not find normal: the shape containing the closest point has 0 faces."));
+    Assert(n_faces < 2, ExcMessage("Could not find normal: the shape containing the closest point has more than 1 face."));
     
 
     TopExp_Explorer exp;

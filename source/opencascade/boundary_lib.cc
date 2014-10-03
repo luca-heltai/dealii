@@ -105,10 +105,9 @@ namespace OpenCASCADE
         Point<3> surface_normal;
         double mean_curvature;
         Assert(closest_point_and_differential_forms(sh, surrounding_points[i], surface_normal, mean_curvature)
-               .distance(surrounding_points[i]) < (surrounding_points[i].norm()>0 ?
-                                                   tolerance*surrounding_points[i].norm() :
-                                                   tolerance),
-               ExcPointNotOnManifold(surrounding_points[i]));
+               .distance(surrounding_points[i]) <
+             1e2*std::max(tolerance*surrounding_points[i].norm(), tolerance),
+             ExcPointNotOnManifold(surrounding_points[i]));
         average_normal += surface_normal;
         }
 
