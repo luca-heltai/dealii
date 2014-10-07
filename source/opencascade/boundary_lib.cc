@@ -111,9 +111,26 @@ namespace OpenCASCADE
         average_normal += surface_normal;
         }
 
-    average_normal/surrounding_points.size();
+    average_normal/=surrounding_points.size();
+/*
+    if (surrounding_points.size() == 2)
+       {
+       Point<3> P = (surrounding_points[0]+surrounding_points[1])/2;
+       Point<3> N = surrounding_points[0]-surrounding_points[1];
+       N = N/sqrt(N.square());
+       average_normal = average_normal-(average_normal*N)*N;
+       average_normal = average_normal/sqrt(average_normal.square());
+       }
+    else if (surrounding_points.size() == 8)
+       {
+       cout<<"Ps = ["<<endl;
+       for (unsigned int i=0; i<surrounding_points.size(); ++i)
+           cout<<surrounding_points[i]<<endl;
+       cout<<"]"<<endl;
+       }
 
-
+*/  
+    average_normal = average_normal/sqrt(average_normal.square());
     // if for any reason the normals have zero average, just use the direction
     // specified at the construction of the projector. Otherwise use "local" normal estimate    
     if (average_normal.norm() < 0.9)
