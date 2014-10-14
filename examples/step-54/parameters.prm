@@ -1,12 +1,7 @@
 # Listing of Parameters
 # ---------------------
-set Number of cycles                = 7
+set Number of cycles                = 5
 
-
-subsection Quadrature rules
-  set Quadrature order          = 4
-  set Quadrature type           = gauss
-end
 
 
 

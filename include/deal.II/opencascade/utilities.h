@@ -123,7 +123,10 @@ namespace OpenCASCADE
   void write_IGES(const TopoDS_Shape &shape,
                   const std::string &filename);
 
-
+  /**
+    * This function returns the tolerance associated with the shape.
+    */
+  double get_shape_tolerance(const TopoDS_Shape &shape);
 
   /**
    * Perform the intersection of the given topological shape with the
