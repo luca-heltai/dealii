@@ -218,6 +218,32 @@ namespace OpenCASCADE
     AssertThrow(OK, ExcMessage("Failed to write IGES file."));
   }
 
+  double get_shape_tolerance(const TopoDS_Shape &shape)
+  {
+    double tolerance = 0.0;
+
+    std::vector<TopoDS_Face> faces;
+    std::vector<TopoDS_Edge> edges;
+    std::vector<TopoDS_Vertex> vertices;
+
+    extract_geometrical_shapes(shape,
+                               faces,
+                               edges,
+                               vertices);
+
+    for (unsigned int i=0; i<vertices.size(); ++i)
+        tolerance = fmax(tolerance,BRep_Tool::Tolerance(vertices[i]));
+
+    for (unsigned int i=0; i<edges.size(); ++i)
+        tolerance = fmax(tolerance,BRep_Tool::Tolerance(edges[i]));
+
+    for (unsigned int i=0; i<faces.size(); ++i)
+        tolerance = fmax(tolerance,BRep_Tool::Tolerance(faces[i]));
+
+
+
+    return tolerance;
+  }
 
   TopoDS_Shape intersect_plane(const TopoDS_Shape &in_shape,
                                const double c_x,
