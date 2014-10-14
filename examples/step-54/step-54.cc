@@ -84,8 +84,9 @@ namespace Step54
   class TriangulationOnCAD
   {
   public:
-    TriangulationOnCAD(const unsigned int fe_degree = 1,
-               const unsigned int mapping_degree = 1);
+    TriangulationOnCAD(const std::string &initial_mesh_filename,
+                       const std::string &output_filename,
+                       const unsigned int &surface_projection_kind = 0);
 
     
     ~TriangulationOnCAD();
@@ -103,19 +104,12 @@ namespace Step54
     void output_results(const unsigned int cycle);
 
     Triangulation<2, 3>   tria;
-    FE_Q<2,3>             fe;
-    DoFHandler<2,3>       dh;
-    MappingQ<2,3>      mapping;
 
-    std_cxx11::shared_ptr<Quadrature<2> > quadrature;
-
-    SolverControl solver_control;
+    const std::string &initial_mesh_filename;
+    const std::string &output_filename;
+    const unsigned int &surface_projection_kind;
 
     unsigned int n_cycles;
-
-    OpenCASCADE::ArclengthProjectionLineManifold<2,3> *line_projector;
-    OpenCASCADE::NormalProjectionBoundary<2,3> *normal_projector;
-    OpenCASCADE::DirectionalProjectionBoundary<2,3> *directional_projector;
 
   };
 
@@ -136,21 +130,17 @@ namespace Step54
   // Functions::ParsedFunction::declare_parameters is static, and has no
   // knowledge of the number of components.
 
-  TriangulationOnCAD::TriangulationOnCAD(const unsigned int fe_degree,
-                              const unsigned int mapping_degree)
+  TriangulationOnCAD::TriangulationOnCAD(const std::string &initial_mesh_filename,
+                                         const std::string &output_filename,
+                                         const unsigned int &surface_projection_kind)
     :
-    fe(fe_degree),
-    dh(tria),
-    mapping(mapping_degree, true)
+    initial_mesh_filename(initial_mesh_filename),
+    output_filename(output_filename),
+    surface_projection_kind(surface_projection_kind)
   {}
 
   TriangulationOnCAD::~TriangulationOnCAD()
   {
-  tria.set_manifold(1);
-  tria.set_manifold(2);
-  delete line_projector;
-  delete normal_projector;
-  delete directional_projector;
   }
 
   void TriangulationOnCAD::read_parameters (const std::string &filename)
@@ -163,13 +153,6 @@ namespace Step54
     prm.declare_entry("Number of cycles", "4",
                       Patterns::Integer());
 
-    prm.enter_subsection("Quadrature rules");
-    {
-      prm.declare_entry("Quadrature type", "gauss",
-                        Patterns::Selection(QuadratureSelector<(2)>::get_quadrature_names()));
-      prm.declare_entry("Quadrature order", "4", Patterns::Integer());
-    }
-    prm.leave_subsection();
 
     // After declaring all these parameters to the ParameterHandler object,
     // let's read an input file that will give the parameters their values. We
@@ -178,14 +161,6 @@ namespace Step54
 
     n_cycles = prm.get_integer("Number of cycles");
 
-    prm.enter_subsection("Quadrature rules");
-    {
-      quadrature =
-        std_cxx11::shared_ptr<Quadrature<2> >
-        (new QuadratureSelector<2> (prm.get("Quadrature type"),
-                                        prm.get_integer("Quadrature order")));
-    }
-    prm.leave_subsection();
 
   }
 
@@ -223,12 +198,13 @@ namespace Step54
 
     std::ifstream in;
 
-    in.open ("initial_mesh_3d.inp");
+    in.open(initial_mesh_filename.c_str());
 
     GridIn<2,3> gi;
-    gi.attach_triangulation (tria);
-    gi.read_ucd (in);
+    gi.attach_triangulation(tria);
+    gi.read_ucd(in);
 
+    output_results(0);
 
     Triangulation<2,3>::active_cell_iterator cell = tria.begin_active();
     cell->set_manifold_id(1);
@@ -237,6 +213,10 @@ namespace Step54
         cell->face(f)->set_manifold_id(2);
 
     TopoDS_Shape bow_surface = OpenCASCADE::read_IGES("DTMB-5415_bulbous_bow.iges",1e-3);
+
+    double tolerance = OpenCASCADE::get_shape_tolerance(bow_surface);
+    tolerance*=5.0;
+
 
     std::vector<TopoDS_Compound> compounds;
     std::vector<TopoDS_CompSolid> compsolids;
@@ -252,12 +232,29 @@ namespace Step54
                                          wires);
 
 
-    line_projector = new OpenCASCADE::ArclengthProjectionLineManifold<2,3>(wires[0]);
-    normal_projector = new OpenCASCADE::NormalProjectionBoundary<2,3>(bow_surface);
-    directional_projector = new OpenCASCADE::DirectionalProjectionBoundary<2,3>(bow_surface, Point<3>(0.0,1.0,0.0));
+    static OpenCASCADE::ArclengthProjectionLineManifold<2,3> line_projector(wires[0], tolerance);
+    tria.set_manifold(2, line_projector);
 
-    tria.set_manifold(2, *line_projector);
-    tria.set_manifold(1,*directional_projector);
+
+    switch (surface_projection_kind)
+          {
+           case 0:
+                static OpenCASCADE::NormalProjectionBoundary<2,3> normal_projector(bow_surface, tolerance);
+                tria.set_manifold(1,normal_projector);
+                break;
+           case 1:
+                static OpenCASCADE::DirectionalProjectionBoundary<2,3> directional_projector(bow_surface, Point<3>(0.0,1.0,0.0), tolerance);
+                tria.set_manifold(1,directional_projector);
+                break;
+           case 2:
+                static OpenCASCADE::NormalToMeshProjectionBoundary<2,3> normal_to_mesh_projector(bow_surface, tolerance);
+                tria.set_manifold(1,normal_to_mesh_projector);
+                break;
+	   default:
+	         AssertThrow(false, ExcMessage("No valid projector selected: surface_projection_kind must be 0,1 or 2."));
+	         break;
+          }
+
   }
 
 
@@ -270,11 +267,6 @@ namespace Step54
   void TriangulationOnCAD::refine_and_resize()
   {
     tria.refine_global(1);
-
-    dh.distribute_dofs(fe);
-
-    const unsigned int n_dofs =  dh.n_dofs();
-
   }
 
 
@@ -288,8 +280,7 @@ namespace Step54
   void TriangulationOnCAD::output_results(const unsigned int cycle)
   {
 
-    std::string filename = ( Utilities::int_to_string(3) +
-                             "d_meshhh_" +
+    std::string filename = ( output_filename +
                              Utilities::int_to_string(cycle) +
                              ".inp" );
   std::ofstream logfile(filename.c_str());
@@ -315,7 +306,7 @@ namespace Step54
     for (unsigned int cycle=0; cycle<n_cycles; ++cycle)
       {
         refine_and_resize();
-        output_results(cycle);
+        output_results(cycle+1);
       }
 
   }
@@ -333,12 +324,42 @@ int main ()
       using namespace dealii;
       using namespace Step54;
 
-      const unsigned int degree = 1;
-      const unsigned int mapping_degree = 1;
 
       deallog.depth_console (3);
-      TriangulationOnCAD triangulation_on_cad(degree, mapping_degree);
-      triangulation_on_cad.run();
+
+      std::string in_mesh_filename = "initial_mesh_3d.inp";
+
+      cout<<"----------------------------------------------------------"<<endl;
+      cout<<"Testing projection in direction normal to CAD surface"<<endl;
+      cout<<"----------------------------------------------------------"<<endl;
+      std::string out_mesh_filename = ( "3d_mesh_normal_projection" );
+      TriangulationOnCAD tria_on_cad_norm(in_mesh_filename,out_mesh_filename,0);
+      tria_on_cad_norm.run();
+      cout<<"----------------------------------------------------------"<<endl;
+      cout<<endl;
+      cout<<endl;
+
+      cout<<"----------------------------------------------------------"<<endl;
+      cout<<"Testing projection in y-axis direction"<<endl;
+      cout<<"----------------------------------------------------------"<<endl;
+      out_mesh_filename = ( "3d_mesh_directional_projection" );
+      TriangulationOnCAD tria_on_cad_dir(in_mesh_filename,out_mesh_filename,1);
+      tria_on_cad_dir.run();
+      cout<<"----------------------------------------------------------"<<endl;
+      cout<<endl;
+      cout<<endl;
+
+      cout<<"----------------------------------------------------------"<<endl;
+      cout<<"Testing projection in direction normal to mesh elements"<<endl;
+      cout<<"----------------------------------------------------------"<<endl;
+      out_mesh_filename = ( "3d_mesh_normal_to_mesh_projection" );
+      TriangulationOnCAD tria_on_cad_norm_to_mesh(in_mesh_filename,out_mesh_filename,2);
+      tria_on_cad_norm_to_mesh.run();
+      cout<<"----------------------------------------------------------"<<endl;
+      cout<<endl;
+      cout<<endl;
+
+
 
     }
   catch (std::exception &exc)
