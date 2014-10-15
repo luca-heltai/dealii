@@ -171,7 +171,7 @@ namespace Step54
 
     GridIn<2,3> gi;
     gi.attach_triangulation(tria);
-    gi.read_ucd(in);
+    gi.read_vtk(in);
 
     output_results(0);
 
@@ -249,12 +249,12 @@ namespace Step54
   void TriangulationOnCAD::output_results(const unsigned int cycle)
   {
 
-    std::string filename = ( output_filename +
+    std::string filename = ( output_filename + "_" +
                              Utilities::int_to_string(cycle) +
-                             ".inp" );
+                             ".vtk" );
     std::ofstream logfile(filename.c_str());
     GridOut grid_out;
-    grid_out.write_ucd(tria, logfile);
+    grid_out.write_vtk(tria, logfile);
 
 
   }
@@ -295,7 +295,7 @@ int main ()
 
       deallog.depth_console (3);
 
-      std::string in_mesh_filename = "initial_mesh_3d.inp";
+      std::string in_mesh_filename = "initial_mesh_3d.vtk";
 
       cout<<"----------------------------------------------------------"<<endl;
       cout<<"Testing projection in direction normal to CAD surface"<<endl;
