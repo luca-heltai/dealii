@@ -106,7 +106,7 @@ namespace OpenCASCADE
              std::max(tolerance*surrounding_points[i].norm(), tolerance),
              ExcPointNotOnManifold(surrounding_points[i]));
 
-    return axis_intersection(sh, candidate, direction, tolerance);
+    return line_intersection(sh, candidate, direction, tolerance);
 
   }
 
@@ -203,7 +203,7 @@ namespace OpenCASCADE
 
     average_normal = average_normal/average_normal.norm();
 
-    return axis_intersection(sh, candidate, average_normal, tolerance);
+    return line_intersection(sh, candidate, average_normal, tolerance);
   }
 
 
