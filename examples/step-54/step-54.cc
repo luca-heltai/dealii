@@ -88,7 +88,7 @@ namespace Step54
                        const std::string &output_filename,
                        const unsigned int &surface_projection_kind = 0);
 
-    
+
     ~TriangulationOnCAD();
 
     void run();
@@ -210,7 +210,7 @@ namespace Step54
     cell->set_manifold_id(1);
 
     for (unsigned int f=0; f<GeometryInfo<2>::faces_per_cell; ++f)
-        cell->face(f)->set_manifold_id(2);
+      cell->face(f)->set_manifold_id(2);
 
     TopoDS_Shape bow_surface = OpenCASCADE::read_IGES("DTMB-5415_bulbous_bow.iges",1e-3);
 
@@ -222,7 +222,7 @@ namespace Step54
     std::vector<TopoDS_CompSolid> compsolids;
     std::vector<TopoDS_Solid> solids;
     std::vector<TopoDS_Shell> shells;
-    std::vector<TopoDS_Wire> wires;    
+    std::vector<TopoDS_Wire> wires;
 
     OpenCASCADE::extract_compound_shapes(bow_surface,
                                          compounds,
@@ -237,23 +237,23 @@ namespace Step54
 
 
     switch (surface_projection_kind)
-          {
-           case 0:
-                static OpenCASCADE::NormalProjectionBoundary<2,3> normal_projector(bow_surface, tolerance);
-                tria.set_manifold(1,normal_projector);
-                break;
-           case 1:
-                static OpenCASCADE::DirectionalProjectionBoundary<2,3> directional_projector(bow_surface, Point<3>(0.0,1.0,0.0), tolerance);
-                tria.set_manifold(1,directional_projector);
-                break;
-           case 2:
-                static OpenCASCADE::NormalToMeshProjectionBoundary<2,3> normal_to_mesh_projector(bow_surface, tolerance);
-                tria.set_manifold(1,normal_to_mesh_projector);
-                break;
-	   default:
-	         AssertThrow(false, ExcMessage("No valid projector selected: surface_projection_kind must be 0,1 or 2."));
-	         break;
-          }
+      {
+      case 0:
+        static OpenCASCADE::NormalProjectionBoundary<2,3> normal_projector(bow_surface, tolerance);
+        tria.set_manifold(1,normal_projector);
+        break;
+      case 1:
+        static OpenCASCADE::DirectionalProjectionBoundary<2,3> directional_projector(bow_surface, Point<3>(0.0,1.0,0.0), tolerance);
+        tria.set_manifold(1,directional_projector);
+        break;
+      case 2:
+        static OpenCASCADE::NormalToMeshProjectionBoundary<2,3> normal_to_mesh_projector(bow_surface, tolerance);
+        tria.set_manifold(1,normal_to_mesh_projector);
+        break;
+      default:
+        AssertThrow(false, ExcMessage("No valid projector selected: surface_projection_kind must be 0,1 or 2."));
+        break;
+      }
 
   }
 
@@ -283,9 +283,9 @@ namespace Step54
     std::string filename = ( output_filename +
                              Utilities::int_to_string(cycle) +
                              ".inp" );
-  std::ofstream logfile(filename.c_str());
-  GridOut grid_out;
-  grid_out.write_ucd(tria, logfile);
+    std::ofstream logfile(filename.c_str());
+    GridOut grid_out;
+    grid_out.write_ucd(tria, logfile);
 
 
   }
