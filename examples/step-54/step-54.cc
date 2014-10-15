@@ -95,8 +95,6 @@ namespace Step54
 
   private:
 
-    void read_parameters (const std::string &filename);
-
     void read_domain();
 
     void refine_and_resize();
@@ -109,26 +107,16 @@ namespace Step54
     const std::string &output_filename;
     const unsigned int &surface_projection_kind;
 
-    unsigned int n_cycles;
-
   };
 
 
-  // @sect4{TriangulationOnCAD::TriangulationOnCAD and TriangulationOnCAD::read_parameters}
+  // @sect4{TriangulationOnCAD::TriangulationOnCAD }
 
   // The constructor initializes the various object in much the same way as
   // done in the finite element programs such as step-4 or step-6. The only
   // new ingredient here is the ParsedFunction object, which needs, at
   // construction time, the specification of the number of components.
   //
-  // For the exact solution the number of vector components is one, and no
-  // action is required since one is the default value for a ParsedFunction
-  // object. The wind, however, requires dim components to be
-  // specified. Notice that when declaring entries in a parameter file for the
-  // expression of the Functions::ParsedFunction, we need to specify the
-  // number of components explicitly, since the function
-  // Functions::ParsedFunction::declare_parameters is static, and has no
-  // knowledge of the number of components.
 
   TriangulationOnCAD::TriangulationOnCAD(const std::string &initial_mesh_filename,
                                          const std::string &output_filename,
@@ -137,32 +125,13 @@ namespace Step54
     initial_mesh_filename(initial_mesh_filename),
     output_filename(output_filename),
     surface_projection_kind(surface_projection_kind)
-  {}
+  {
+  }
 
   TriangulationOnCAD::~TriangulationOnCAD()
   {
   }
 
-  void TriangulationOnCAD::read_parameters (const std::string &filename)
-  {
-    deallog << std::endl << "Parsing parameter file " << filename << std::endl
-            << "for a three dimensional geometry. " << std::endl;
-
-    ParameterHandler prm;
-
-    prm.declare_entry("Number of cycles", "4",
-                      Patterns::Integer());
-
-
-    // After declaring all these parameters to the ParameterHandler object,
-    // let's read an input file that will give the parameters their values. We
-    // then proceed to extract these values from the ParameterHandler object:
-    prm.read_input(filename);
-
-    n_cycles = prm.get_integer("Number of cycles");
-
-
-  }
 
 
   // @sect4{TriangulationOnCAD::read_domain}
@@ -299,10 +268,9 @@ namespace Step54
   void TriangulationOnCAD::run()
   {
 
-    read_parameters("parameters.prm");
 
     read_domain();
-
+    unsigned int n_cycles = 5;
     for (unsigned int cycle=0; cycle<n_cycles; ++cycle)
       {
         refine_and_resize();

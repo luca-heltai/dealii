@@ -241,7 +241,6 @@ namespace OpenCASCADE
       tolerance = fmax(tolerance,BRep_Tool::Tolerance(faces[i]));
 
 
-
     return tolerance;
   }
 
@@ -352,12 +351,12 @@ namespace OpenCASCADE
     Point<3> result;
     for (int i=0; i<Inters.NbPnt(); ++i)
       {
-        distance = Pnt(origin).Distance(Inters.Pnt(i+1));
-        //cout<<"Point "<<i<<": "<<Pnt(Inters.Pnt(i+1))<<"  distance: "<<distance<<endl;
+        distance = point(origin).Distance(Inters.Pnt(i+1));
+        //cout<<"Point "<<i<<": "<<point(Inters.Pnt(i+1))<<"  distance: "<<distance<<endl;
         if (distance < minDistance)
           {
             minDistance = distance;
-            result = Pnt(Inters.Pnt(i+1));
+            result = point(Inters.Pnt(i+1));
             lowest_dist_int = i+1;
           }
       }
@@ -460,7 +459,7 @@ namespace OpenCASCADE
               // curve upon which the edge is defined
               Handle(Geom_Curve) CurveToProj = BRep_Tool::Curve(edge,L,First,Last);
 
-              GeomAPI_ProjectPointOnCurve Proj(Pnt(origin),CurveToProj);
+              GeomAPI_ProjectPointOnCurve Proj(point(origin),CurveToProj);
               unsigned int num_proj_points = Proj.NbPoints();
               if ((num_proj_points > 0) && (Proj.LowerDistance() < minDistance))
                 {
