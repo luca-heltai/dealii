@@ -177,14 +177,14 @@ namespace OpenCASCADE
   /**
    * A Boundary object based on OpenCASCADE TopoDS_Shape where new
    * points are first computed by averaging the surrounding points in
-   * the same way as FlatManifold does, and then projecting it using 
+   * the same way as FlatManifold does, and then projecting it using
    * OpenCASCADE utilities onto the manifold along a direction which
    * is an estimation of the surrounding points (hence mesh cell) normal.
    * The direction normal to the mesh is particularly useful because
    * it is the direction in which the mesh is missing nodes. For
-   * instance, during the refinement of a cell a new node is initially 
+   * instance, during the refinement of a cell a new node is initially
    * created around the baricenter of the cell. This location somehow
-   * ensures a uniform distance from the nodes of the old cell. 
+   * ensures a uniform distance from the nodes of the old cell.
    * Projecting such cell baricenter onto the CAD surface in the direction
    * normal to the original cell will then retain uniform distance from
    * the points of the original cell. Of course, at the stage of mesh
@@ -197,7 +197,7 @@ namespace OpenCASCADE
    * The case in which 2 surrounding points are present (i.e.:a cell
    * edge is being refined) is of course more tricky. The average of
    * the CAD surface normals at the 2 surrounding points is first
-   * computed, and then projected onto the plane normal to the 
+   * computed, and then projected onto the plane normal to the
    * segment linking the surrounding points. This again is an attempt
    * to have the new point with equal distance with respect to the
    * surrounding points
@@ -211,11 +211,11 @@ namespace OpenCASCADE
    * calling OpenCASCADE::closest_point() on those points leaves them
    * untouched. If this is not the case, an ExcPointNotOnManifold is
    * thrown.
-   *     
+   *
    *
    * Notice that this type of Boundary descriptor may fail to give
    * results if the triangulation to be refined is close to the
-   * boundary of the given TopoDS_Shape, or when the normal direction 
+   * boundary of the given TopoDS_Shape, or when the normal direction
    * estimated from the surrounding points does not intersect the shape.
    * An exception
    * is thrown when this appens.
