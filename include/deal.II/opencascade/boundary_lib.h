@@ -40,7 +40,7 @@ namespace OpenCASCADE
   /**
    * A Boundary object based on OpenCASCADE TopoDS_Shape where where
    * new points are first computed by averaging the surrounding points
-   * in the same way as FlatManifold does, and then projecting in the
+   * in the same way as FlatManifold does, and are then projected in the
    * normal direction using OpenCASCADE utilities.
    *
    * This class makes no assumptions on the shape you pass to it, and
@@ -107,14 +107,14 @@ namespace OpenCASCADE
   /**
    * A Boundary object based on OpenCASCADE TopoDS_Shape where new
    * points are first computed by averaging the surrounding points in
-   * the same way as FlatManifold does, and then projecting in onto
+   * the same way as FlatManifold does, and then projecting them onto
    * the manifold along the direction specified at construction time
    * using OpenCASCADE utilities.
    *
    * This class makes no assumptions on the shape you pass to it, and
    * the topological dimension of the Manifold is inferred from the
    * TopoDS_Shape itself. In debug mode there is a sanity check to
-   * make sure that the surrounding points (the ones used it
+   * make sure that the surrounding points (the ones used in
    * project_to_manifold()) actually live on the Manifold, i.e.,
    * calling OpenCASCADE::closest_point() on those points leaves them
    * untouched. If this is not the case, an ExcPointNotOnManifold is
@@ -205,7 +205,7 @@ namespace OpenCASCADE
    * This class only operates with CAD faces and makes the
    * assumption that the shape you pass to it
    * contains at least a face. If that is not the case, an Exeption
-   * thrown. In debug mode there is a sanity check to
+   * is thrown. In debug mode there is a sanity check to
    * make sure that the surrounding points (the ones used in
    * project_to_manifold()) actually live on the Manifold, i.e.,
    * calling OpenCASCADE::closest_point() on those points leaves them
