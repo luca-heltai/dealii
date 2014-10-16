@@ -149,10 +149,10 @@ namespace OpenCASCADE
                ExcPointNotOnManifold(surrounding_points[i]));
       }
 
-    average_normal/=surrounding_points.size();
-
-    if (surrounding_points.size() == 2)
+    switch (surrounding_points.size())
       {
+      case 2:
+        {
         for (unsigned int i=0; i<surrounding_points.size(); ++i)
           {
             Point<3> surface_normal;
@@ -171,9 +171,10 @@ namespace OpenCASCADE
         N = N/sqrt(N.square());
         average_normal = average_normal-(average_normal*N)*N;
         average_normal = average_normal/average_normal.norm();
-      }
-    else if (surrounding_points.size() == 8)
-      {
+        break;
+        }
+      case 8:
+        {
         Point<3> u = surrounding_points[1]-surrounding_points[0];
         Point<3> v = surrounding_points[2]-surrounding_points[0];
         Point<3> n1(u(1)*v(2)-u(2)*v(1),u(2)*v(0)-u(0)*v(2),u(1)*v(1)-u(1)*v(0));
@@ -197,11 +198,14 @@ namespace OpenCASCADE
                ExcMessage("Failed to refine cell: the average of the surface normals at the surrounding edge turns out to be a null vector, making the projection direction undetermined."));
 
         average_normal = average_normal/average_normal.norm();
-
+        break;
+        }
+      default:
+        {
+        AssertThrow(false, ExcNotImplemented());
+        break;
+        }
       }
-
-
-    average_normal = average_normal/average_normal.norm();
 
     return line_intersection(sh, candidate, average_normal, tolerance);
   }

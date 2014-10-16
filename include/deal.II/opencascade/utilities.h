@@ -123,6 +123,16 @@ namespace OpenCASCADE
 
   /**
     * This function returns the tolerance associated with the shape.
+    * Each CAD geometrical object is defined along with a tolerance, which indicates
+    * possible inaccuracy of its placement. For instance, the tolerance tol of a vertex
+    * indicates that it can be located in any point contained in a sphere centered  
+    * in the nominal position and having radius tol. While carrying out an operation
+    * such as projecting a point onto a
+    * surface (which will in turn have its tolerance) we must keep in mind that the
+    * precision of the projection will be limited by the tolerance with which the
+    * surface is built.
+    * The tolerance is computed taking the maximum tolerance among the subshapes
+    * composing the shape.
     */
   double get_shape_tolerance(const TopoDS_Shape &shape);
 
