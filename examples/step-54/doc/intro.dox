@@ -1,0 +1,14 @@
+<br>
+
+<i>This program was contributed by Andrea Mola and Luca Heltai.</i>
+
+@note This program elaborates on concepts of industrial geometry, using 
+tools that interface with OpenCASCADE (http://www.opencascade.org) that 
+allow the specification of arbitrary IGES files as boundaries for your
+geometries.
+
+
+<a name="Intro"></a>
+<h1>Introduction</h1>
+
+<h2>Where geometry and meshes intersect</h2>
