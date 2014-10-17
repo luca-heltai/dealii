@@ -99,7 +99,7 @@ namespace OpenCASCADE
    * topological entities associated with actual geometries) which are
    * contained in the given shape.
    */
-  std::tuple<unsigned int, unsigned int, unsigned int>
+  std_cxx11::tuple<unsigned int, unsigned int, unsigned int>
   count_elements(const TopoDS_Shape &shape);
 
   /**
@@ -232,7 +232,7 @@ namespace OpenCASCADE
    * shape, the u coordinate and the v coordinate (which is different
    * from zero only if the resulting shape is a face).
    */
-  std::tuple<Point<3>, TopoDS_Shape, double, double>
+  std_cxx11::tuple<Point<3>, TopoDS_Shape, double, double>
   project_point_and_pull_back(const TopoDS_Shape &in_shape,
                               const Point<3> &origin,
                               const double tolerance=1e-7);
@@ -267,7 +267,7 @@ namespace OpenCASCADE
    * normal to the surface at that point and the mean curvature as a
    * tuple.
    */
-  std::tuple<Point<3>, Point<3>, double >
+  std_cxx11::tuple<Point<3>, Point<3>, double >
   push_forward_and_differential_forms(const TopoDS_Face &face,
                                       const double u,
                                       const double v,
@@ -282,7 +282,7 @@ namespace OpenCASCADE
    * returned. This function will throw an exception if the @p
    * in_shape does not contain at least one face.
    */
-  std::tuple<Point<3>, Point<3>, double>
+  std_cxx11::tuple<Point<3>, Point<3>, double>
   closest_point_and_differential_forms(const TopoDS_Shape &in_shape,
                                        const Point<3> &origin,
                                        const double tolerance=1e-7);

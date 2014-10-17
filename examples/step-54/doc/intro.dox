@@ -11,4 +11,15 @@ geometries.
 <a name="Intro"></a>
 <h1>Introduction</h1>
 
+In some of the previous tutorial programs (step-1 and step-5 among others)
+we have seen that the deal.II mesh refinement is able to 
+
+-mesh refinement -> rule to refine boundary cells
+-set_boundary
+-so far only elementary shapes were considered
+
+-this tutorial shows how to refine a mesh on top of a complex surface
+generated with a CAD modeler and saved in an IGES file.
+
+
 <h2>Where geometry and meshes intersect</h2>

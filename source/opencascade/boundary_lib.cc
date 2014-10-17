@@ -118,10 +118,10 @@ namespace OpenCASCADE
   {
     Assert(spacedim == 3, ExcNotImplemented());
 
-    std::tuple<unsigned int, unsigned int, unsigned int>
+    std_cxx11::tuple<unsigned int, unsigned int, unsigned int>
     counts = count_elements(sh);
 
-    Assert(std::get<0>(counts) > 0, ExcMessage("NormalToMeshProjectionBoundary needs a shape containing faces to operate."));
+    Assert(std_cxx11::get<0>(counts) > 0, ExcMessage("NormalToMeshProjectionBoundary needs a shape containing faces to operate."));
   }
 
 
@@ -149,12 +149,12 @@ namespace OpenCASCADE
       {
         for (unsigned int i=0; i<surrounding_points.size(); ++i)
           {
-            std::tuple<Point<3>, Point<3>, double>
+            std_cxx11::tuple<Point<3>, Point<3>, double>
             p_and_diff_forms =
               closest_point_and_differential_forms(sh,
                                                    surrounding_points[i],
                                                    tolerance);
-            average_normal += std::get<1>(p_and_diff_forms);
+            average_normal += std_cxx11::get<1>(p_and_diff_forms);
           }
 
         average_normal/=2.0;
