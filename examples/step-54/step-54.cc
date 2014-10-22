@@ -132,7 +132,7 @@ namespace Step54
   // refinement.
   //
   // To initialize the Triangulation, as done in previous tutorial programs, we import a
-  // pre-existing grid saved in .vtk format. The imported mesh is composed of a single
+  // pre-existing grid saved in VTK format. The imported mesh is composed of a single
   // quadrilateral cell the vertices of which have been placed on the CAD shape. 
   //
   // So, after importing both the IGES geometry and the initial mesh, we assign the projectors
@@ -197,7 +197,7 @@ namespace Step54
                                          wires);
 
     // The next few steps are more familiar, and allow us to import an existing
-    // mesh from an external vtk file, and convert it to a deal triangulation.
+    // mesh from an external VTK file, and convert it to a deal triangulation.
     std::ifstream in;
 
     in.open(initial_mesh_filename.c_str());

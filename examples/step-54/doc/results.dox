@@ -1,13 +1,12 @@
 <h1>Results</h1>
 
-Running the program produces a series of mesh files <code>3d_mesh.vtk</code> 
-that we can
-visualize with any of the usual visualization programs that can read the VTK
+The program execution produces a series of mesh files <code>3d_mesh_*.vtk</code> 
+that we can visualize with any of the usual visualization programs that can read the VTK
 file format. 
 
 The following table illustrates the results obtained employing the normal projection strategy. The first two
 rows of the table show side views of the grids obtained for progressive levels of refinement. The last row
-of the pictures depict front views of the same grids shown in the second row.
+of pictures depict front views of the same grids shown in the second row.
 
 
 <table style="width:90%">
@@ -30,9 +29,10 @@ of the pictures depict front views of the same grids shown in the second row.
 
 As can be seen in the pictures --and as we anticipated--- the normal refinement strategy is unable to produce nicely shaped elements
 when applied to surfaces with significant curvature changes.
+
 The following table, which is arranged as the previous one, illustrates
 the results obtained adopting the directional projection approach, in which the projection direction selected was the y-axis (which
-is indicated with a small yellow arrow in the bottom left of each image).
+is indicated with a small yellow arrow at the bottom left of each image).
 
 
 <table style="width:90%">
@@ -54,8 +54,9 @@ is indicated with a small yellow arrow in the bottom left of each image).
 </table>
 
 The images confirm that the quality of the mesh obtained with a directional projection is sensibly higher than that obtained projecting along the
-surface normal. Yet, a number of rather elongated elements can be seen around the bottom of the bulb, where the surface is almost parallel to the
+surface normal. Yet, a number of elements elongated in the y-direction are observed around the bottom of the bulb, where the surface is almost parallel to the
 direction chosen for the projection. 
+
 The final test carried out results instead in the meshes illustrated in the following table.
 
 <table style="width:90%">
@@ -76,7 +77,7 @@ The final test carried out results instead in the meshes illustrated in the foll
   </tr>
 </table>
 
-The pictures confirm that the normal to mesh projection approach algorithm that leads to grids that remain rather evenly spaced
+The pictures confirm that the normal to mesh projection approach leads to grids that remain evenly spaced
 throughtout the refinement steps. At the same time, these meshes represent rather well the original geometry even in the bottom region
 of the bulb, which is not well recovered employing the directional projector or the normal projector.
  
