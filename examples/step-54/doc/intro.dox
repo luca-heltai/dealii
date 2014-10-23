@@ -71,7 +71,7 @@ projector, the ArclengthProjectionLineManifold, is to be used only for edge refi
 and refines a mesh edge finding the new vertex as the point splitting in two even parts the curvilinear length of the CAD curve
 portion that lies between the vertices of the original edge.
 
-<img src="/scratch/src/deal-branches/dealii/examples/step-54/doc/PICTURES/CurveSplit.png" alt="" width="500">
+<img src="http://www.dealii.org/images/steps/developer/step-54.CurveSplit.png" alt="" width="500">
 
 
 A different projection stategy has been implemented in the NormalProjectionBoundary. The TopoDS_Shape assigned in construction can be arbitrary
@@ -82,8 +82,8 @@ to the original one is selected. In cases instead where more than one normal pro
 point is again selected. If the shape is composed by several sub-shapes, the projection is carried out onto every single
 sub-shape, and the closest projection point point is selected. 
 
-<img src="/scratch/src/deal-branches/dealii/examples/step-54/doc/PICTURES/NormalProjectionEdge.png" alt="" width="500">
-<img src="/scratch/src/deal-branches/dealii/examples/step-54/doc/PICTURES/NormalProjection.png" alt="" width="500">
+<img src="http://www.dealii.org/images/steps/developer/step-54.NormalProjectionEdge.png" alt="" width="500">
+<img src="http://www.dealii.org/images/steps/developer/step-54.NormalProjection.png" alt="" width="500">
 
 As we are about to experience, in presence of arbitrary shapes setting the projection direction as that normal to the CAD surface will not
 lead to surface mesh elements of suitable quality. This because the direction normal to the CAD surface has in principle nothing to do with the
@@ -91,7 +91,7 @@ direction along which the mesh needs the new nodes to be located. For this reaso
 is constructed assigning a TopoDS_Shape (containing at least a face) and a direction along which all the projections will be carried out.
 In this way, the user will have a higher control on the projection direction to be enforced to ensure good mesh quality.
 
-<img src="/scratch/src/deal-branches/dealii/examples/step-54/doc/PICTURES/DirectionalProjection.png" alt="" width="500">
+<img src="http://www.dealii.org/images/steps/developer/step-54.DirectionalProjection.png" alt="" width="500">
 
 
 Of course the latter approach results effective only when the orientation of the surface is rather uniform, so that a single projection
@@ -115,6 +115,6 @@ in 3D gets a little more complicated than that described in this simple 2D case.
 mesh direction is the best approach among the three tested, when arbitrarily shaped surfaces are considered. 
 
 
-<img src="/scratch/src/deal-branches/dealii/examples/step-54/doc/PICTURES/ProjectionComparisons.png" alt="" width="700">
+<img src="http://www.dealii.org/images/steps/developer/step-54.ProjectionComparisons.png" alt="" width="700">
 
 
