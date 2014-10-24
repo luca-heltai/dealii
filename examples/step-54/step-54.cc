@@ -58,7 +58,7 @@ namespace Step54
   // arguments of this class are basically just the input and output file
   // names, and a flag indicating the surface projection strategy we want to
   // test. Along with the input argument, the only other member of the class
-  // is the triangulation we want to play with. 
+  // is the triangulation we want to play with.
   // The member functions of this class are similar to those that in most of the
   // other tutorial programs deal with the setup of the grid for the
   // simulations.
@@ -133,7 +133,7 @@ namespace Step54
   //
   // To initialize the Triangulation, as done in previous tutorial programs, we import a
   // pre-existing grid saved in VTK format. The imported mesh is composed of a single
-  // quadrilateral cell the vertices of which have been placed on the CAD shape. 
+  // quadrilateral cell the vertices of which have been placed on the CAD shape.
   //
   // So, after importing both the IGES geometry and the initial mesh, we assign the projectors
   // previously discussed to each of the edges and cells which will have to be
