@@ -1,12 +1,21 @@
-language: C++
-
-compiler: 
-- gcc
-
-before_install: ./contrib/utilities/setup_astyle.sh 
-
-script: ./contrib/utilities/check_indentation.sh 
-
-branches:
-  only:
-    - master
+# This version of travis.yml will only deploy on tags
+notifications:
+  email: false
+language: cpp
+compiler:
+    - clang
+before_install:
+    - ./contrib/utilities/setup_travis.sh
+script: 
+    - ./contrib/utilities/run_travis.sh
+deploy:
+  provider: releases
+  api_key:
+    secure: PTgJIqgJJgoPSkHO5hX273RrGs0hLU0Q5zKV78O1aKaA8ROfYSjqwAQfmxlUcM5+kzHMloK/H+7Z62DLN/0Ibau9dVwau6GhA6l3TNjUK1aoFcUP/011XNxtNz6OaWXRM/u/1uUrc9un2W0Rgyp6y8bNwYUmGmagL3MDR3fVTA4=
+  file: 
+    - /home/travis/dealii-travis-CI-build.tgz
+  skip_cleanup: true
+  on:
+    repo: luca-heltai/dealii
+    all_branches: true
+    tags: true
