@@ -1,8 +1,5 @@
 sudo : false
 
-notifications:
-  email: false
-
 language: C++
 
 compiler: 
@@ -12,13 +9,53 @@ cache:
   directories:
     - programs
 
+notifications:
+  email: false
+
+addons:
+  apt:
+    sources: 
+      - ubuntu-toolchain-r-test
+      - llvm-toolchain-precise-3.6
+    packages:
+      - build-essential
+      - libblas-dev
+      - liblapack-dev
+      - libboost-dev
+      - clang-3.6
+      - gfortran
+
+language: cpp
+compiler: clang
+
+#env:
+#  - CXX=g++-4.8 PATH=$HOME/programs/cmake/bin:$HOME/programs/ninja:$HOME/programs/astyle/build/gcc/bin:$PATH TRILINOS_DIR=$HOME/programs/trilinos DEAL_II_DIR=$HOME/programs/dealii  
+
 install:
+    - export PRG=$PWD/programs
+    - export CASA=$PWD
+    - export CXX=clang++-3.6
+    - export PATH=$PWD/programs/cmake/bin:$PATH
+    - export PATH=$PWD/programs/ninja:$PATH
+    - export TRILINOS_DIR=$PWD/programs/trilinos
+    - export DEAL_II_DIR=$PWD/programs/dealii
     - export PATH=$PWD/programs/astyle/build/gcc/bin:$PATH
-    - ./contrib/utilities/setup_astyle.sh 
+    - export PATH=$PRG/numdiff/bin:$PATH
+    - ./contrib/utilities/setup_cache.sh
 
-script: 
-    - ./contrib/utilities/check_indentation.sh 
+script:
+    - ./contrib/utilities/run_travis.sh
+    - ./contrib/utilities/check_indentation.sh
 
-branches:
-  only:
-    - master
+deploy:
+  provider: releases
+  api_key:
+   secure: PTgJIqgJJgoPSkHO5hX273RrGs0hLU0Q5zKV78O1aKaA8ROfYSjqwAQfmxlUcM5+kzHMloK/H+7Z62DLN/0Ibau9dVwau6GhA6l3TNjUK1aoFcUP/011XNxtNz6OaWXRM/u/1uUrc9un2W0Rgyp6y8bNwYUmGmagL3MDR3fVTA4=
+  file: 
+    - $PRG/trilinos-serial-CI-build.tgz
+    - $PRG/dealii-trilinos-serial-CI-build.tgz
+  skip_cleanup: true
+  on:
+    repo: luca-heltai/dealii
+    tags: true
+    all_branches: true
