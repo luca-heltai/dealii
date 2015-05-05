@@ -738,8 +738,10 @@ namespace DynamicSparsityPatternIterators
   Accessor::operator == (const Accessor &other) const
   {
     return (sparsity_pattern == other.sparsity_pattern &&
-            current_row == other.current_row &&
-            current_entry == other.current_entry);
+	    current_row == other.current_row &&
+	    ((current_entry == other.current_entry)
+	     ||
+	     (current_row == numbers::invalid_unsigned_int)));
   }
 
 
