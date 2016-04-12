@@ -61,7 +61,7 @@ namespace LA
 
 #include <fstream>
 #include <iostream>
-namespace Step38
+namespace Step56
 {
   using namespace dealii;
   template <int spacedim>
@@ -331,7 +331,7 @@ namespace Step38
 #ifdef USE_PETSC_LA
     data.symmetric_operator = true;
 #else
-    / * Trilinos defaults are good */
+    /* Trilinos defaults are good */
 #endif
     preconditioner.initialize(system_matrix, data);
     solver.solve (system_matrix, completely_distributed_solution, system_rhs,
@@ -459,7 +459,7 @@ int main (int argc, char *argv[])
   try
     {
       using namespace dealii;
-      using namespace Step38;
+      using namespace Step56;
       Utilities::MPI::MPI_InitFinalize mpi_initialization(argc, argv, 1);
       LaplaceBeltramiProblem<3> laplace_beltrami;
       laplace_beltrami.run();
