@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2000 - 2015 by the deal.II authors
+// Copyright (C) 2000 - 2016 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -764,27 +764,30 @@ initialize_face (const UpdateFlags      update_flags,
         {
           aux.resize (dim-1, std::vector<Tensor<1,spacedim> > (n_original_q_points));
 
-          // Compute tangentials to the
-          // unit cell.
-          const unsigned int nfaces = GeometryInfo<dim>::faces_per_cell;
-          unit_tangentials.resize (nfaces*(dim-1),
-                                   std::vector<Tensor<1,dim> > (n_original_q_points));
-          if (dim==2)
+          // Compute tangentials to the unit cell.
+          for (unsigned int i=0; i<unit_tangentials.size(); ++i)
+            unit_tangentials[i].resize (n_original_q_points);
+          switch (dim)
             {
-              // ensure a counterclockwise
-              // orientation of tangentials
+            case 2:
+            {
+              // ensure a counterclockwise orientation of tangentials
               static const int tangential_orientation[4]= {-1,1,1,-1};
-              for (unsigned int i=0; i<nfaces; ++i)
+              for (unsigned int i=0; i<GeometryInfo<dim>::faces_per_cell; ++i)
                 {
                   Tensor<1,dim> tang;
-                  tang[1-i/2]=tangential_orientation[i];
+                  tang[1-i/2] = tangential_orientation[i];
                   std::fill (unit_tangentials[i].begin(),
-                             unit_tangentials[i].end(), tang);
+                             unit_tangentials[i].end(),
+                             tang);
                 }
+
+              break;
             }
-          else if (dim==3)
+
+            case 3:
             {
-              for (unsigned int i=0; i<nfaces; ++i)
+              for (unsigned int i=0; i<GeometryInfo<dim>::faces_per_cell; ++i)
                 {
                   Tensor<1,dim> tang1, tang2;
 
@@ -806,10 +809,18 @@ initialize_face (const UpdateFlags      update_flags,
                   // for all quadrature
                   // points on this face
                   std::fill (unit_tangentials[i].begin(),
-                             unit_tangentials[i].end(), tang1);
-                  std::fill (unit_tangentials[nfaces+i].begin(),
-                             unit_tangentials[nfaces+i].end(), tang2);
+                             unit_tangentials[i].end(),
+                             tang1);
+                  std::fill (unit_tangentials[GeometryInfo<dim>::faces_per_cell+i].begin(),
+                             unit_tangentials[GeometryInfo<dim>::faces_per_cell+i].end(),
+                             tang2);
                 }
+
+              break;
+            }
+
+            default:
+              Assert (false, ExcNotImplemented());
             }
         }
     }
@@ -2614,12 +2625,16 @@ fill_fe_values (const typename Triangulation<dim,spacedim>::cell_iterator &cell,
                   }
                 else
                   {
-                    const unsigned int codim = spacedim-dim;
-                    (void)codim;
-
                     if (update_flags & update_normal_vectors)
                       {
-                        Assert( codim==1 , ExcMessage("There is no cell normal in codim 2."));
+                        Assert(spacedim == dim+1,
+                               ExcMessage("There is no (unique) cell normal for "
+                                          + Utilities::int_to_string(dim) +
+                                          "-dimensional cells in "
+                                          + Utilities::int_to_string(spacedim) +
+                                          "-dimensional space. This only works if the "
+                                          "space dimension is one greater than the "
+                                          "dimensionality of the mesh cells."));
 
                         if (dim==1)
                           output_data.normal_vectors[point] =
