@@ -13,6 +13,18 @@ do not necessarily reflect the views of the National Science Foundation
 <a name="Intro"></a>
 
 <h1>Introduction</h1>
+This example is an extension of step-38, which solves a partial differential equation
+on a surface in 3d or a line in 2d. 
+Our implementation is also based on step-6, which uses adaptivity to handle locally refined grids.
+
+
+
+The code can also be run in parallel, using Trilinos and p4est, and the framework of step-40. This turns out to be particularly useful in the three dimensions case, where you can reach a higher number of degrees of freedom.
+
+<h3>Using the right forcing term</h3>
+
+
+
 
 In this example, we show how to solve a partial differential equation (PDE)
 on a codimension one surface $\Gamma \subset \mathbb R^3$
