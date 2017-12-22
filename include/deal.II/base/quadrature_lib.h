@@ -746,6 +746,34 @@ public:
   QTrianglePolar(const unsigned int &n);
 };
 
+
+/**
+ * A two dimensional simplex quadrature with zero Jacobian on vertex zero. The
+ * quadrature is obtained through the so called Duffy transformation that maps
+ * a standard Gaussian quadrature on the unit square to the Simplex Triangle:
+ *
+ * \f[
+ *  \begin{pmatrix}
+ *  x \\
+ *  y
+ *  \end{pmatrix}
+ *  =
+ * \begin{pmatrix}
+ *  \hat{x}^\beta * (1-v) \\
+ *  \hat{x}^\beta * v
+ *  \end{pmatrix}
+ * \f]
+ *
+ * @author Nicola Giuliani, 2017
+ */
+
+class  QDuffy: public QSimplex<2>
+{
+public:
+
+  QDuffy(const unsigned int &n, const unsigned int &beta=1.);
+};
+
 /**
  * A quadrature that implements the Lachat-Watson transformation from a
  * square to a triangle to integrate singularities in the origin of the

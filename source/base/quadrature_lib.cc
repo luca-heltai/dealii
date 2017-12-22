@@ -1397,6 +1397,31 @@ QSimplex<dim>::compute_affine_transformation(const std::array<Point<dim>, dim+1>
 }
 
 
+QDuffy::QDuffy(const unsigned int &n, const unsigned int &beta) :
+  QSimplex<2>(Quadrature<2>())
+{
+  QGauss<2> q_helper(n);
+
+  this->quadrature_points.resize(q_helper.size());
+  this->weights.resize(q_helper.size());
+
+  for(unsigned int i = 0; i<q_helper.size(); ++i)
+  {
+    auto u = q_helper.point(i)[0];
+    auto v = q_helper.point(i)[1];
+    auto w = q_helper.weight(i);
+
+    auto Zx = std::pow(u, beta);
+    auto Zy = std::pow(u, beta) * v;
+    auto Zw = w * beta * std::pow(u, 2.*beta-1.);
+
+    this->quadrature_points[i][0] = Zx - Zy;
+    this->quadrature_points[i][1] = Zy;
+    this->weights[i] = Zw;
+  }
+
+}
+
 
 QTrianglePolar::QTrianglePolar(const Quadrature<1> &radial_quadrature,
                                const Quadrature<1> &angular_quadrature) :
