@@ -17,33 +17,103 @@
  */
 
 // @sect3{Include files}
+// Most of these have been introduced elsewhere, we'll comment only on the new ones.
 
-#include <iostream>
 #include <deal.II/base/logstream.h>
-
 #include <deal.II/base/utilities.h>
-#include <deal.II/base/parameter_acceptor.h>
 #include <deal.II/base/timer.h>
+
+// The parameter acceptor class is the first novelty of this tutorial program.
+//
+// This class is used to define a public interface for classes that want to use
+// a single global ParameterHandler to handle parameters. The class provides a
+// static ParameterHandler member, namely ParameterAcceptor::prm, and
+// implements the "Command design patter" (see, for example, E. Gamma, R. Helm,
+// R. Johnson, J. Vlissides, Design Patterns: Elements of Reusable
+// Object-Oriented Software, Addison-Wesley Professional, 1994.
+// https://goo.gl/FNYByc).
+//
+// ParameterAcceptor provides a global subscription mechanism. Whenever an
+// object of a class derived from ParameterAcceptor is constructed, a pointer
+// to that object-of-derived-type is registered, together with a section entry
+// in the parameter file. Such registry is traversed upon invocation of the
+// single function ParameterAcceptor::initialize(file.prm) which in turn makes
+// sure that all classes stored in the global register declare the parameters
+// they will be using, and after having declared them, it reads the content of
+// `file.prm` to parse the actual parameters.
+//
+// If you call the method ParameterHandler::add_parameter for each of the
+// parameters you want to use in your code, there is nothing else you need to
+// do. If you are using an already existing class that provides the two
+// functions `decalre_parameters` and `parse_parameters`, you can still use
+// ParameterAcceptor, by encapsulating the existing class into a
+// ParameterAcceptorProxy class.
+//
+// In this example, we'll use both strategies, using ParameterAcceptorProxy for
+// deal.II classes, and deriving our own parameter classes directly from
+// ParameterAcceptor.
+#include <deal.II/base/parameter_acceptor.h>
 
 #include <deal.II/grid/tria.h>
 #include <deal.II/grid/grid_generator.h>
 #include <deal.II/grid/grid_tools.h>
+
+// The other new include file is the one that contains the GridTools::Cache class.
+// This class is used when you need to compute data structures that refer to a
+// Triangulation that are usually not stored in the Triangulation itself, like,
+// for example, a map from the vertices of a Triangulation to all cells that share
+// that vertex. Since these data structures are usually not needed in a finite element
+// code, deal.II provides function in GridTools to compute them, but it does not store
+// this information in the Triangulation itself.
+//
+// Some methods, for example GridTools::find_active_cell_around_point, make
+// heavy usage of these non-standard data structures. If you need to call these
+// methods more than once, it makes sense to store those data structures
+// somewhere. GridTools::Cache does exactly this, giving you access to previously
+// computed objects, or computing them on the fly (and then storing them inside the
+// class for later use), and making sure that whenever the Triangulation is updated,
+// also the relevant data strucutres are recomputed.
 #include <deal.II/grid/grid_tools_cache.h>
 
 #include <deal.II/fe/fe.h>
 #include <deal.II/fe/fe_q.h>
 #include <deal.II/fe/fe_system.h>
 
+// In this example, we will be using a reference domain to describe an embedded
+// Triangulation, deformed through a finite element vector field.
+//
+// The following two include files contain the definition of two classes that
+// can be used in these cases. MappingQEulerian allows one to describe a domain
+// through a *deformation* field, based on a FESystem[FE_Q(p)^spacedim] finite
+// element space. The second is a little more generic, and allows you to use
+// arbitrary vector FiniteElement spaces, as long as they provide a
+// *continuous* description of your domain. In this case, the description is done through
+// the actual *configuration* field, rather than a *deformation* field.
+//
+// Which one is used depends on how the user wants to specify the reference
+// domain, and/or the actual configuration. We'll provide both options, and
+// experiment a little in the results section of this tutorial program.
 #include <deal.II/fe/mapping_q_eulerian.h>
 #include <deal.II/fe/mapping_fe_field.h>
 
 #include <deal.II/dofs/dof_tools.h>
 
+// The parsed function class is another new entry. It allows one to create a
+// Function object, starting from a string in a parameter file which is parsed
+// into an actual Function object, that you can use anywhere deal.II accepts a
+// Function (for example, for interpolation, boundary conditions, etc.).
 #include <deal.II/base/parsed_function.h>
+
 #include <deal.II/numerics/data_out.h>
 #include <deal.II/numerics/vector_tools.h>
 #include <deal.II/numerics/matrix_tools.h>
 
+// This is the last new entry for this tutorial program. The namespace
+// NonMatching contains a few methods that are useful when performing
+// computations on non-matching grids, or on curves that are not aligned with
+// the underlying mesh.
+//
+// We'll discuss its use in details later on in the setup_coupling() method.
 #include <deal.II/non_matching/coupling.h>
 
 #include <deal.II/lac/sparse_matrix.h>
@@ -52,6 +122,8 @@
 #include <deal.II/lac/solver_cg.h>
 #include <deal.II/lac/linear_operator.h>
 #include <deal.II/lac/linear_operator_tools.h>
+
+#include <iostream>
 
 namespace Step60
 {
