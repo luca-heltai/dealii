@@ -23,6 +23,8 @@
 #include <deal.II/base/utilities.h>
 #include <deal.II/base/timer.h>
 
+#include <deal.II/base/parameter_acceptor.h>
+
 // The parameter acceptor class is the first novelty of this tutorial program.
 //
 // This class is used to define a public interface for classes that want to use
@@ -45,19 +47,19 @@
 // If you call the method ParameterHandler::add_parameter for each of the
 // parameters you want to use in your code, there is nothing else you need to
 // do. If you are using an already existing class that provides the two
-// functions `decalre_parameters` and `parse_parameters`, you can still use
+// functions `declare_parameters` and `parse_parameters`, you can still use
 // ParameterAcceptor, by encapsulating the existing class into a
 // ParameterAcceptorProxy class.
 //
 // In this example, we'll use both strategies, using ParameterAcceptorProxy for
 // deal.II classes, and deriving our own parameter classes directly from
 // ParameterAcceptor.
-#include <deal.II/base/parameter_acceptor.h>
 
 #include <deal.II/grid/tria.h>
 #include <deal.II/grid/grid_generator.h>
 #include <deal.II/grid/grid_tools.h>
 
+#include <deal.II/grid/grid_tools_cache.h>
 // The other new include file is the one that contains the GridTools::Cache class.
 // This class is used when you need to compute data structures that refer to a
 // Triangulation that are usually not stored in the Triangulation itself, like,
@@ -73,48 +75,48 @@
 // computed objects, or computing them on the fly (and then storing them inside the
 // class for later use), and making sure that whenever the Triangulation is updated,
 // also the relevant data strucutres are recomputed.
-#include <deal.II/grid/grid_tools_cache.h>
 
 #include <deal.II/fe/fe.h>
 #include <deal.II/fe/fe_q.h>
 #include <deal.II/fe/fe_system.h>
 
+#include <deal.II/fe/mapping_q_eulerian.h>
+#include <deal.II/fe/mapping_fe_field.h>
 // In this example, we will be using a reference domain to describe an embedded
 // Triangulation, deformed through a finite element vector field.
 //
-// The following two include files contain the definition of two classes that
-// can be used in these cases. MappingQEulerian allows one to describe a domain
+// The two include files above contain the definition of two classes that can
+// be used in these cases. MappingQEulerian allows one to describe a domain
 // through a *deformation* field, based on a FESystem[FE_Q(p)^spacedim] finite
 // element space. The second is a little more generic, and allows you to use
 // arbitrary vector FiniteElement spaces, as long as they provide a
-// *continuous* description of your domain. In this case, the description is done through
-// the actual *configuration* field, rather than a *deformation* field.
+// *continuous* description of your domain. In this case, the description is
+// done through the actual *configuration* field, rather than a *deformation*
+// field.
 //
 // Which one is used depends on how the user wants to specify the reference
 // domain, and/or the actual configuration. We'll provide both options, and
 // experiment a little in the results section of this tutorial program.
-#include <deal.II/fe/mapping_q_eulerian.h>
-#include <deal.II/fe/mapping_fe_field.h>
 
 #include <deal.II/dofs/dof_tools.h>
 
+#include <deal.II/base/parsed_function.h>
 // The parsed function class is another new entry. It allows one to create a
 // Function object, starting from a string in a parameter file which is parsed
 // into an actual Function object, that you can use anywhere deal.II accepts a
 // Function (for example, for interpolation, boundary conditions, etc.).
-#include <deal.II/base/parsed_function.h>
 
 #include <deal.II/numerics/data_out.h>
 #include <deal.II/numerics/vector_tools.h>
 #include <deal.II/numerics/matrix_tools.h>
 
+#include <deal.II/non_matching/coupling.h>
 // This is the last new entry for this tutorial program. The namespace
 // NonMatching contains a few methods that are useful when performing
 // computations on non-matching grids, or on curves that are not aligned with
 // the underlying mesh.
 //
-// We'll discuss its use in details later on in the setup_coupling() method.
-#include <deal.II/non_matching/coupling.h>
+// We'll discuss its use in details later on in the `setup_coupling` method.
 
 #include <deal.II/lac/sparse_matrix.h>
 #include <deal.II/lac/vector.h>
@@ -134,27 +136,64 @@ namespace Step60
   {
   public:
 
+    // We construct the parameters of our problem in an internal class, derived
+    // from ParameterAcceptor. This allows us to use the
+    // ParameterHandler::add_parameter methods in the constructor of the
+    // DistributedLagrangeProblemParameters function. The members of this
+    // function are all non-const, but the DistributedLagrangeProblem class
+    // takes a const reference to a DistributedLagrangeProblemParameters
+    // object, so that it is not possible to modify the parameters from within
+    // the DistributedLagrangeProblem class itself.
+
     class DistributedLagrangeProblemParameters : public ParameterAcceptor
     {
     public:
       DistributedLagrangeProblemParameters();
 
-      unsigned int initial_refinement = 4;
-      unsigned int delta_refinement = 3;
-      unsigned int initial_embedded_refinement = 4;
-      std::list<types::boundary_id> homogeneous_dirichlet_ids {0};
-      unsigned int embedding_space_finite_element_degree = 1;
-      unsigned int embedded_space_finite_element_degree = 1;
+      // Initial refinement for the embedding grid, corresponding to the domain
+      // $\Omega$.
+      unsigned int initial_refinement                           = 4;
+
+      // We allow also a local refinement in the domain $\Omega$, where there
+      // is overlap between the embedded grid and the embedding grid. If
+      // `delta_refinement` is greater than zero, then we mark each cell of
+      // the space grid that contains a vertex of the embedded grid, execute
+      // the refinement, and repeat the process `delta_refinement` times.
+      unsigned int delta_refinement                             = 3;
+
+      // Starting refinement of the embedding grid, corresponding to the domain
+      // $\Omega$.
+      unsigned int initial_embedded_refinement                  = 7;
+
+      // A list of boundary ids where we impose homogeneous Dirichlet boundary
+      // conditions
+      std::list<types::boundary_id> homogeneous_dirichlet_ids   {0};
+
+      // FiniteElement degree of the embedding space
+      unsigned int embedding_space_finite_element_degree        = 1;
+
+      // FiniteElement degree of the embedded space
+      unsigned int embedded_space_finite_element_degree         = 1;
+
+      // FiniteElement degree of the space used to describe the deformation
+      // of the embedded domain
       unsigned int embedded_configuration_finite_element_degree = 1;
-      unsigned int coupling_quadrature_order = 3;
-      bool use_displacement = false;
+
+      // Order of the quadrature formula used to integrate the coupling
+      unsigned int coupling_quadrature_order                    = 3;
+
+      // If set to true, then the embedded configuration function is
+      // interpreted as a displacement function
+      bool use_displacement                                     = false;
     };
 
     DistributedLagrangeProblem(const DistributedLagrangeProblemParameters &parameters);
 
+    // Entry point for the DistributedLagrangeProblem
     void run();
 
   private:
+    // The actual parameters
     const DistributedLagrangeProblemParameters &parameters;
 
     void setup_grids_and_dofs();
