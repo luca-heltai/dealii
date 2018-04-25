@@ -63,7 +63,7 @@ $u$, that satisfies homogenous boundary conditions on $\partial\Omega$, subject
 to the constraint $\gamma u = g$ using a Lagrange multiplier.
 
 The variational formulation can be derived by introducing two infinite
-dimenensional spaces $V$ and $Q^*$, respectively for the solution $u$ and for the
+dimensional spaces $V$ and $Q^*$, respectively for the solution $u$ and for the
 Lagrange multiplier $\lambda$.
 
 Multiplying the first equation by $v \in V$ and the second by $q \in Q$,
@@ -89,7 +89,7 @@ co-dimension zero case) or $H^{1/2}(\Gamma)$ (for the co-dimension one case).
 This leaves us with a Lagrange multiplier $\lambda$ in $Q^*$, which is either
 $(H^1(\Omega))^*$ or $H^{-1/2}(\Gamma)$.
 
-There are two options for the discretisation of the problema above. One could choose
+There are two options for the discretisation of the problem above. One could choose
 matching discretisations, where the Triangulation for $\Gamma$ is aligned with the
 Triangulation for $\Omega$, or one could choose to discretize the two domains in
 a completely independent way.
@@ -170,9 +170,9 @@ G
 where
 
 @f{eqnarray*}
-K_{ij} &:=& (\nabla v_j, \nabla v_i)_\Omega \\
-C_{\alpha j} &:=& (v_j, \nabla q_\alpha)_\Gamma \\
-G_{\alpha} &:=& (g, q_\alpha)_\Gamma.
+K_{ij} &:=& (\nabla v_j, \nabla v_i)_\Omega   & i,j=1,\dots,n \\
+C_{\alpha j} &:=& (v_j, \nabla q_\alpha)_\Gamma  &j=1,\dots,n, \alpha = 1,\dots, m \\\\
+G_{\alpha} &:=& (g, q_\alpha)_\Gamma & \alpha = 1,\dots, m.
 @f}
 
 While the matrix $K$ is the standard stiffness matrix for the poisson problem
