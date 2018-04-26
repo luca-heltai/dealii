@@ -126,24 +126,67 @@
 #include <deal.II/lac/linear_operator_tools.h>
 
 #include <iostream>
+#include <fstream>
 
 namespace Step60
 {
   using namespace dealii;
+
+  // In the DistributedLagrangeProblem, we need two parameters describing the
+  // dimensions of the domain $\Gamma$ (`dim`) and of the domain $\Omega$
+  // (`spacedim`).
+  //
+  // These will be used to initialize a Triangulation<dim,spacedim> (for
+  // $\Gamma$) and a Triangulation<spacedim,spacedim> (for $\Omega$).
+  //
+  // A novelty w.r.t. to other tutorial programs is the heavy use of
+  // std::unique_ptr. These behave like classical pointers, with the advantage
+  // of doing automatic house-keeping. We do this, because we want to be able to
+  // i) construct the problem, ii) read the parameters, and iii) initialize all
+  // objects according to what is specified in a parameter file.
+  //
+  // We construct the parameters of our problem in the internal class
+  // DistributedLagrangeProblemParameters, derived from ParameterAcceptor. The
+  // DistributedLagrangeProblem class takes a const reference to a
+  // DistributedLagrangeProblemParameters object, so that it is not possible to
+  // modify the parameters from within the DistributedLagrangeProblem class
+  // itself.
+  //
+  // We could have initialized the parameters first, and then pass the
+  // parameters to the DistributedLagrangeProblem assuming all entries are set to
+  // the desired values, but this has two disadvantages:
+  //
+  // - we should not make assumptions on how the user initializes a class that
+  // is not under our direct control. If the user fails to initialize the
+  // class, we should notice and throw an exception;
+  //
+  // - not all objects that need to read parameters from a parameter file may
+  // be available when we construct the DistributedLagrangeProblemParameters;
+  // this is often the case for complex programs, with multiple physics, or
+  // where we reuse existing code in some external classes. We simulate this by
+  // keeping some "complex" objects, like ParsedFunction objects, inside the
+  // DistributedLagrangeProblem instead of inside the
+  // DistributedLagrangeProblemParameters.
+  //
+  // Here we assume that upon construction, the classes that build up our
+  // problem are not usable yet. Parsing the parameter file is what ensures we have
+  // all ingredients to build up our classes, and we design them so that if parsing
+  // was not executed, the run is aborted.
 
   template <int dim, int spacedim=dim>
   class DistributedLagrangeProblem
   {
   public:
 
-    // We construct the parameters of our problem in an internal class, derived
-    // from ParameterAcceptor. This allows us to use the
-    // ParameterHandler::add_parameter methods in the constructor of the
-    // DistributedLagrangeProblemParameters function. The members of this
-    // function are all non-const, but the DistributedLagrangeProblem class
-    // takes a const reference to a DistributedLagrangeProblemParameters
-    // object, so that it is not possible to modify the parameters from within
-    // the DistributedLagrangeProblem class itself.
+    // The DistributedLagrangeProblemParameters is derived from
+    // ParameterAcceptor. This allows us to use the
+    // ParameterAcceptor::add_parameter methods in its constructor.
+    //
+    // The members of this function are all non-const, but the
+    // DistributedLagrangeProblem class takes a const reference to a
+    // DistributedLagrangeProblemParameters object, so that it is not possible
+    // to modify the parameters from within the DistributedLagrangeProblem
+    // class itself.
 
     class DistributedLagrangeProblemParameters : public ParameterAcceptor
     {
@@ -166,7 +209,8 @@ namespace Step60
       unsigned int initial_embedded_refinement                  = 7;
 
       // A list of boundary ids where we impose homogeneous Dirichlet boundary
-      // conditions
+      // conditions. On the remaining boundary ids (if any), we impose
+      // homogeneous Neumann boundary conditions
       std::list<types::boundary_id> homogeneous_dirichlet_ids   {0};
 
       // FiniteElement degree of the embedding space
@@ -185,6 +229,9 @@ namespace Step60
       // If set to true, then the embedded configuration function is
       // interpreted as a displacement function
       bool use_displacement                                     = false;
+
+      // A flag to keep track if we were initialized or not
+      bool initialized                                          = false;
     };
 
     DistributedLagrangeProblem(const DistributedLagrangeProblemParameters &parameters);
@@ -277,12 +324,114 @@ namespace Step60
     TimerOutput monitor;
   };
 
+  // At construction time, we initialize also the ParameterAcceptor class, with
+  // the section name we want our problem to use when parsing the parameter
+  // file.
+  //
+  // This gives us a nice opportunity: ParameterAcceptor allows you to specify
+  // the section name using unix conventions on paths. If the section name
+  // starts with a slash ("/"), then the section is interpreted as an *absolute
+  // path*, ParameterAcceptor enters a subsection for each directory in the
+  // path, using the last name it encountered as the landing subsection for the
+  // current class.
+  //
+  // For example, if you construct your class using
+  // ParameterAcceptor("/first/second/third/My Class"), the parameters will be
+  // organized as follows:
+  //
+  // @code
+  // subsection first
+  //   subsection second
+  //     subsection third
+  //       subsection My Class
+  //        ... # all the parameters
+  //       end
+  //     end
+  //   end
+  // end
+  // @endcode
+  //
+  // Internally, the *current path* stored in ParameterAcceptor, is now
+  // considered to be "/first/second/third/", i.e., when you specify an
+  // absolute path, ParameterAcceptor *changes* the current section to the
+  // current path, i.e., to the path of the section name until the *last* "/".
+  //
+  // If you now construct another class derived from ParameterAcceptor using a
+  // relative path (e.g., ParameterAcceptor("My Other class")), you'll end up
+  // with
+  // @code
+  // subsection first
+  //   subsection second
+  //     subsection third
+  //       subsection MyClass
+  //        ... # all the parameters
+  //       end
+  //       subsection My Other Class
+  //        ... # all the parameters of MyOtherClass
+  //       end
+  //     end
+  //   end
+  // end
+  // @endcode
+  //
+  // If the section name *ends* with a slash, say, similar to the example above
+  // we have two classes, one initialized with "/first/second/third/My Class/"
+  // and the other with "My Other class", then the resulting parameter file will
+  // look like:
+  //
+  // @code
+  // subsection first
+  //   subsection second
+  //     subsection third
+  //       subsection MyClass
+  //        ... # all the parameters
+  //        subsection My Other Class
+  //         ... # all the parameters of MyOtherClass
+  //        end
+  //       end
+  //     end
+  //   end
+  // end
+  // @endcode
+  //
+  // We are going to exploit this, by making our
+  // DistributedLagrangeProblemParameters
+  // the *parent* of all subsequently constructed classes. Since most of the other
+  // classes are members of DistributedLagrangeProblem, this allows one to construct,
+  // for example, two DistributedLagrangeProblem for two different dimensions, without
+  // having conflicts in the parameters for the two problems.
+
   template<int dim, int spacedim>
   DistributedLagrangeProblem<dim,spacedim>::DistributedLagrangeProblemParameters::
   DistributedLagrangeProblemParameters() :
     ParameterAcceptor("/Distributed Lagrange<" + Utilities::int_to_string(dim)
-                      + "," + Utilities::int_to_string(spacedim) +">")
+                      + "," + Utilities::int_to_string(spacedim) +">/")
   {
+
+    // The ParameterAcceptor::add_parameter does a few things:
+    //
+    // - enters the subsection specified at construction time to ParameterAcceptor
+    //
+    // - calls the ParameterAcceptor::prm.add_parameter
+    //
+    // - calls any signal you may have attached to
+    // ParameterAcceptor::declare_parameters_call_back
+    //
+    // - leaves the subsection
+    //
+    // In turns, ParameterAcceptor::prm.add_parameter
+    //
+    // - declares an entry in the parameter handler for the given variable;
+    //
+    // - reads the value of the variable,
+    //
+    // - transforms it to a string, used as the default value for the parameter
+    // file
+    //
+    // - attaches an *action* to ParameterAcceptor::prm that monitors when a file
+    // is parsed, or when an entry is set, and when this happens, it updates the
+    // content of the given variable to the value parsed by the string
+
     add_parameter("Initial embedding space refinement",
                   initial_refinement);
 
@@ -323,14 +472,25 @@ namespace Step60
             TimerOutput::summary,
             TimerOutput::cpu_and_wall_times)
   {
-    auto myf = [&] () -> void
-    {
-      // embedded_configuration_function.enter_my_subsection(ParameterAcceptor::prm);
-      ParameterAcceptor::prm.set("Function constants", "R=.3, Cx=.4, Cy=.4");
-      ParameterAcceptor::prm.set("Function expression", "R*cos(2*pi*x)+Cx; R*sin(2*pi*x)+Cy");
-      // embedded_configuration_function.leave_my_subsection(ParameterAcceptor::prm);
-    };
-    embedded_configuration_function.declare_parameters_call_back.connect(myf);
+    // Here is a way to set default values for a ParameterAcceptor class
+    // that was constructed using ParameterAcceptorProxy.
+    //
+    // In this case, we set the default deformation of the embedded grid to be
+    // a circle with radius `R` and center (Cx, Cy).
+
+    embedded_configuration_function.declare_parameters_call_back.connect(
+          [&] () -> void
+          {
+            ParameterAcceptor::prm.set("Function constants", "R=.3, Cx=.4, Cy=.4");
+            ParameterAcceptor::prm.set("Function expression", "R*cos(2*pi*x)+Cx; R*sin(2*pi*x)+Cy");
+          });
+
+    embedded_value_function.declare_parameters_call_back.connect(
+          [&] () -> void
+          {
+            ParameterAcceptor::prm.set("Function expression", "1");
+          });
+
   }
 
   template<int dim, int spacedim>
