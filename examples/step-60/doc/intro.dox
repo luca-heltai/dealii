@@ -150,8 +150,8 @@ and
 \f[
 Q_h = \text{span} \{q_i\}_{i=1}^m
 \f]
-respectively, where $n$ is `spacedim`, the dimension of `space_dh`, and $m$
-is `dim`, the dimension of `embedded_dh`.
+respectively, where $n$ is the dimension of `space_dh`, and $m$
+the dimension of `embedded_dh`.
 
 Once all the finite dimensional spaces are defined, we are left with the following
 finite dimensional system of equations:
