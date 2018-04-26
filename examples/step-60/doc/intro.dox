@@ -1,28 +1,31 @@
 <br>
 
 <i>This program was contributed by Luca Heltai.
- 
-<a name="Intro"></a>
-<h1>Introduction</h1>
 
-<h3> Distributed Lagrange multipliers</h3>
+<a name="Introduction"></a><h1>Introduction</h1>
 
-Consider the case where you have a domain $\Omega$ in $R^{\text{spacedim}}$,
-and an embedded domain (say, $\Gamma$) in $R^{\text{dim}}$, and we want to
-solve a partial differential equation on $\Omega$, enforcing some conditions on
+
+<a name="DistributedLagrangemultipliers"></a><h3> Distributed Lagrange multipliers</h3>
+
+
+In this tutorial we consider the case of two domains, $\Omega$ in $R^{\text{spacedim}}$
+and $\Gamma$ in $R^{\text{dim}}$, where $\Gamma$ is embedded in $\Omega$ and thus
+$\Gamma \subseteq \Omega$. We want to solve a partial differential equation on $\Omega$,
+enforcing some conditions on
 the solution of the problem *on the embedded domain* $\Gamma$.
 
 There are two interesting scenarios:
 
 - the geometrical dimension `spacedim` of the embedded domain $\Gamma$ is the
-same of the domain $\Omega$ (`dim`), that is, the measure of $\Gamma$ is not
-zero, and $\Gamma \subseteq \Omega$, or
+same of the domain $\Omega$ (`dim`), that is, the spacedim-dimensional measure
+of $\Gamma$ is not zero, or
 
-- $\Gamma$ has zero measure and an intrinsic dimension `dim` which is smaller
-than that of $\Omega$ (`spacedim`), for example it is a curve embedded in a two
+- the embedded domain $\Gamma$ has an intrinsic dimension `dim` which is smaller
+than that of $\Omega$ (`spacedim`), thus its spacedim-dimensional measure is
+zero; for example it is a curve embedded in a two
 dimensional domain, or a surface embedded in a three-dimensional domain.
 
-In both cases, let's define the restriction operator $\gamma$ as the operator
+In both cases define the restriction operator $\gamma$ as the operator
 that, given a continuous function on $\Omega$, returns its (continuous)
 restriction on $\Gamma$, i.e.,
 \f[
@@ -45,9 +48,10 @@ not possible to construct a continous trace operator, not even from
 $H^1(\Omega)$ to $L^2(\Gamma)$, when the dimension of $\Gamma$ is zero or one
 respectively in two and three dimensions.
 
-For the sake of simplicity, in this tutorial program we will assume that the
-dimension of the embedded domain (`dim`) is always smaller by one or equal
-w.r.t. to the dimension of the embedding domain $\Omega$ (`spacedim`).
+In this tutorial program we're not interested into further details on $\gamma$:
+we give $\gamma$'s extension for granted assuming that the dimension of the
+embedded domain (`dim`) is always smaller by one or equal w.r.t. the dimension
+of the embedding domain $\Omega$ (`spacedim`).
 
 We are going to solve the following differential problem: given a sufficiently
 regular function $g$ on $\Gamma$, find the solution $u$ to
@@ -59,7 +63,7 @@ u & = & 0 & \text{ on } \partial\Omega.
 @f}
 
 This is a constrained problem, where we are looking for a harmonic function
-$u$, that satisfies homogenous boundary conditions on $\partial\Omega$, subject
+$u$, that satisfies homogeneous boundary conditions on $\partial\Omega$, subject
 to the constraint $\gamma u = g$ using a Lagrange multiplier.
 
 The variational formulation can be derived by introducing two infinite
@@ -87,7 +91,7 @@ taken as $H^{1/2}(\Gamma)$.
 The function $g$, therefore, should be either in $H^1(\Gamma)$ (for the
 co-dimension zero case) or $H^{1/2}(\Gamma)$ (for the co-dimension one case).
 This leaves us with a Lagrange multiplier $\lambda$ in $Q^*$, which is either
-$(H^1(\Omega))^*$ or $H^{-1/2}(\Gamma)$.
+$(H^1(\Gamma))^*$ or $H^{-1/2}(\Gamma)$.
 
 There are two options for the discretisation of the problem above. One could choose
 matching discretisations, where the Triangulation for $\Gamma$ is aligned with the
@@ -119,11 +123,11 @@ for any point $x \in \Gamma_0$ its coordinate $\psi(x)$ in $\Omega$;
 representing for any point $x$ the displacement vector to apply in order to
 deform $x$ to its actual configuration $\psi(x) = x +\delta\psi(x)$.
 
-We define the embedded reference domain `embedded_grid`, and on this domain, we
-construct a finite dimensional space (`embedded_configuration_dh`) to describe
-either the deformation or the displacement, through a FiniteElement system of
-FE_Q objects (`embedded_configuration_fe`). This finite dimensional space is
-used only to interpolate a user supplied function
+We define the embedded reference domain $\Gamma_0$ `embedded_grid`, and on
+this domain, we construct a finite dimensional space (`embedded_configuration_dh`)
+to describe either the deformation or the displacement, through a FiniteElement
+system of FE_Q objects (`embedded_configuration_fe`). This finite dimensional
+space is used only to interpolate a user supplied function
 (`embedded_configuration_function`) representing either $\psi$ (if the
 parameter `use_displacement` is set to false) or $\delta\psi$ (if the parameter
 `use_displacement` is set to true).
@@ -138,15 +142,16 @@ In the embedding space, a standard finite dimensional space `space_dh` is
 constructed on the embedding grid `space_grid` (`space_dh`), using the
 FiniteElement `space_fe`, following almost verbatim what was done in step-6.
 
-We indicate with
+We indicate the discretizations of the spaces $V$ and $Q$ with
 \f[
 V_h = \text{span} \{v_i\}_{i=1}^n
 \f]
-and with
+and
 \f[
 Q_h = \text{span} \{q_i\}_{i=1}^m
 \f]
-where $n$ is the dimension of `space_dh`, while $m$ is the dimension of `embedded_dh`.
+respectively, where $n$ is `spacedim`, the dimension of `space_dh`, and $m$
+is `dim`, the dimension of `embedded_dh`.
 
 Once all the finite dimensional spaces are defined, we are left with the following
 finite dimensional system of equations:
@@ -179,9 +184,9 @@ While the matrix $K$ is the standard stiffness matrix for the poisson problem
 on $\Omega$, and the vector $G$ is a standard right-hand-side vector for a
 finite element problem with forcing term $g$ on $\Gamma$, (see, for example,
 step-3), the matrix $C$ or its transpose $C^T$ are non standard, since they
-couple informations on two different grids.
+couple information on two non-matching grids.
 
-In deal.II, this is possible using functions in the NonMatching namespace, and
+In deal.II, $C$ can be computed using functions in the NonMatching namespace, and
 will be explained in detail later on.
 
 We solve the above saddle point problem by iterating over the Schur complement,
