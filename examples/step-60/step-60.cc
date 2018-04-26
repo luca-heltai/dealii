@@ -122,6 +122,7 @@
 #include <deal.II/lac/vector.h>
 #include <deal.II/lac/sparse_direct.h>
 #include <deal.II/lac/solver_cg.h>
+#include <deal.II/lac/precondition.h>
 #include <deal.II/lac/linear_operator.h>
 #include <deal.II/lac/linear_operator_tools.h>
 
@@ -230,6 +231,9 @@ namespace Step60
       // interpreted as a displacement function
       bool use_displacement                                     = false;
 
+      // Level of verbosity to use in the output
+      unsigned int verbosity_level                              = 10;
+
       // A flag to keep track if we were initialized or not
       bool initialized                                          = false;
     };
@@ -305,11 +309,12 @@ namespace Step60
 
     SparsityPattern           stiffness_sparsity;
     SparsityPattern           coupling_sparsity;
-    SparsityPattern           embedded_mass_sparsity;
+    SparsityPattern           embedded_sparsity;
 
     SparseMatrix<double>      stiffness_matrix;
     SparseMatrix<double>      coupling_matrix;
     SparseMatrix<double>      embedded_mass_matrix;
+    SparseMatrix<double>      embedded_stiffness_matrix;
 
     ConstraintMatrix          constraints;
 
@@ -317,7 +322,7 @@ namespace Step60
     Vector<double>            rhs;
 
     Vector<double>            lambda;
-    Vector<double>            lambda_rhs;
+    Vector<double>            embedded_rhs;
     Vector<double>            embedded_value;
 
     // TimerOuput
@@ -458,6 +463,15 @@ namespace Step60
 
     add_parameter("Coupling quadrature order",
                   coupling_quadrature_order);
+
+    add_parameter("Verbosity level",
+                  verbosity_level);
+
+    // If we get parsed, then the parameters are good to go. Set the internal
+    // variable `initialized` to true.
+    parse_parameters_call_back.connect(
+          [&]() -> void {initialized = true;}
+          );
   }
 
   template<int dim, int spacedim>
@@ -496,6 +510,8 @@ namespace Step60
   template<int dim, int spacedim>
   void DistributedLagrangeProblem<dim, spacedim>::run()
   {
+    AssertThrow(parameters.initialized,
+                ExcNotInitialized());
     setup_grids_and_dofs();
     setup_coupling();
     assemble_system();
@@ -543,6 +559,7 @@ namespace Step60
          embedded_configuration);
 
     double embedded_space_maximal_diameter = GridTools::maximal_cell_diameter(*embedded_grid, *embedded_mapping);
+    double embedding_space_minimal_diameter = GridTools::minimal_cell_diameter(*space_grid);
 
     setup_embedded_dofs();
     for (unsigned int i=0; i<parameters.delta_refinement; ++i)
@@ -557,20 +574,21 @@ namespace Step60
         for (auto cell : cells)
           cell->set_refine_flag();
         space_grid->execute_coarsening_and_refinement();
-        double embedding_space_minimal_diameter = GridTools::minimal_cell_diameter(*space_grid);
+        embedding_space_minimal_diameter = GridTools::minimal_cell_diameter(*space_grid);
         AssertThrow(embedded_space_maximal_diameter < embedding_space_minimal_diameter,
                     ExcMessage("The embedding grid is too refined (or the embedded grid is too coarse). Adjust the "
                                "parameters so that the minimal grid size of the embedding grid is larger "
                                "than the maximal grid size of the embedded grid."))
       }
+    deallog << "Embedding minimal diameter: " << embedded_space_maximal_diameter
+            << ", embedded maximal diameter: " << embedding_space_minimal_diameter
+            << ", ratio: " embedded_space_maximal_diameter/embedding_space_minimal_diameter << std::endl;
     setup_embedding_dofs();
   }
 
   template<int dim, int spacedim>
   void DistributedLagrangeProblem<dim,spacedim>::setup_embedding_dofs()
   {
-    TimerOutput::Scope timer_section(monitor, "Setup embedding dofs");
-
     space_dh = std_cxx14::make_unique<DoFHandler<spacedim> >(*space_grid);
     space_fe = std_cxx14::make_unique<FE_Q<spacedim> >(parameters.embedding_space_finite_element_degree);
     space_dh->distribute_dofs(*space_fe);
@@ -591,25 +609,28 @@ namespace Step60
     stiffness_matrix.reinit(stiffness_sparsity);
     solution.reinit(space_dh->n_dofs());
     rhs.reinit(space_dh->n_dofs());
+
+    deallog << "Embedding dofs: " << space_dh->n_dofs() << std::endl;
   }
 
   template<int dim, int spacedim>
   void DistributedLagrangeProblem<dim,spacedim>::setup_embedded_dofs()
   {
-    TimerOutput::Scope timer_section(monitor, "Setup embedded dofs");
-
     embedded_dh = std_cxx14::make_unique<DoFHandler<dim,spacedim> >(*embedded_grid);
     embedded_fe = std_cxx14::make_unique<FE_Q<dim,spacedim> >(parameters.embedded_space_finite_element_degree);
     embedded_dh->distribute_dofs(*embedded_fe);
 
     DynamicSparsityPattern dsp(embedded_dh->n_dofs(), embedded_dh->n_dofs());
     DoFTools::make_sparsity_pattern(*embedded_dh, dsp);
-    embedded_mass_sparsity.copy_from(dsp);
-    embedded_mass_matrix.reinit(embedded_mass_sparsity);
+    embedded_sparsity.copy_from(dsp);
+    embedded_mass_matrix.reinit(embedded_sparsity);
+    embedded_stiffness_matrix.reinit(embedded_sparsity);
 
     lambda.reinit(embedded_dh->n_dofs());
-    lambda_rhs.reinit(embedded_dh->n_dofs());
+    embedded_rhs.reinit(embedded_dh->n_dofs());
     embedded_value.reinit(embedded_dh->n_dofs());
+
+    deallog << "Embedded dofs: " << embedded_dh->n_dofs() << std::endl;
   }
 
 
@@ -636,27 +657,42 @@ namespace Step60
   template<int dim, int spacedim>
   void DistributedLagrangeProblem<dim,spacedim>::assemble_system()
   {
-    TimerOutput::Scope timer_section(monitor, "Assemble system");
+    {
+      TimerOutput::Scope timer_section(monitor, "Assemble system");
 
-    // Embedding stiffness matrix
-    MatrixTools::create_laplace_matrix(*space_dh, QGauss<spacedim>(2*space_fe->degree+1),
-                                       stiffness_matrix, (const Function<spacedim> *) nullptr, constraints);
+      // Embedding stiffness matrix
+      MatrixTools::create_laplace_matrix(*space_dh, QGauss<spacedim>(2*space_fe->degree+1),
+                                         stiffness_matrix, (const Function<spacedim> *) nullptr, constraints);
 
-    // Embedded mass matrix
-    MatrixTools::create_mass_matrix(*embedded_dh, QGauss<dim>(2*embedded_fe->degree+1),
-                                    embedded_mass_matrix);
+      // Embedded stiffness matrix and rhs vector $G$
+      MatrixTools::create_laplace_matrix(*embedded_mapping,
+                                         *embedded_dh,
+                                         QGauss<dim>(2*embedded_fe->degree+1),
+                                         embedded_stiffness_matrix,
+                                         embedded_value_function,
+                                         embedded_rhs);
 
-    // Coupling matrix
-    QGauss<dim> quad(parameters.coupling_quadrature_order);
-    NonMatching::create_coupling_mass_matrix(*space_dh,
-                                             *embedded_dh,
-                                             quad,
-                                             coupling_matrix, ConstraintMatrix(),
-                                             ComponentMask(), ComponentMask(),
-                                             StaticMappingQ1<spacedim>::mapping,
-                                             *embedded_mapping);
+      // Embedded mass matrix
+      MatrixTools::create_mass_matrix(*embedded_mapping,
+                                      *embedded_dh,
+                                      QGauss<dim>(2*embedded_fe->degree+1),
+                                      embedded_mass_matrix);
+    }
+    {
+      TimerOutput::Scope timer_section(monitor, "Assemble coupling system");
 
-    VectorTools::interpolate(*embedded_dh, embedded_value_function, embedded_value);
+      // Coupling matrix
+      QGauss<dim> quad(parameters.coupling_quadrature_order);
+      NonMatching::create_coupling_mass_matrix(*space_dh,
+                                               *embedded_dh,
+                                               quad,
+                                               coupling_matrix, ConstraintMatrix(),
+                                               ComponentMask(), ComponentMask(),
+                                               StaticMappingQ1<spacedim>::mapping,
+                                               *embedded_mapping);
+
+      VectorTools::interpolate(*embedded_dh, embedded_value_function, embedded_value);
+    }
   }
 
 
@@ -665,25 +701,31 @@ namespace Step60
   {
     TimerOutput::Scope timer_section(monitor, "Solve system");
 
-    // Start by creating the inverse stiffness matrix, and the inverse mass matrix
-    SparseDirectUMFPACK A_inv_umfpack;
-    A_inv_umfpack.initialize(stiffness_matrix);
+    // Start by creating the inverse stiffness matrix
+    SparseDirectUMFPACK K_inv_umfpack;
+    K_inv_umfpack.initialize(stiffness_matrix);
 
-    auto A = linear_operator(stiffness_matrix);
+    // Same thing, for the embedded space
+    SparseDirectUMFPACK A_inv_umfpack;
+    A_inv_umfpack.initialize(embedded_stiffness_matrix);
+
+    auto K = linear_operator(stiffness_matrix);
+    auto A = linear_operator(embedded_stiffness_matrix);
     auto M = linear_operator(embedded_mass_matrix);
     auto Ct = linear_operator(coupling_matrix);
     auto C = transpose_operator(Ct);
 
+    auto K_inv = linear_operator(K, K_inv_umfpack);
     auto A_inv = linear_operator(A, A_inv_umfpack);
 
-    auto S = C*A_inv*Ct;
+    auto S = C*K_inv*Ct;
 
     SolverCG<Vector<double> > solver_cg(schur_solver_control);
-    auto S_inv = inverse_operator(S, solver_cg, identity_operator(M));
+    auto S_inv = inverse_operator(S, solver_cg, A_inv);
 
-    lambda = S_inv * M * embedded_value;
+    lambda = S_inv * embedded_rhs;
 
-    solution = A_inv * Ct * lambda;
+    solution = K_inv * Ct * lambda;
 
     constraints.distribute(solution);
   }
@@ -726,6 +768,8 @@ int main()
       using namespace Step60;
 
       const unsigned int dim=1, spacedim=2;
+
+      deallog.depth_console(50);
 
       DistributedLagrangeProblem<dim, spacedim>::DistributedLagrangeProblemParameters parameters;
       DistributedLagrangeProblem<dim, spacedim> problem(parameters);
