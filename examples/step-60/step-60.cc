@@ -25,7 +25,13 @@
 
 #include <deal.II/base/parameter_acceptor.h>
 
-// The parameter acceptor class is the first novelty of this tutorial program.
+// The parameter acceptor class is the first novelty of this tutorial program:
+// in general parameter files are used to steer the execution of a program
+// at run time. While even a simple approach saves compiling time, as the same
+// executable can be run with different parameter settings, it can become
+// difficult to handle hundreds of parameters simultaneously while maintaining
+// compatibility between different programs. This is where the class
+// ParameterAcceptor proves useful.
 //
 // This class is used to define a public interface for classes that want to use
 // a single global ParameterHandler to handle parameters. The class provides a
@@ -61,16 +67,26 @@
 
 #include <deal.II/grid/grid_tools_cache.h>
 // The other new include file is the one that contains the GridTools::Cache class.
-// This class is used when you need to compute data structures that refer to a
-// Triangulation that are usually not stored in the Triangulation itself, like,
-// for example, a map from the vertices of a Triangulation to all cells that share
-// that vertex. Since these data structures are usually not needed in a finite element
-// code, deal.II provides function in GridTools to compute them, but it does not store
-// this information in the Triangulation itself.
+// The structure of deal.II, as many modern numerical libraries, is organized
+// following a Directed Acyclic Graph (DAG).
+// A DAG is a directed graph with topological ordering: each node structurally
+// represents an object, and one or more directed edges represent how
+// it can be used to generate new objects. This has several advantages,
+// but intrinsically creates “asymmetries” as certain operations are fast unlike
+// their inverse. For example, in deal.II finding the vertices of a cell has
+// very low computational cost, while finding all the cells that share a vertex requires
+// a non-trivial computation unless a new data structure is added.
+//
+// Since inverse operations are usually not needed in a finite element
+// code, these are implemented in GridTools without the use of extra data structures
+// related to the Triangulation which would make them much faster.
+// One such data structure, for example, is a map from the vertices of a Triangulation
+// to all cells that share those vertices, which would reduce the computations needed
+// to answer to the previous example.
 //
 // Some methods, for example GridTools::find_active_cell_around_point, make
-// heavy usage of these non-standard data structures. If you need to call these
-// methods more than once, it makes sense to store those data structures
+// heavy usage of these non-standard operations. If you need to call these
+// methods more than once, it becomes convenient to store those data structures
 // somewhere. GridTools::Cache does exactly this, giving you access to previously
 // computed objects, or computing them on the fly (and then storing them inside the
 // class for later use), and making sure that whenever the Triangulation is updated,
@@ -139,9 +155,13 @@ namespace Step60
   // These will be used to initialize a Triangulation<dim,spacedim> (for
   // $\Gamma$) and a Triangulation<spacedim,spacedim> (for $\Omega$).
   //
-  // A novelty w.r.t. to other tutorial programs is the heavy use of
+  // A novelty w.r.t. other tutorial programs is the heavy use of
   // std::unique_ptr. These behave like classical pointers, with the advantage
-  // of doing automatic house-keeping. We do this, because we want to be able to
+  // of doing automatic house-keeping: the contained object is automatically
+  // destroyed as soon as the unique_ptr goes out of scope, even if it is
+  // inside a container or there's an exception. Moreover it does not allow
+  // for duplicate pointers, which prevents ownership problems.
+  // We do this, because we want to be able to
   // i) construct the problem, ii) read the parameters, and iii) initialize all
   // objects according to what is specified in a parameter file.
   //
@@ -171,7 +191,7 @@ namespace Step60
   // Here we assume that upon construction, the classes that build up our
   // problem are not usable yet. Parsing the parameter file is what ensures we have
   // all ingredients to build up our classes, and we design them so that if parsing
-  // was not executed, the run is aborted.
+  // fails, the run is aborted.
 
   template <int dim, int spacedim=dim>
   class DistributedLagrangeProblem
@@ -184,9 +204,9 @@ namespace Step60
     //
     // The members of this function are all non-const, but the
     // DistributedLagrangeProblem class takes a const reference to a
-    // DistributedLagrangeProblemParameters object, so that it is not possible
-    // to modify the parameters from within the DistributedLagrangeProblem
-    // class itself.
+    // DistributedLagrangeProblemParameters object: this ensures that
+    // parameters are not modified from within the DistributedLagrangeProblem
+    // class.
 
     class DistributedLagrangeProblemParameters : public ParameterAcceptor
     {
@@ -197,15 +217,18 @@ namespace Step60
       // $\Omega$.
       unsigned int initial_refinement                           = 4;
 
-      // We allow also a local refinement in the domain $\Omega$, where there
-      // is overlap between the embedded grid and the embedding grid. If
-      // `delta_refinement` is greater than zero, then we mark each cell of
-      // the space grid that contains a vertex of the embedded grid, execute
-      // the refinement, and repeat the process `delta_refinement` times.
+      // The interaction between the embedded grid $\Omega$ and the embedding
+      // grid $\Gamma$ is handled throught the computation of $C$, which
+      // involves all cells of $\Omega$ overlapping with parts of $\Gamma$:
+      // a higher refinement of such cells might improve the results' quality.
+      // For this reason we define `delta_refinement`: if it is greater
+      // than zero, then we mark each cell of the space grid that contains
+      // a vertex of the embedded grid, execute the refinement, and repeat
+      // this process `delta_refinement` times.
       unsigned int delta_refinement                             = 3;
 
-      // Starting refinement of the embedding grid, corresponding to the domain
-      // $\Omega$.
+      // Starting refinement of the embedded grid, corresponding to the domain
+      // $\Gamma$.
       unsigned int initial_embedded_refinement                  = 7;
 
       // A list of boundary ids where we impose homogeneous Dirichlet boundary
@@ -213,10 +236,10 @@ namespace Step60
       // homogeneous Neumann boundary conditions
       std::list<types::boundary_id> homogeneous_dirichlet_ids   {0};
 
-      // FiniteElement degree of the embedding space
+      // FiniteElement degree of the embedding space: $V_h$
       unsigned int embedding_space_finite_element_degree        = 1;
 
-      // FiniteElement degree of the embedded space
+      // FiniteElement degree of the embedded space: $Q_h$
       unsigned int embedded_space_finite_element_degree         = 1;
 
       // FiniteElement degree of the space used to describe the deformation
@@ -261,7 +284,7 @@ namespace Step60
     // Embedding space geometry
     std::unique_ptr<Triangulation<spacedim> > space_grid;
 
-    // A Cache for the computation of some space grid related stuff.
+    // A Cache for the computation of some space grid related stuff
     std::unique_ptr<GridTools::Cache<spacedim, spacedim> > space_grid_tools_cache;
 
     // Embedding finite element space
@@ -286,10 +309,11 @@ namespace Step60
     // Embedded dof handler
     std::unique_ptr<DoFHandler<dim, spacedim> > embedded_configuration_dh;
 
+    // Embedded mapping
+    std::unique_ptr<Mapping<dim,spacedim> > embedded_mapping;
+
     // The configuration vector
     Vector<double> embedded_configuration;
-
-    std::unique_ptr<Mapping<dim,spacedim> > embedded_mapping;
 
     // Embedded configuration function
     ParameterAcceptorProxy<Functions::ParsedFunction<spacedim> >
@@ -328,12 +352,14 @@ namespace Step60
   // the section name we want our problem to use when parsing the parameter
   // file.
   //
-  // This gives us a nice opportunity: ParameterAcceptor allows you to specify
-  // the section name using unix conventions on paths. If the section name
-  // starts with a slash ("/"), then the section is interpreted as an *absolute
-  // path*, ParameterAcceptor enters a subsection for each directory in the
-  // path, using the last name it encountered as the landing subsection for the
-  // current class.
+  // Parameter files can be organized into section/subsection/etc. :
+  // this has the advantage that defined objects share parameters when
+  // sharing the same section/subsection/etc. ParameterAcceptor allows
+  // to specify the section name using unix conventions on paths.
+  // If the section name starts with a slash ("/"), then the section is
+  // interpreted as an *absolute path*, ParameterAcceptor enters a subsection
+  // for each directory in the path, using the last name it encountered as
+  // the landing subsection for the current class.
   //
   // For example, if you construct your class using
   // ParameterAcceptor("/first/second/third/My Class"), the parameters will be
@@ -352,13 +378,14 @@ namespace Step60
   // @endcode
   //
   // Internally, the *current path* stored in ParameterAcceptor, is now
-  // considered to be "/first/second/third/", i.e., when you specify an
+  // considered to be "/first/second/third/", i.e. when you specify an
   // absolute path, ParameterAcceptor *changes* the current section to the
-  // current path, i.e., to the path of the section name until the *last* "/".
+  // current path, i.e. to the path of the section name until the *last* "/".
   //
-  // If you now construct another class derived from ParameterAcceptor using a
-  // relative path (e.g., ParameterAcceptor("My Other class")), you'll end up
-  // with
+  // You can now construct another class derived from ParameterAcceptor using a
+  // relative path (e.g., ParameterAcceptor("My Other Class")) instead of the
+  // absolute one (e.g. ParameterAcceptor("/first/second/third/My Other Class")),
+  // obtaining:
   // @code
   // subsection first
   //   subsection second
@@ -374,10 +401,12 @@ namespace Step60
   // end
   // @endcode
   //
-  // If the section name *ends* with a slash, say, similar to the example above
-  // we have two classes, one initialized with "/first/second/third/My Class/"
-  // and the other with "My Other class", then the resulting parameter file will
-  // look like:
+  // If the section name *ends* with a slash then subsequent classes will
+  // interpret this as a full path: for example, similar to the one above, if
+  // we have two classes, one initialized with
+  // ParameterAcceptor("/first/second/third/My Class/")
+  // and the other with ParameterAcceptor("My Other Class"), then the
+  // resulting parameter file will look like:
   //
   // @code
   // subsection first
@@ -385,10 +414,11 @@ namespace Step60
   //     subsection third
   //       subsection MyClass
   //        ... # all the parameters
+  //        # notice MyClass subsection does not end here
   //        subsection My Other Class
   //         ... # all the parameters of MyOtherClass
   //        end
-  //       end
+  //       end # of subsection MyClass
   //     end
   //   end
   // end
@@ -397,8 +427,8 @@ namespace Step60
   // We are going to exploit this, by making our
   // DistributedLagrangeProblemParameters
   // the *parent* of all subsequently constructed classes. Since most of the other
-  // classes are members of DistributedLagrangeProblem, this allows one to construct,
-  // for example, two DistributedLagrangeProblem for two different dimensions, without
+  // classes are members of DistributedLagrangeProblem this allows, for example,
+  // to construct two DistributedLagrangeProblem for two different dimensions, without
   // having conflicts in the parameters for the two problems.
 
   template<int dim, int spacedim>
@@ -479,17 +509,17 @@ namespace Step60
     // a circle with radius `R` and center (Cx, Cy).
 
     embedded_configuration_function.declare_parameters_call_back.connect(
-          [&] () -> void
-          {
-            ParameterAcceptor::prm.set("Function constants", "R=.3, Cx=.4, Cy=.4");
-            ParameterAcceptor::prm.set("Function expression", "R*cos(2*pi*x)+Cx; R*sin(2*pi*x)+Cy");
-          });
+      [&] () -> void
+    {
+      ParameterAcceptor::prm.set("Function constants", "R=.3, Cx=.4, Cy=.4");
+      ParameterAcceptor::prm.set("Function expression", "R*cos(2*pi*x)+Cx; R*sin(2*pi*x)+Cy");
+    });
 
     embedded_value_function.declare_parameters_call_back.connect(
-          [&] () -> void
-          {
-            ParameterAcceptor::prm.set("Function expression", "1");
-          });
+      [&] () -> void
+    {
+      ParameterAcceptor::prm.set("Function expression", "1");
+    });
 
   }
 
