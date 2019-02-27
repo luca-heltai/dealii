@@ -312,6 +312,8 @@ namespace internal
                 dof_handler.get_fe().dofs_per_cell,
               numbers::invalid_dof_index);
           }
+        dof_handler.non_local_dofs.resize(
+          dof_handler.get_fe().n_non_local_dofs(), numbers::invalid_dof_index);
       }
 
 
@@ -348,6 +350,9 @@ namespace internal
                 dof_handler.get_fe().dofs_per_line,
               numbers::invalid_dof_index);
           }
+
+        dof_handler.non_local_dofs.resize(
+          dof_handler.get_fe().n_non_local_dofs(), numbers::invalid_dof_index);
       }
 
 
@@ -388,6 +393,9 @@ namespace internal
                 dof_handler.get_fe().dofs_per_quad,
               numbers::invalid_dof_index);
           }
+
+        dof_handler.non_local_dofs.resize(
+          dof_handler.get_fe().n_non_local_dofs(), numbers::invalid_dof_index);
       }
 
       template <int spacedim>

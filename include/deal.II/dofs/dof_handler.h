@@ -1312,6 +1312,11 @@ private:
   std::vector<types::global_dof_index> vertex_dofs;
 
   /**
+   * Array to store the indices for non local degrees of freedom.
+   */
+  std::vector<types::global_dof_index> non_local_dofs;
+
+  /**
    * An array to store the indices for level degrees of freedom located at
    * vertices.
    */

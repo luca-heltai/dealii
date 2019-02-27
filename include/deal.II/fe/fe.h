@@ -846,6 +846,24 @@ public:
   operator[](const unsigned int fe_index) const;
 
   /**
+   * Return the total number of non-local degrees of freedom.
+   *
+   * Non-local degrees freedom are not associated with a specific Triangulation
+   * object, and should be handled directly by derived classes.
+   */
+  virtual types::global_dof_index
+  n_non_local_dofs() const;
+
+  /**
+   * Return the subset of [0, n_non_local_dofs()) that is non-zero on the given
+   * @p cell.
+   *
+   * The returned IndexSet has dimension non_local_dofs_per_cell
+   */
+  virtual IndexSet
+  get_non_local_dofs_on_cell(const unsigned int cell_index) const;
+
+  /**
    * @name Shape function access
    * @{
    */

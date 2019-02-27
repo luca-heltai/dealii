@@ -155,6 +155,25 @@ FiniteElement<dim, spacedim>::operator^(const unsigned int multiplicity) const
 
 
 template <int dim, int spacedim>
+types::global_dof_index
+FiniteElement<dim, spacedim>::n_non_local_dofs() const
+{
+  return 0;
+}
+
+
+
+template <int dim, int spacedim>
+IndexSet
+FiniteElement<dim, spacedim>::get_non_local_dofs_on_cell(
+  const unsigned int) const
+{
+  return IndexSet();
+}
+
+
+
+template <int dim, int spacedim>
 double
 FiniteElement<dim, spacedim>::shape_value(const unsigned int,
                                           const Point<dim> &) const

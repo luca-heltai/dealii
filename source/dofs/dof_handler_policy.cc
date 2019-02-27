@@ -228,6 +228,46 @@ namespace internal
       struct Implementation
       {
         /* -------------- distribute_dofs functionality ------------- */
+        /**
+         * Distribute non local dofs on the given cell.
+         *
+         * Implemented only for standard DoFHandler objects.
+         */
+        template <int dim, int spacedim>
+        static types::global_dof_index
+        distribute_non_local_dofs_on_cell(
+          DoFHandler<dim, spacedim> &dof_handler,
+          const typename DoFHandler<dim, spacedim>::active_cell_iterator &cell,
+          types::global_dof_index next_free_dof)
+        {
+          const auto non_local_ids =
+            dof_handler.get_fe().get_non_local_dofs_on_cell(cell->index());
+          for (auto id : non_local_ids)
+            if (dof_handler.non_local_dofs[id] != numbers::invalid_dof_index)
+              dof_handler.non_local_dofs[id] = next_free_dof++;
+
+          return next_free_dof;
+        }
+
+
+
+        /**
+         * Throw. [TODO]
+         */
+        template <int dim, int spacedim>
+        static types::global_dof_index
+        distribute_non_local_dofs_on_cell(
+          hp::DoFHandler<dim, spacedim> &dof_handler,
+          const typename DoFHandler<dim, spacedim>::active_cell_iterator &cell,
+          types::global_dof_index next_free_dof)
+        {
+          (void)dof_handler;
+          (void)cell;
+          Assert(false, ExcNotImplemented());
+          return next_free_dof;
+        }
+
+
 
         /**
          * Distribute dofs on the given cell, with new dofs starting with index
@@ -2056,10 +2096,15 @@ namespace internal
             if (!cell->is_artificial())
               if ((subdomain_id == numbers::invalid_subdomain_id) ||
                   (cell->subdomain_id() == subdomain_id))
-                next_free_dof =
-                  Implementation::distribute_dofs_on_cell(dof_handler,
-                                                          cell,
-                                                          next_free_dof);
+                {
+                  next_free_dof =
+                    Implementation::distribute_dofs_on_cell(dof_handler,
+                                                            cell,
+                                                            next_free_dof);
+                  next_free_dof =
+                    Implementation::distribute_non_local_dofs_on_cell(
+                      dof_handler, cell, next_free_dof);
+                }
 
           update_all_active_cell_dof_indices_caches(dof_handler);
 

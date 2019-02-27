@@ -2703,6 +2703,24 @@ namespace internal
     struct Implementation
     {
       /**
+       * Enumerate non local dof indices in the cache.
+       */
+      template <int dim, int spacedim, bool level_dof_access>
+      static void
+      update_non_local_cell_dof_indices_cache(
+        const DoFCellAccessor<DoFHandler<dim, spacedim>, level_dof_access>
+          &                                            accessor,
+        std::vector<types::global_dof_index>::iterator next)
+      {
+        const auto non_local_ids =
+          accessor.get_fe().get_non_local_dofs_on_cell(accessor.index());
+        for (auto id : non_local_ids)
+          *next++ = accessor.get_dof_handler().non_local_dofs[id];
+      }
+
+
+
+      /**
        * Implement the updating of the cache. Currently not implemented for
        * hp::DoFHandler objects.
        */
@@ -2747,6 +2765,8 @@ namespace internal
             *next++ = accessor.vertex_dof_index(vertex, d);
         for (unsigned int d = 0; d < dofs_per_line; ++d)
           *next++ = accessor.dof_index(d);
+
+        update_non_local_cell_dof_indices_cache(accessor, next);
       }
 
 
@@ -2796,6 +2816,7 @@ namespace internal
             *next++ = accessor.line(line)->dof_index(d);
         for (unsigned int d = 0; d < dofs_per_quad; ++d)
           *next++ = accessor.dof_index(d);
+        update_non_local_cell_dof_indices_cache(accessor, next);
       }
 
 
@@ -2881,6 +2902,7 @@ namespace internal
                   accessor.face_rotation(quad)));
         for (unsigned int d = 0; d < dofs_per_hex; ++d)
           *next++ = accessor.dof_index(d);
+        update_non_local_cell_dof_indices_cache(accessor, next);
       }
 
 
@@ -3014,7 +3036,6 @@ namespace internal
           accessor.set_dof_index(d,
                                  local_dof_indices[index],
                                  accessor.active_fe_index());
-
         Assert(index == accessor.get_fe().dofs_per_cell, ExcInternalError());
       }
 
