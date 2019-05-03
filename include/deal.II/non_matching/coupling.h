@@ -18,6 +18,7 @@
 
 #include <deal.II/base/config.h>
 
+#include <deal.II/base/function_lib.h>
 #include <deal.II/base/quadrature.h>
 
 #include <deal.II/dofs/dof_handler.h>
@@ -424,15 +425,15 @@ namespace NonMatching
   template <int dim0, int dim1, int spacedim, typename Matrix, typename Number>
   void
   create_coupling_mass_matrix(
-    const Function<1> &                     kernel,
-    const Number &                          epsilon,
-    const GridTools::Cache<dim0, spacedim> &cache0,
-    const GridTools::Cache<dim1, spacedim> &cache1,
-    const DoFHandler<dim0, spacedim> &      dh0,
-    const DoFHandler<dim1, spacedim> &      dh1,
-    const Quadrature<dim0> &                quadrature0,
-    const Quadrature<dim1> &                quadrature1,
-    Matrix &                                matrix,
+    Functions::CutOffFunctionBase<spacedim> &kernel,
+    const Number &                           epsilon,
+    const GridTools::Cache<dim0, spacedim> & cache0,
+    const GridTools::Cache<dim1, spacedim> & cache1,
+    const DoFHandler<dim0, spacedim> &       dh0,
+    const DoFHandler<dim1, spacedim> &       dh1,
+    const Quadrature<dim0> &                 quadrature0,
+    const Quadrature<dim1> &                 quadrature1,
+    Matrix &                                 matrix,
     const AffineConstraints<Number> &constraints = AffineConstraints<Number>(),
     const ComponentMask &            comps0      = ComponentMask(),
     const ComponentMask &            comps1      = ComponentMask())
@@ -511,6 +512,9 @@ namespace NonMatching
                 typename Triangulation<dim1, spacedim>::active_cell_iterator>>
       intersection;
 
+    kernel.set_radius(epsilon);
+    std::vector<double> kernel_values(fev1.n_quadrature_points);
+
     for (const auto &cell0 : dh0.active_cell_iterators())
       if (cell0->is_locally_owned())
         {
@@ -533,35 +537,33 @@ namespace NonMatching
                   fev1.reinit(cell1);
                   cell_matrix = 0;
                   for (unsigned int q0 = 0; q0 < quadrature0.size(); ++q0)
-                    for (unsigned int q1 = 0; q1 < quadrature1.size(); ++q1)
-                      {
-                        double delta_q0q1 = 1;
-                        for (unsigned int d = 0; d < spacedim; ++d)
-                          delta_q0q1 *= kernel.value(Point<1>(
-                                          (fev0.quadrature_point(q0)[d] -
-                                           fev1.quadrature_point(q1)[d]) /
-                                          epsilon)) /
-                                        epsilon;
-                        for (unsigned int i = 0; i < fe0.dofs_per_cell; ++i)
-                          {
-                            const auto comp_i =
-                              fe0.system_to_component_index(i).first;
-                            if (mask0[comp_i])
-                              for (unsigned int j = 0; j < fe1.dofs_per_cell;
-                                   ++j)
-                                {
-                                  const auto comp_j =
-                                    fe1.system_to_component_index(j).first;
-                                  if (gtl1[comp_j] == gtl0[comp_i])
-                                    {
-                                      cell_matrix(i, j) +=
-                                        fev0.shape_value(i, q0) *
-                                        fev1.shape_value(j, q1) * delta_q0q1 *
-                                        fev0.JxW(q0) * fev1.JxW(q1);
-                                    }
-                                }
-                          }
-                      }
+                    {
+                      kernel.set_center(fev0.quadrature_point(q0));
+                      kernel.value_list(fev1.get_quadrature_points(),
+                                        kernel_values);
+                      for (unsigned int q1 = 0; q1 < quadrature1.size(); ++q1)
+                        if (kernel_values[q1] != 0.0)
+                          for (unsigned int i = 0; i < fe0.dofs_per_cell; ++i)
+                            {
+                              const auto comp_i =
+                                fe0.system_to_component_index(i).first;
+                              if (mask0[comp_i])
+                                for (unsigned int j = 0; j < fe1.dofs_per_cell;
+                                     ++j)
+                                  {
+                                    const auto comp_j =
+                                      fe1.system_to_component_index(j).first;
+                                    if (gtl1[comp_j] == gtl0[comp_i])
+                                      {
+                                        cell_matrix(i, j) +=
+                                          fev0.shape_value(i, q0) *
+                                          fev1.shape_value(j, q1) *
+                                          kernel_values[q1] * fev0.JxW(q0) *
+                                          fev1.JxW(q1);
+                                      }
+                                  }
+                            }
+                    }
 
                   constraints.distribute_local_to_global(cell_matrix,
                                                          dofs0,
