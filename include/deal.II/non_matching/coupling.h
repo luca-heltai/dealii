@@ -305,9 +305,12 @@ namespace NonMatching
             // const auto &reference_location =
             // particle->get_reference_location();
 
+            // To Discuss -
             // Particles ids are numbered from [1,n_p] instead of [0,n_p[
-            // I am not sure this is the best way to fix this
-            particle_indices[i] = particle->get_id() - 1;
+            // when they are created from add_particles
+            // However the particles generator number them [0,n_p[
+            // This appears to be a bug?
+            particle_indices[i] = particle->get_id();
           }
         constraints.add_entries_local_to_global(particle_indices,
                                                 dof_indices,

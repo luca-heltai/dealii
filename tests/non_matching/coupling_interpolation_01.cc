@@ -40,6 +40,7 @@
 
 #include <deal.II/numerics/matrix_tools.h>
 
+#include <deal.II/particles/generators.h>
 #include <deal.II/particles/particle_handler.h>
 
 #include "../tests.h"
@@ -78,12 +79,21 @@ test()
 
   // Create a single particle at an arbitrary point of the triangulation
   // Insert one particle per processor
-  std::vector<Point<spacedim>> particles_positions;
-  const unsigned int           n_particles = 1;
-  for (unsigned int i = 0; i < n_particles; ++i)
-    particles_positions.emplace_back(random_point<spacedim>());
+  // std::vector<Point<spacedim>> particles_positions;
+  // const unsigned int           n_particles = 1;
+  // for (unsigned int i = 0; i < n_particles; ++i)
+  //  particles_positions.emplace_back(random_point<spacedim>());
+  //
+  // particle_handler.insert_particles(particles_positions);
 
-  particle_handler.insert_particles(particles_positions);
+  const unsigned int n_particles_per_processor = 1;
+
+  Particles::Generators::probabilistic_locations<dim, spacedim>(
+    space_tria,
+    ConstantFunction<spacedim, double>(1.),
+    true,
+    Utilities::MPI::n_mpi_processes(MPI_COMM_WORLD) * n_particles_per_processor,
+    particle_handler);
 
   deallog << "Number of particles: " << particle_handler.n_global_particles()
           << std::endl;
@@ -108,22 +118,29 @@ test()
                                                      particle_handler,
                                                      dsp);
 
-  // Temporary - Display the sparsity pattern
-  SparsityPattern sparsity_pattern;
-  sparsity_pattern.copy_from(dsp);
-  std::string fname("sparsity_pattern_" + Utilities::int_to_string(dim) + "_" +
-                    Utilities::int_to_string(spacedim) + ".svg");
-  std::ofstream out(fname.c_str());
-  sparsity_pattern.print_svg(out);
-  // End temporary
-
-  IndexSet           local_particle_index_set(n_particles);
   const unsigned int my_mpi_id =
     Utilities::MPI::this_mpi_process(MPI_COMM_WORLD);
-  local_particle_index_set.add_range(my_mpi_id * n_particles,
-                                     (my_mpi_id + 1) * n_particles);
+  // Temporary - Display the sparsity pattern
+  if (my_mpi_id == 0)
+    {
+      SparsityPattern sparsity_pattern;
+      sparsity_pattern.copy_from(dsp);
+      std::string   fname("sparsity_pattern_" + Utilities::int_to_string(dim) +
+                        "_" + Utilities::int_to_string(spacedim) + ".svg");
+      std::ofstream out(fname.c_str());
+      sparsity_pattern.print_svg(out);
+    }
+  // End temporary
+
+  // To Discuss - Not confident about this part
+  // IndexSet local_particle_index_set(n_particles_per_processor);
+  IndexSet local_particle_index_set(particle_handler.n_global_particles());
+
+  local_particle_index_set.add_range(my_mpi_id * n_particles_per_processor,
+                                     (my_mpi_id + 1) *
+                                       n_particles_per_processor);
   auto global_particles_index_set =
-    Utilities::MPI::all_gather(MPI_COMM_WORLD, n_particles);
+    Utilities::MPI::all_gather(MPI_COMM_WORLD, n_particles_per_processor);
 
   SparsityTools::distribute_sparsity_pattern(dsp,
                                              global_particles_index_set,
