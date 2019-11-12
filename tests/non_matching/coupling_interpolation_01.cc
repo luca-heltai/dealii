@@ -60,7 +60,8 @@ void
 test()
 {
   deallog << "dim: " << dim << ", spacedim: " << spacedim << std::endl;
-  parallel::distributed::Triangulation<dim, spacedim> space_tria(MPI_COMM_WORLD);
+  parallel::distributed::Triangulation<dim, spacedim> space_tria(
+    MPI_COMM_WORLD);
   MappingQ<dim, spacedim> mapping(1);
   GridGenerator::hyper_cube(space_tria, -1, 1);
   space_tria.refine_global(2);
@@ -68,19 +69,19 @@ test()
   Particles::ParticleHandler<dim, spacedim> particle_handler(tr, mapping);
 
   // Create a single particle at an arbitrary point of the triangulation
-  Point<spacedim> position;
-  position(0) = 0.3;
-  position(1) = 0.5;
-  if (spacedim > 2)
-    position(2) = 0.7;
+  Point<spacedim> position = Tests::random_point<dim>();
 
   // Insert one particle per processor
   std::vector<Point<spacedim>> particles_positions;
-  particles_positions.push_back(position)
+  const unsigned int           n_particles = 1;
+  for (unsigned int i = 0; i < n_particles; ++)
+    particles_positions
+      .emplace_back(Tests::random_point<dim>())
 
-  particle_handler.insert_particles(particle);
+        particle_handler.insert_particles(particle);
 
-  deallog << "Number of particles: " << particle_handler.n_global_particles() << std::endl;
+  deallog << "Number of particles: " << particle_handler.n_global_particles()
+          << std::endl;
 
   FE_Q<spacedim, spacedim> space_fe(1);
 
@@ -97,18 +98,22 @@ test()
 
   DynamicSparsityPattern dsp(space_dh.n_dofs(), dh.n_dofs());
 
-  NonMatching::create_interpolation_sparsity_pattern(space_dh, particle_handler, dsp);
+  NonMatching::create_interpolation_sparsity_pattern(space_dh,
+                                                     particle_handler,
+                                                     dsp);
 
-  IndexSet local_particle_index_set (1);
-  unsigned int my_mpi_id=Utilities::MPI::this_mpi_process(mpi_communicator);
-  is.add_range(Utilities::MPI::this_mpi_process(mpi_communicator), N)
-  auto global_particles_index_set = Utilities::MPI::all_gather(mpi_communicator, local_particle_index_set)
 
-  SparsityTools::distribute_sparsity_pattern(
-    dsp,
-    global_particles_index_set,
-    mpi_communicator,
-    locally_relevant_dofs);
+  IndexSet           local_particle_index_set(n_particles);
+  const unsigned int my_mpi_id =
+    Utilities::MPI::this_mpi_process(mpi_communicator);
+  is.add_range(my_mpi_id * n_particles,
+               (my_mpi_id + 1) * n_particles) auto global_particles_index_set =
+    Utilities::MPI::all_gather(mpi_communicator, local_particle_index_set)
+
+      SparsityTools::distribute_sparsity_pattern(dsp,
+                                                 global_particles_index_set,
+                                                 mpi_communicator,
+                                                 locally_relevant_dofs);
 
   LA::MPI::SparseMatrix system_matrix;
   system_matrix.reinit(local_particle_index_set,
@@ -116,23 +121,23 @@ test()
                        dsp,
                        mpi_communicator);
 
-  //NonMatching::create_interpolation_matrix(space_dh, dh, quad, coupling);
+  // NonMatching::create_interpolation_matrix(space_dh, dh, quad, coupling);
 
   // now take ones in space and interpolate it to the points
   // Locally locally_relevant_dofs are used to allow for modifications
   // of the vectors
   LA::MPI::Vector<double> space_ones(locally_relevant_dofs);
-  //LA::MPI::Vector<double> ones(locally_relevant_dofs);
+  // LA::MPI::Vector<double> ones(locally_relevant_dofs);
 
-  //space_ones = 1.0;
-  //coupling.Tvmult(ones, space_ones);
-  //mass_matrix_inv.solve(ones);
+  // space_ones = 1.0;
+  // coupling.Tvmult(ones, space_ones);
+  // mass_matrix_inv.solve(ones);
 
-  //Vector<double> real_ones(dh.n_dofs());
-  //real_ones = 1.0;
-  //ones -= real_ones;
+  // Vector<double> real_ones(dh.n_dofs());
+  // real_ones = 1.0;
+  // ones -= real_ones;
 
-  deallog << "Error on constants: " << ones.l2_norm() << std::endl;
+  // deallog << "Error on constants: " << ones.l2_norm() << std::endl;
 }
 
 
