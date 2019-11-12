@@ -44,15 +44,16 @@
 
 #include "../tests.h"
 
-namespace LA {
-#if defined(DEAL_II_WITH_PETSC) && !defined(DEAL_II_PETSC_WITH_COMPLEX) &&     \
-    !(defined(DEAL_II_WITH_TRILINOS) && defined(FORCE_USE_OF_TRILINOS))
-using namespace ::LinearAlgebraPETSc;
-#define USE_PETSC_LA
+namespace LA
+{
+#if defined(DEAL_II_WITH_PETSC) && !defined(DEAL_II_PETSC_WITH_COMPLEX) && \
+  !(defined(DEAL_II_WITH_TRILINOS) && defined(FORCE_USE_OF_TRILINOS))
+  using namespace ::LinearAlgebraPETSc;
+#  define USE_PETSC_LA
 #elif defined(DEAL_II_WITH_TRILINOS)
-using namespace ::LinearAlgebraTrilinos;
+  using namespace ::LinearAlgebraTrilinos;
 #else
-#error DEAL_II_WITH_PETSC or DEAL_II_WITH_TRILINOS required
+#  error DEAL_II_WITH_PETSC or DEAL_II_WITH_TRILINOS required
 #endif
 } // namespace LA
 
@@ -61,10 +62,13 @@ using namespace dealii;
 // Test that an interpolation matrix can be constructed for a single
 // particle for every valid dimension pair that exist
 
-template <int dim, int spacedim> void test() {
+template <int dim, int spacedim>
+void
+test()
+{
   deallog << "dim: " << dim << ", spacedim: " << spacedim << std::endl;
   parallel::distributed::Triangulation<dim, spacedim> space_tria(
-      MPI_COMM_WORLD);
+    MPI_COMM_WORLD);
   MappingQ1<dim, spacedim> mapping;
   GridGenerator::hyper_cube(space_tria, -1, 1);
   space_tria.refine_global(2);
@@ -75,7 +79,7 @@ template <int dim, int spacedim> void test() {
   // Create a single particle at an arbitrary point of the triangulation
   // Insert one particle per processor
   std::vector<Point<spacedim>> particles_positions;
-  const unsigned int n_particles = 1;
+  const unsigned int           n_particles = 1;
   for (unsigned int i = 0; i < n_particles; ++i)
     particles_positions.emplace_back(random_point<spacedim>());
 
@@ -100,7 +104,8 @@ template <int dim, int spacedim> void test() {
   DynamicSparsityPattern dsp(particle_handler.n_global_particles(),
                              space_dh.n_dofs());
 
-  NonMatching::create_interpolation_sparsity_pattern(space_dh, particle_handler,
+  NonMatching::create_interpolation_sparsity_pattern(space_dh,
+                                                     particle_handler,
                                                      dsp);
 
   // Temporary - Display the sparsity pattern
@@ -112,20 +117,23 @@ template <int dim, int spacedim> void test() {
   sparsity_pattern.print_svg(out);
   // End temporary
 
-  IndexSet local_particle_index_set(n_particles);
+  IndexSet           local_particle_index_set(n_particles);
   const unsigned int my_mpi_id =
-      Utilities::MPI::this_mpi_process(MPI_COMM_WORLD);
+    Utilities::MPI::this_mpi_process(MPI_COMM_WORLD);
   local_particle_index_set.add_range(my_mpi_id * n_particles,
                                      (my_mpi_id + 1) * n_particles);
   auto global_particles_index_set =
-      Utilities::MPI::all_gather(MPI_COMM_WORLD, n_particles);
+    Utilities::MPI::all_gather(MPI_COMM_WORLD, n_particles);
 
-  SparsityTools::distribute_sparsity_pattern(dsp, global_particles_index_set,
+  SparsityTools::distribute_sparsity_pattern(dsp,
+                                             global_particles_index_set,
                                              MPI_COMM_WORLD,
                                              local_particle_index_set);
 
   LA::MPI::SparseMatrix system_matrix;
-  system_matrix.reinit(local_particle_index_set, locally_owned_dofs, dsp,
+  system_matrix.reinit(local_particle_index_set,
+                       locally_owned_dofs,
+                       dsp,
                        MPI_COMM_WORLD);
 
   // NonMatching::create_interpolation_matrix(space_dh, dh, quad, coupling);
@@ -147,7 +155,9 @@ template <int dim, int spacedim> void test() {
   // deallog << "Error on constants: " << ones.l2_norm() << std::endl;
 }
 
-int main(int argc, char **argv) {
+int
+main(int argc, char **argv)
+{
   Utilities::MPI::MPI_InitFinalize mpi_initialization(argc, argv, 1);
 
   initlog();
