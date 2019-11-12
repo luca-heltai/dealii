@@ -295,8 +295,8 @@ namespace NonMatching
         const auto &dh_cell =
           typename DoFHandler<dim, spacedim>::cell_iterator(*cell, &space_dh);
         dh_cell->get_dof_indices(dof_indices);
-        const auto pic         = particle_handler.particles_in_cells(cell);
-        const auto n_particles = pic.end() - pic.begin();
+        const auto pic         = particle_handler.particles_in_cell(cell);
+        const auto n_particles = particle_handler.n_particles_in_cell(cell);
         particle_indices.resize(n_particles);
         // local_matrix.reinit({n_particles, fe.dofs_per_cell});
         Assert(pic.begin() == particle, ExcInternalError());
