@@ -271,7 +271,7 @@ namespace NonMatching
       void
       create_interpolation_sparsity_pattern(
         const DoFHandler<dim, spacedim> &space_dh,
-        Particles::ParticleHandler<dim, spacedim> particle_handler
+        Particles::ParticleHandler<dim, spacedim> &particle_handler,
         Sparsity &                        sparsity,
         const AffineConstraints<number> & constraints = AffineConstraints<number>(),
         const ComponentMask &             space_comps = ComponentMask(),
@@ -279,7 +279,7 @@ namespace NonMatching
           StaticMappingQ1<dim0, spacedim>::mapping
         )
       {
-        
+
       }
 
 

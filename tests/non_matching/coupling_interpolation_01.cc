@@ -13,8 +13,23 @@
 //
 // ---------------------------------------------------------------------
 
+namespace LA
+{
+#if defined(DEAL_II_WITH_PETSC) && !defined(DEAL_II_PETSC_WITH_COMPLEX) && \
+  !(defined(DEAL_II_WITH_TRILINOS) && defined(FORCE_USE_OF_TRILINOS))
+  using namespace ::LinearAlgebraPETSc;
+#  define USE_PETSC_LA
+#elif defined(DEAL_II_WITH_TRILINOS)
+  using namespace ::LinearAlgebraTrilinos;
+#else
+#  error DEAL_II_WITH_PETSC or DEAL_II_WITH_TRILINOS required
+#endif
+} // namespace LA
+
 #include <deal.II/base/point.h>
 #include <deal.II/base/tensor.h>
+
+#include <deal.II/distributed/tria.h>
 
 #include <deal.II/dofs/dof_tools.h>
 
@@ -31,79 +46,91 @@
 
 #include <deal.II/numerics/matrix_tools.h>
 
+#include <deal.II/particles/particle_handler.h>
+
 #include "../tests.h"
 
 using namespace dealii;
 
-// Test that a coupling matrix can be constructed for each pair of dimension and
-// immersed dimension, and check that constants are projected correctly.
+// Test that an interpolation matrix can be constructed for a single
+// particle for every valid dimension pair that exist
 
 template <int dim, int spacedim>
 void
 test()
 {
   deallog << "dim: " << dim << ", spacedim: " << spacedim << std::endl;
-
-  Triangulation<dim, spacedim>      tria;
-  Triangulation<spacedim, spacedim> space_tria;
-
-  GridGenerator::hyper_cube(tria, -.4, .3);
+  parallel::distributed::Triangulation<dim, spacedim> space_tria(MPI_COMM_WORLD);
+  MappingQ<dim, spacedim> mapping(1);
   GridGenerator::hyper_cube(space_tria, -1, 1);
-
-  tria.refine_global(1);
   space_tria.refine_global(2);
 
-  FE_Q<dim, spacedim>      fe(1);
+  Particles::ParticleHandler<dim, spacedim> particle_handler(tr, mapping);
+
+  // Create a single particle at an arbitrary point of the triangulation
+  Point<spacedim> position;
+  position(0) = 0.3;
+  position(1) = 0.5;
+  if (spacedim > 2)
+    position(2) = 0.7;
+
+  // Insert one particle per processor
+  std::vector<Point<spacedim>> particles_positions;
+  particles_positions.push_back(position)
+
+  particle_handler.insert_particles(particle);
+
+  deallog << "Number of particles: " << particle_handler.n_global_particles() << std::endl;
+
   FE_Q<spacedim, spacedim> space_fe(1);
 
-  deallog << "FE      : " << fe.get_name() << std::endl
-          << "Space FE: " << space_fe.get_name() << std::endl;
+  deallog << "Space FE: " << space_fe.get_name() << std::endl;
 
-  DoFHandler<dim, spacedim>      dh(tria);
   DoFHandler<spacedim, spacedim> space_dh(space_tria);
-
-  dh.distribute_dofs(fe);
   space_dh.distribute_dofs(space_fe);
 
-  deallog << "Dofs      : " << dh.n_dofs() << std::endl
-          << "Space dofs: " << space_dh.n_dofs() << std::endl;
+  IndexSet locally_owned_dofs = dof_handler.locally_owned_dofs();
+  IndexSet locally_relevant_dofs;
+  DoFTools::extract_locally_relevant_dofs(dof_handler, locally_relevant_dofs);
 
-  QGauss<dim> quad(3); // Quadrature for coupling
+  deallog << "Space dofs: " << space_dh.n_dofs() << std::endl;
 
+  DynamicSparsityPattern dsp(space_dh.n_dofs(), dh.n_dofs());
 
-  SparsityPattern sparsity;
-  {
-    DynamicSparsityPattern dsp(space_dh.n_dofs(), dh.n_dofs());
-    NonMatching::create_coupling_sparsity_pattern(space_dh, dh, quad, dsp);
-    sparsity.copy_from(dsp);
-  }
-  SparseMatrix<double> coupling(sparsity);
-  NonMatching::create_coupling_mass_matrix(space_dh, dh, quad, coupling);
+  NonMatching::create_interpolation_sparsity_pattern(space_dh, particle_handler, dsp);
 
-  SparsityPattern mass_sparsity;
-  {
-    DynamicSparsityPattern dsp(dh.n_dofs(), dh.n_dofs());
-    DoFTools::make_sparsity_pattern(dh, dsp);
-    mass_sparsity.copy_from(dsp);
-  }
-  SparseMatrix<double> mass_matrix(mass_sparsity);
-  MatrixTools::create_mass_matrix(dh, quad, mass_matrix);
+  IndexSet local_particle_index_set (1);
+  unsigned int my_mpi_id=Utilities::MPI::this_mpi_process(mpi_communicator);
+  is.add_range(Utilities::MPI::this_mpi_process(mpi_communicator), N)
+  auto global_particles_index_set = Utilities::MPI::all_gather(mpi_communicator, local_particle_index_set)
 
-  SparseDirectUMFPACK mass_matrix_inv;
-  mass_matrix_inv.factorize(mass_matrix);
+  SparsityTools::distribute_sparsity_pattern(
+    dsp,
+    global_particles_index_set,
+    mpi_communicator,
+    locally_relevant_dofs);
 
-  // now take ones in space, project them onto the immersed space,
-  // get back ones, and check for the error.
-  Vector<double> space_ones(space_dh.n_dofs());
-  Vector<double> ones(dh.n_dofs());
+  LA::MPI::SparseMatrix system_matrix;
+  system_matrix.reinit(local_particle_index_set,
+                       locally_owned_dofs,
+                       dsp,
+                       mpi_communicator);
 
-  space_ones = 1.0;
-  coupling.Tvmult(ones, space_ones);
-  mass_matrix_inv.solve(ones);
+  //NonMatching::create_interpolation_matrix(space_dh, dh, quad, coupling);
 
-  Vector<double> real_ones(dh.n_dofs());
-  real_ones = 1.0;
-  ones -= real_ones;
+  // now take ones in space and interpolate it to the points
+  // Locally locally_relevant_dofs are used to allow for modifications
+  // of the vectors
+  LA::MPI::Vector<double> space_ones(locally_relevant_dofs);
+  //LA::MPI::Vector<double> ones(locally_relevant_dofs);
+
+  //space_ones = 1.0;
+  //coupling.Tvmult(ones, space_ones);
+  //mass_matrix_inv.solve(ones);
+
+  //Vector<double> real_ones(dh.n_dofs());
+  //real_ones = 1.0;
+  //ones -= real_ones;
 
   deallog << "Error on constants: " << ones.l2_norm() << std::endl;
 }
@@ -113,10 +140,17 @@ test()
 int
 main()
 {
+  Utilities::MPI::MPI_InitFinalize mpi_initialization(argc, argv, 1);
+
+
   initlog();
-  test<1, 1>();
-  test<1, 2>();
+  deallog.push("2d/2d");
   test<2, 2>();
+  deallog.pop();
+  deallog.push("2d/3d");
   test<2, 3>();
+  deallog.pop();
+  deallog.push("3d/3d");
   test<3, 3>();
+  deallog.pop();
 }
