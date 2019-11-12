@@ -30,6 +30,9 @@
 
 #include <deal.II/lac/affine_constraints.h>
 
+#include <deal.II/particles/particle_handler.h>
+
+
 DEAL_II_NAMESPACE_OPEN
 
 /**
@@ -221,6 +224,66 @@ namespace NonMatching
     const ComponentMask &          immersed_comps = ComponentMask(),
     const Mapping<dim1, spacedim> &immersed_mapping =
       StaticMappingQ1<dim1, spacedim>::mapping);
+
+      /**
+       * Create a interpolation sparsity pattern for non-matching,
+       * overlapping grids.
+       *
+       * Given a triangulation representing the domains $\Omega$
+       * and a particle handler of particles in $\Omega$,
+       * and a finite element space
+       * $V(\Omega) = \text{span}\{v_i\}_{i=0}^n$,
+       * compute the sparsity pattern that would be
+       * necessary to assemble the matrix
+       * \f[
+       * M_{ij} \dealcoloneq v_i(x_j) ,
+       * \f]
+       * where $V(\Omega)$ is the finite element space associated with the
+       * `space_dh`
+       *
+       * The `sparsity` is filled by locating the position of the points
+       * within the particle handler with respect to the embedding triangulation
+       * $\Omega$.
+       *
+       * The `space_comps` masks will assume which components are coupled
+       *
+       * If a particle does not fall within $\Omega$, an exception will be
+       * thrown by the algorithm that computes the point location. In
+       * particular, notice that this function only makes sens for `dim1` lower or
+       * equal than `dim0`. A static assert guards that this is actually the case.
+       *
+       * For both spaces, it is possible to specify a custom Mapping, which
+       * defaults to StaticMappingQ1 for both.
+       *
+       * This function will also work in parallel, provided that the immersed
+       * triangulation is of type parallel::distributed::Triangulation<dim1,spacedim>
+       * or parallel::shared::Triangulation<dim1,spacedim>.
+       *
+       * See the tutorial program step-**** for an example on how to use this
+       * function.
+       *
+       * @author Bruno Blais, Luca Heltai, 2019
+       */
+      template <int dim,
+                int spacedim,
+                typename Sparsity,
+                typename number = double>
+      void
+      create_interpolation_sparsity_pattern(
+        const DoFHandler<dim, spacedim> &space_dh,
+        Particles::ParticleHandler<dim, spacedim> particle_handler
+        Sparsity &                        sparsity,
+        const AffineConstraints<number> & constraints = AffineConstraints<number>(),
+        const ComponentMask &             space_comps = ComponentMask(),
+        const Mapping<dim0, spacedim> &   space_mapping =
+          StaticMappingQ1<dim0, spacedim>::mapping
+        )
+      {
+        
+      }
+
+
+
 } // namespace NonMatching
 DEAL_II_NAMESPACE_CLOSE
 
