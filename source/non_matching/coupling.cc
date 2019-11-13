@@ -234,10 +234,10 @@ namespace NonMatching
     // the version with the dof_mask, this should be uncommented.
     //
     // // Construct a dof_mask, used to distribute entries to the sparsity
-    // able< 2, bool > dof_mask(space_fe.dofs_per_cell,
+    // Table< 2, bool > dof_mask(space_fe.dofs_per_cell,
     //                          immersed_fe.dofs_per_cell);
-    // of_mask.fill(false);
-    // or (unsigned int i=0; i<space_fe.dofs_per_cell; ++i)
+    // dof_mask.fill(false);
+    // for (unsigned int i=0; i<space_fe.dofs_per_cell; ++i)
     //  {
     //    const auto comp_i = space_fe.system_to_component_index(i).first;
     //    if (space_gtl[comp_i] != numbers::invalid_unsigned_int)

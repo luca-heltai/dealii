@@ -95,9 +95,39 @@ namespace Particles
       const auto  max_particles_per_cell =
         particle_handler.n_global_max_particles_per_cell();
 
+
+      // Take care of components
+      const ComponentMask comps =
+        (space_comps.size() == 0 ? ComponentMask(fe.n_components(), true) :
+                                   space_comps);
+      AssertDimension(comps.size(), fe.n_components());
+
+      const auto n_comps = comps.n_selected_components();
+
+      // Global to local indices
+      std::vector<unsigned int> space_gtl(fe.n_components(),
+                                          numbers::invalid_unsigned_int);
+      for (unsigned int i = 0, j = 0; i < space_gtl.size(); ++i)
+        if (comps[i])
+          space_gtl[i] = j++;
+
+      // [TODO]: when the add_entries_local_to_global below will implement
+      // the version with the dof_mask, this should be uncommented.
+      // // Construct a dof_mask, used to distribute entries to the sparsity
+      // Table<2, bool> dof_mask(max_particles_per_cell * n_comps,
+      //                         fe.dofs_per_cell);
+      // dof_mask.fill(false);
+      // for (unsigned int i = 0; i < space_fe.dofs_per_cell; ++i)
+      //   {
+      //     const auto comp_i = space_fe.system_to_component_index(i).first;
+      //     if (space_gtl[comp_i] != numbers::invalid_unsigned_int)
+      //       for (unsigned int j = 0; j < max_particles_per_cell; ++j)
+      //         dof_mask(i, j * n_comps + space_gtl[comp_i]) = true;
+      //   }
+
       std::vector<types::global_dof_index> dof_indices(fe.dofs_per_cell);
       std::vector<types::particle_index>   particle_indices(
-        max_particles_per_cell);
+        max_particles_per_cell * n_comps);
 
       // FullMatrix<double> local_matrix(max_particles_per_cell,
       // fe.dofs_per_cell);
@@ -110,7 +140,7 @@ namespace Particles
           dh_cell->get_dof_indices(dof_indices);
           const auto pic         = particle_handler.particles_in_cell(cell);
           const auto n_particles = particle_handler.n_particles_in_cell(cell);
-          particle_indices.resize(n_particles);
+          particle_indices.resize(n_particles * n_comps);
           // local_matrix.reinit({n_particles, fe.dofs_per_cell});
           Assert(pic.begin() == particle, ExcInternalError());
           for (unsigned int i = 0; particle != pic.end(); ++particle, ++i)
@@ -123,11 +153,23 @@ namespace Particles
               // when they are created from add_particles
               // However the particles generator number them [0,n_p[
               // This appears to be a bug?
-              particle_indices[i] = particle->get_id();
+              for (unsigned int j = 0; j < fe.dofs_per_cell; ++j)
+                {
+                  const auto comp_j =
+                    space_gtl[fe.system_to_component_index(j).first];
+                  if (comp_j != numbers::invalid_unsigned_int)
+                    constraints.add_entries_local_to_global(
+                      {i * n_comps + comp_j}, {dof_indices[j]}, sparsity);
+                  // for (unsigned int d = 0; d < n_comps; ++d)
+                  //   particle_indices[i * n_comps + d] =
+                  //     particle->get_id() * n_comps + d;
+                }
             }
-          constraints.add_entries_local_to_global(particle_indices,
-                                                  dof_indices,
-                                                  sparsity);
+          // [TODO]: when this works, use this:
+          // constraints.add_entries_local_to_global(particle_indices,
+          //                                         dof_indices,
+          //                                         sparsity,
+          //                                         dof_mask);
         }
     }
   } // namespace Utilities
