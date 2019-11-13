@@ -128,8 +128,6 @@ test()
                 dsp,
                 MPI_COMM_WORLD);
 
-  matrix.compress(VectorOperation::insert);
-
   // Build the interpolation matrix
   Particles::Utilities::create_interpolation_matrix(
     space_dh, particle_handler, matrix, constraints, space_mask);

@@ -287,6 +287,7 @@ namespace Particles
                                                  dof_indices,
                                                  matrix);
         }
+      matrix.compress(VectorOperation::insert);
     }
   } // namespace Utilities
 } // namespace Particles
