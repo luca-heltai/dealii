@@ -11,3 +11,5 @@ DEAL:0:3d/3d::dim: 3, spacedim: 3
 DEAL:0:3d/3d::Total number of particles: 512
 DEAL:0:3d/3d::Space FE: FE_Q<3>(1)
 DEAL:0:3d/3d::Space dofs: 125
+
+
