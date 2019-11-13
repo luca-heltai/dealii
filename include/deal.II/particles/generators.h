@@ -20,6 +20,9 @@
 
 #include <deal.II/distributed/tria.h>
 
+#include <deal.II/dofs/dof_handler.h>
+#include <deal.II/dofs/dof_tools.h>
+
 #include <deal.II/fe/mapping.h>
 #include <deal.II/fe/mapping_q1.h>
 
@@ -161,6 +164,40 @@ namespace Particles
       const Mapping<dim, spacedim> &      mapping =
         StaticMappingQ1<dim, spacedim>::mapping,
       const unsigned int random_number_seed = 5432);
+
+
+    /**
+     * A function that generates particles at the location of the support points
+     * of a DoFHandler
+     * The total number of particles that is added to the @p particle_handler object is
+     * the number of dofs of the DoFHandler that is passed that are within the
+     * triangulation.
+     *
+     * @param[in] triangulation The triangulation associated with the @p particle_handler.
+     *
+     * @param[in] a DOF handler that may live on another triangulation
+     *
+     *
+     * @param[in,out] particle_handler The particle handler that will take
+     * ownership of the generated particles.
+     *
+     * @param[in] mapping An optional mapping object that is used to map
+     * the DOF locations. If no mapping is provided a MappingQ1 is assumed.
+     *
+     */
+    template <int dim, int spacedim = dim>
+    void
+    dof_support_points(const Triangulation<dim, spacedim> &triangulation,
+                       const DoFHandler<dim, spacedim> &   dof_handler,
+                       ParticleHandler<dim, spacedim> &    particle_handler,
+                       const Mapping<dim, spacedim> &      mapping =
+                         StaticMappingQ1<dim, spacedim>::mapping)
+    {
+      std::map<types::global_dof_index, Point<spacedim>> support_points;
+      DoFTools::map_dofs_to_support_points(mapping,
+                                           dof_handler,
+                                           support_points);
+    }
 
   } // namespace Generators
 } // namespace Particles
