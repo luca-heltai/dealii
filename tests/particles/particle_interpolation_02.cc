@@ -16,7 +16,8 @@
 // Test that an interpolation sparsity can be constructed for a single
 // particle per processor for every valid dimension pair that exist
 // when there are more than one components on the DoFHandler
-// that is associated with the triangulation
+// that is associated with the triangulation, and we select only one
+// component
 
 #include <deal.II/base/point.h>
 #include <deal.II/base/tensor.h>
@@ -73,7 +74,7 @@ test()
 
   FESystem<dim, spacedim> space_fe(FE_Q<dim, spacedim>(1), 3);
 
-  ComponentMask space_mask(space_fe.n_components(), true);
+  ComponentMask space_mask({false, false, true});
 
   const auto n_comps = space_mask.n_selected_components();
 

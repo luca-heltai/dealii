@@ -67,8 +67,12 @@ test()
       estimated_n_particles_per_processor,
     particle_handler);
 
-  // Create a dof handler
+
   FE_Q<dim, spacedim> space_fe(1);
+
+  ComponentMask space_mask(space_fe.n_components(), true);
+
+  const auto n_comps = space_mask.n_selected_components();
 
   DoFHandler<dim, spacedim> space_dh(space_tria);
   space_dh.distribute_dofs(space_fe);
@@ -85,30 +89,33 @@ test()
             << "Space FE: " << space_fe.get_name() << std::endl
             << "Space dofs: " << space_dh.n_dofs() << std::endl;
 
-  DynamicSparsityPattern dsp(particle_handler.n_global_particles(),
+  DynamicSparsityPattern dsp(particle_handler.n_global_particles() * n_comps,
                              space_dh.n_dofs());
 
-  // Build the interpolation sparsity
-  Particles::Utilities::create_interpolation_sparsity_pattern(space_dh,
-                                                              particle_handler,
-                                                              dsp);
+  AffineConstraints<double> constraints;
 
-  const auto n_local_particles = particle_handler.n_locally_owned_particles();
+  // Build the interpolation sparsity
+  Particles::Utilities::create_interpolation_sparsity_pattern(
+    space_dh, particle_handler, dsp, constraints, space_mask);
+
+  const auto n_local_particles_dofs =
+    particle_handler.n_locally_owned_particles() * n_comps;
 
   auto particle_sizes =
-    Utilities::MPI::all_gather(MPI_COMM_WORLD, n_local_particles);
+    Utilities::MPI::all_gather(MPI_COMM_WORLD, n_local_particles_dofs);
 
   const auto my_start = std::accumulate(particle_sizes.begin(),
                                         particle_sizes.begin() + my_mpi_id,
                                         0u);
 
-  IndexSet local_particle_index_set(particle_handler.n_global_particles());
+  IndexSet local_particle_index_set(particle_handler.n_global_particles() *
+                                    n_comps);
 
-  local_particle_index_set.add_range(my_start, my_start + n_local_particles);
+  local_particle_index_set.add_range(my_start,
+                                     my_start + n_local_particles_dofs);
 
   auto global_particles_index_set =
-    Utilities::MPI::all_gather(MPI_COMM_WORLD,
-                               estimated_n_particles_per_processor);
+    Utilities::MPI::all_gather(MPI_COMM_WORLD, n_local_particles_dofs);
 
   SparsityTools::distribute_sparsity_pattern(dsp,
                                              global_particles_index_set,
