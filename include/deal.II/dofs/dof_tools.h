@@ -1697,6 +1697,80 @@ namespace DoFTools
   extract_locally_relevant_dofs(const DoFHandlerType &dof_handler,
                                 IndexSet &            dof_set);
 
+
+  /**
+   * Extract the set of local, active or relevant DoF indices for each
+   * components within the mask that are owned by the current  processor. For
+   * components disabled by the mask, an empty IndexSet is returned.
+   * For regular DoFHandler objects, this set is the complete set with all DoF
+   * indices. In either case, it equals what DoFHandler::locally_owned_dofs()
+   * returns. The ownership type is fixed by a small enum that controls which
+   * type of ownership is asked off.
+   */
+
+  enum class OwnershipType
+  {
+    owned,
+    active,
+    relevant
+  };
+
+  template <typename DoFHandlerType>
+  std::vector<IndexSet>
+  extract_dofs_per_component(
+    const DoFHandlerType &dof_handler,
+    const OwnershipType   ownership  = OwnershipType::owned,
+    const ComponentMask & components = ComponentMask())
+  {
+    const auto &tria               = dof_handler.get_triangulation();
+    const auto &fe                 = dof_handler.get_fe();
+    const auto  locally_owned_dofs = dof_handler.locally_owned_dofs();
+
+    // Take care of components
+    const ComponentMask mask =
+      (components.size() == 0 ? ComponentMask(fe.n_components(), true) :
+                                components);
+    AssertDimension(mask.size(), fe.n_components());
+
+    std::vector<std::vector<types::global_dof_index>> dofs_per_comp(
+      fe.n_components());
+    const unsigned int                   dofs_per_cell = fe.dofs_per_cell;
+    std::vector<types::global_dof_index> local_dof_indices(dofs_per_cell);
+    for (const auto &cell : dof_handler.active_cell_iterators())
+      {
+        if (cell->is_locally_owned() ||
+            (cell->is_ghost() && ownership == OwnershipType::relevant))
+          {
+            cell->get_dof_indices(local_dof_indices);
+            for (unsigned int i = 0; i < dofs_per_cell; ++i)
+              {
+                unsigned int dof_comp = fe.system_to_component_index(i).first;
+                // Push back global dof index that correspond to component
+                // within mask
+                if (mask[dof_comp] &&
+                    (ownership != OwnershipType::owned ||
+                     locally_owned_dofs.is_element(local_dof_indices[i])))
+                  dofs_per_comp[dof_comp].push_back(local_dof_indices[i]);
+              }
+          }
+      }
+
+    // sort, compress out duplicates, fill into index set
+    std::vector<IndexSet> index_per_comp(mask.n_selected_components(),
+                                         IndexSet(dof_handler.n_dofs()));
+
+    for (unsigned int i = 0; i < dofs_per_comp.size(); ++i)
+      {
+        std::sort(dofs_per_comp[i].begin(), dofs_per_comp[i].end());
+        index_per_comp[i].add_indices(dofs_per_comp[i].begin(),
+                                      std::unique(dofs_per_comp[i].begin(),
+                                                  dofs_per_comp[i].end()));
+        index_per_comp[i].compress();
+      }
+
+    return std::move(index_per_comp);
+  }
+
   /**
    *
    * For each processor, determine the set of locally owned degrees of freedom
