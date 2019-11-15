@@ -26,6 +26,10 @@
 #include <deal.II/fe/mapping.h>
 #include <deal.II/fe/mapping_q1.h>
 
+#include <deal.II/grid/filtered_iterator.h>
+#include <deal.II/grid/grid_tools.h>
+#include <deal.II/grid/grid_tools_cache.h>
+
 #include <deal.II/particles/particle.h>
 #include <deal.II/particles/particle_handler.h>
 
@@ -171,7 +175,7 @@ namespace Particles
      * of a DoFHandler
      * The total number of particles that is added to the @p particle_handler object is
      * the number of dofs of the DoFHandler that is passed that are within the
-     * triangulation.
+     * triangulation and whose components are within the ComponentMask.
      *
      * @param[in] triangulation The triangulation associated with the @p particle_handler.
      *
@@ -184,19 +188,117 @@ namespace Particles
      * @param[in] mapping An optional mapping object that is used to map
      * the DOF locations. If no mapping is provided a MappingQ1 is assumed.
      *
+     * @param[in] Component mask of the dof_handler from which this originates
+     *
+     * @author Bruno Blais, Luca Heltai, 2019
+     *
+     *
      */
     template <int dim, int spacedim = dim>
     void
     dof_support_points(const Triangulation<dim, spacedim> &triangulation,
-                       const DoFHandler<dim, spacedim> &   dof_handler,
+                       const DoFHandler<dim, spacedim> &   particle_dof_handler,
                        ParticleHandler<dim, spacedim> &    particle_handler,
                        const Mapping<dim, spacedim> &      mapping =
-                         StaticMappingQ1<dim, spacedim>::mapping)
+                         StaticMappingQ1<dim, spacedim>::mapping,
+                       const ComponentMask &components = ComponentMask())
     {
-      std::map<types::global_dof_index, Point<spacedim>> support_points;
+      const auto &fe = particle_dof_handler.get_fe();
+
+      // Take care of components
+      const ComponentMask mask =
+        (components.size() == 0 ? ComponentMask(fe.n_components(), true) :
+                                  components);
+
+      std::map<types::global_dof_index, Point<spacedim>> support_points_map;
+
       DoFTools::map_dofs_to_support_points(mapping,
-                                           dof_handler,
-                                           support_points);
+                                           particle_dof_handler,
+                                           support_points_map,
+                                           mask);
+
+      // Generate vector of points from the map
+      // Memory is reserved for efficiency
+      // is problematic
+      std::vector<Point<spacedim>> support_points_vec;
+      support_points_vec.reserve(support_points_map.size());
+      for (auto const &element : support_points_map)
+        support_points_vec.push_back(element.second);
+
+      // Distribute the local points to the processor that owns them
+      // on the triangulation
+      auto my_bounding_box = GridTools::compute_mesh_predicate_bounding_box(
+        triangulation, IteratorFilters::LocallyOwnedCell());
+
+      auto global_bounding_boxes =
+        Utilities::MPI::all_gather(MPI_COMM_WORLD, my_bounding_box);
+
+
+      GridTools::Cache<dim, spacedim> cache(triangulation, mapping);
+
+      auto distributed_tuple =
+        GridTools::distributed_compute_point_locations(cache,
+                                                       support_points_vec,
+                                                       global_bounding_boxes);
+
+      // Finally create the particles
+      std::vector<typename Triangulation<dim, spacedim>::active_cell_iterator>
+                                                cell_iterators = std::get<0>(distributed_tuple);
+      std::vector<std::vector<Point<dim>>>      dist_reference_points =
+        std::get<1>(distributed_tuple);
+      std::vector<std::vector<unsigned int>> dist_map =
+        std::get<2>(distributed_tuple);
+      std::vector<std::vector<Point<spacedim>>> dist_points =
+        std::get<3>(distributed_tuple);
+      std::vector<std::vector<unsigned int>> dist_procs =
+        std::get<4>(distributed_tuple);
+
+      // Count how many particles there are for current processor
+      unsigned int n_particles = 0;
+      for (unsigned int i = 0; i < dist_reference_points.size(); ++i)
+        for (unsigned int j = 0; j < dist_reference_points[i].size(); ++j)
+          n_particles++;
+
+      // Gather the number per processor
+      auto n_particles_per_proc =
+        Utilities::MPI::all_gather(MPI_COMM_WORLD, n_particles);
+
+      // Calculate all starting points locally
+      std::vector<unsigned int> starting_points(
+        Utilities::MPI::n_mpi_processes(MPI_COMM_WORLD));
+      for (unsigned int i = 0; i < starting_points.size(); ++i)
+        std::accumulate(n_particles_per_proc.begin(),
+                        n_particles_per_proc.begin() + i,
+                        0u);
+
+
+
+      // Create the multimap of particles
+      std::multimap<typename Triangulation<dim, spacedim>::active_cell_iterator,
+                    Particle<dim, spacedim>>
+        particles;
+
+      for (unsigned int i_cell = 0; i_cell < cell_iterators.size(); ++i_cell)
+        {
+          for (unsigned int i_particle = 0;
+               i_particle < dist_points[i_cell].size();
+               ++i_particle)
+            {
+              const unsigned int particle_id =
+                dist_map[i_cell][i_particle] +
+                starting_points[dist_procs[i_cell][i_particle]];
+
+              particles.emplace(cell_iterators[i_cell],
+                                Particle<dim, spacedim>(
+                                  dist_points[i_cell][i_particle],
+                                  dist_reference_points[i_cell][i_particle],
+                                  particle_id));
+            }
+        }
+
+
+      // Create particles from the list of point
+      particle_handler.insert_particles(particles);
     }
 
   } // namespace Generators
