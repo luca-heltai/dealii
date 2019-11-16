@@ -14,7 +14,8 @@
 // ---------------------------------------------------------------------
 
 // Test insert_global_particles. Make sure we don't lose particles
-// along the way
+// along the way. Test the case where all particles are owned by a
+// single mpi process
 
 #include <deal.II/base/mpi.h>
 #include <deal.II/base/utilities.h>
@@ -50,7 +51,7 @@ test()
 
   std::vector<Point<spacedim>> points(n_points);
   for (auto &p : points)
-    p = random_point<spacedim>();
+    p = random_point<spacedim>(0, 0.1);
 
   auto cpu_to_index = particle_handler.insert_global_particles(points);
 

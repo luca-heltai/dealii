@@ -1769,7 +1769,7 @@ namespace DoFTools
         index_per_comp[i].compress();
       }
 
-    return std::move(index_per_comp);
+    return index_per_comp;
   }
 
   /**
