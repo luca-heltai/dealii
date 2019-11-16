@@ -243,6 +243,18 @@ namespace Particles
      * GridTools::distributed_compute_point_locations. Consequently, it can
      * require intense communications between the processors.
      *
+     * This function figures out what mpi process owns all points that do not
+     * fall within the locally owned part of the triangulation, it sends
+     * to that process the points passed to this function on this process,
+     * and receives from the points that fall within the locally owned cells of
+     * the triangulation from whoever owns them.
+     *
+     * In order to keep track of what mpi process recieved what points, a maps
+     * from mpi process to IndexSet is returned by the function, that contains
+     * the local indices of the points that were passed to this function on the
+     * calling mpi process, and that falls within the part of triangulation
+     * owned by this mpi process.
+     *
      * @param[in] A vector of points that do not need to be on the local
      * processor
      *
@@ -251,9 +263,14 @@ namespace Particles
      * invalid_unsigned_int int which means that the finest cells are the
      * bounding box. This case should be replaced by an heuristic.
      *
+     * @return A pair of maps from owner to IndexSet, that contains the local
+     * indices of the points that other mpi processes have sent to the current
+     * processor, and a map that identifies the new owner of the points that
+     * were originally located on this processor.
+     *
      * @author : Bruno Blais, Luca Heltai 2019
      */
-    void
+    std::map<unsigned int, IndexSet>
     insert_global_particles(
       const std::vector<Point<spacedim>> &positions,
       unsigned int max_cells = numbers::invalid_unsigned_int)
@@ -261,8 +278,8 @@ namespace Particles
       // Find the bounding box level that approximatively corresponds to the max
       // cells desired
       unsigned int bounding_box_level = 0;
-      while ((triangulation->n_cells(bounding_box_level) < max_cells) &&
-             (bounding_box_level < triangulation->n_levels()))
+      while ((bounding_box_level < triangulation->n_levels()) &&
+             (triangulation->n_cells(bounding_box_level) < max_cells))
         bounding_box_level++;
 
       // Distribute the local points to the processor that owns them
@@ -314,25 +331,35 @@ namespace Particles
                     Particle<dim, spacedim>>
         particles;
 
+      std::map<unsigned int, IndexSet> cpu_to_indices;
+
       for (unsigned int i_cell = 0; i_cell < cell_iterators.size(); ++i_cell)
         {
           for (unsigned int i_particle = 0;
                i_particle < dist_points[i_cell].size();
                ++i_particle)
             {
-              const unsigned int particle_id =
-                dist_map[i_cell][i_particle] +
-                starting_points[dist_procs[i_cell][i_particle]];
+              const auto &local_id = dist_map[i_cell][i_particle];
+              const auto &cpu      = dist_procs[i_cell][i_particle];
+
+              const unsigned int particle_id = local_id + starting_points[cpu];
 
               particles.emplace(cell_iterators[i_cell],
                                 Particle<dim, spacedim>(
                                   dist_points[i_cell][i_particle],
                                   dist_reference_points[i_cell][i_particle],
                                   particle_id));
+
+              if (cpu_to_indices.find(cpu) == cpu_to_indices.end())
+                cpu_to_indices.insert(
+                  {cpu, IndexSet(n_particles_per_proc[cpu])});
+
+              cpu_to_indices[cpu].add_index(local_id);
             }
         }
 
       this->insert_particles(particles);
+      return cpu_to_indices;
     }
 
     /**
