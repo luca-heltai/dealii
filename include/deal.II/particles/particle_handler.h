@@ -25,6 +25,10 @@
 
 #include <deal.II/fe/mapping.h>
 
+#include <deal.II/grid/filtered_iterator.h>
+#include <deal.II/grid/grid_tools.h>
+#include <deal.II/grid/grid_tools_cache.h>
+
 #include <deal.II/particles/particle.h>
 #include <deal.II/particles/particle_iterator.h>
 #include <deal.II/particles/property_pool.h>
@@ -230,6 +234,106 @@ namespace Particles
      */
     void
     insert_particles(const std::vector<Point<spacedim>> &positions);
+
+    /**
+     * Create and insert a number of particles into the collection of particles.
+     * This function takes a list of positions and creates a set of particles
+     * at these positions, which are then distributed and added to the local
+     * particle collection of a procesor. Note that this function uses
+     * GridTools::distributed_compute_point_locations. Consequently, it can
+     * require intense communications between the processors.
+     *
+     * @param[in] A vector of points that do not need to be on the local
+     * processor
+     *
+     * @param[in] (Optional) a maximum number of cell that is used to
+     * guide the bounding box creation refinement level. Defaut value is
+     * invalid_unsigned_int int which means that the finest cells are the
+     * bounding box. This case should be replaced by an heuristic.
+     *
+     * @author : Bruno Blais, Luca Heltai 2019
+     */
+    void
+    insert_global_particles(
+      const std::vector<Point<spacedim>> &positions,
+      unsigned int max_cells = numbers::invalid_unsigned_int)
+    {
+      // Find the bounding box level that approximatively corresponds to the max
+      // cells desired
+      unsigned int bounding_box_level = 0;
+      while ((triangulation->n_cells(bounding_box_level) < max_cells) &&
+             (bounding_box_level < triangulation->n_levels()))
+        bounding_box_level++;
+
+      // Distribute the local points to the processor that owns them
+      // on the triangulation
+      auto my_bounding_box = GridTools::compute_mesh_predicate_bounding_box(
+        *triangulation, IteratorFilters::LocallyOwnedCell());
+
+      auto global_bounding_boxes =
+        Utilities::MPI::all_gather(triangulation->get_communicator(),
+                                   my_bounding_box);
+
+
+      GridTools::Cache<dim, spacedim> cache(*triangulation, *mapping);
+
+      // Gather the number of points per processor
+      auto n_particles_per_proc =
+        Utilities::MPI::all_gather(triangulation->get_communicator(),
+                                   positions.size());
+
+      // Calculate all starting points locally
+      std::vector<unsigned int> starting_points(
+        Utilities::MPI::n_mpi_processes(triangulation->get_communicator()));
+      for (unsigned int i = 0; i < starting_points.size(); ++i)
+        {
+          starting_points[i] = std::accumulate(n_particles_per_proc.begin(),
+                                               n_particles_per_proc.begin() + i,
+                                               0u);
+        }
+
+      auto distributed_tuple =
+        GridTools::distributed_compute_point_locations(cache,
+                                                       positions,
+                                                       global_bounding_boxes);
+
+      // Finally create the particles
+      std::vector<typename Triangulation<dim, spacedim>::active_cell_iterator>
+                                           cell_iterators = std::get<0>(distributed_tuple);
+      std::vector<std::vector<Point<dim>>> dist_reference_points =
+        std::get<1>(distributed_tuple);
+      std::vector<std::vector<unsigned int>> dist_map =
+        std::get<2>(distributed_tuple);
+      std::vector<std::vector<Point<spacedim>>> dist_points =
+        std::get<3>(distributed_tuple);
+      std::vector<std::vector<unsigned int>> dist_procs =
+        std::get<4>(distributed_tuple);
+
+      // Create the multimap of particles
+      std::multimap<typename Triangulation<dim, spacedim>::active_cell_iterator,
+                    Particle<dim, spacedim>>
+        particles;
+
+      for (unsigned int i_cell = 0; i_cell < cell_iterators.size(); ++i_cell)
+        {
+          for (unsigned int i_particle = 0;
+               i_particle < dist_points[i_cell].size();
+               ++i_particle)
+            {
+              const unsigned int particle_id =
+                dist_map[i_cell][i_particle] +
+                starting_points[dist_procs[i_cell][i_particle]];
+
+              particles.emplace(cell_iterators[i_cell],
+                                Particle<dim, spacedim>(
+                                  dist_points[i_cell][i_particle],
+                                  dist_reference_points[i_cell][i_particle],
+                                  particle_id));
+            }
+        }
+
+      this->insert_particles(particles);
+    }
 
     /**
      * This function allows to register three additional functions that are
