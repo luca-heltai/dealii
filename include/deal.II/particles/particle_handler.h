@@ -258,6 +258,12 @@ namespace Particles
      * @param[in] A vector of points that do not need to be on the local
      * processor
      *
+     * @param[in] A vector of vectors of bounding boxes. The bounding boxes
+     * global_bboxes[rk] describe which part of the mesh is locally owned by
+     * the mpi process with rank rk. The local description can be obtained from
+     * GridTools::compute_mesh_predicate_bounding_box, and the global one can
+     * be obtained by passing the local ones to Utilities::MPI::all_gather.
+     *
      * @param[in] (Optional) a vector of properties associated with each
      * local point. The size of the vector should be either zero (no
      * properties will be transfered nor attached to the generated particles)
@@ -265,11 +271,6 @@ namespace Particles
      * Notice that this function call will tranfer the properties from the
      * local mpi process to the final mpi process that will own each of the
      * particle, and it may therefore be communication intensive.
-     *
-     * @param[in] (Optional) a maximum number of cell that is used to
-     * guide the bounding box creation refinement level. Defaut value is
-     * invalid_unsigned_int int which means that the finest cells are the
-     * bounding box. This case should be replaced by an heuristic.
      *
      * @return A pair of maps from owner to IndexSet, that contains the local
      * indices of the points that other mpi processes have sent to the current

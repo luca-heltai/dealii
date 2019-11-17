@@ -52,6 +52,14 @@ test()
   const unsigned int n_cpus = Utilities::MPI::n_mpi_processes(MPI_COMM_WORLD);
   Testing::srand(my_cpu + 1);
 
+  // Distribute the local points to the processor that owns them
+  // on the triangulation
+  auto my_bounding_box = GridTools::compute_mesh_predicate_bounding_box(
+    tr, IteratorFilters::LocallyOwnedCell());
+
+  auto global_bounding_boxes =
+    Utilities::MPI::all_gather(MPI_COMM_WORLD, my_bounding_box);
+
   std::vector<Point<spacedim>> points(n_points);
   std::vector<double>          properties(n_points, my_cpu);
 
@@ -59,7 +67,9 @@ test()
     p = random_point<spacedim>();
 
   auto cpu_to_index =
-    particle_handler.insert_global_particles(points, properties);
+    particle_handler.insert_global_particles(points,
+                                             global_bounding_boxes,
+                                             properties);
 
   for (auto p : particle_handler)
     {
