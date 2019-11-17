@@ -281,27 +281,13 @@ namespace Particles
     std::map<unsigned int, IndexSet>
     insert_global_particles(
       const std::vector<Point<spacedim>> &positions,
-      const std::vector<double> &         properties = std::vector<double>(),
-      unsigned int max_cells = numbers::invalid_unsigned_int)
+      const std::vector<std::vector<BoundingBox<spacedim>>>
+        &                        global_bounding_boxes,
+      const std::vector<double> &properties = std::vector<double>())
     {
       if (!properties.empty())
         AssertDimension(properties.size(),
                         positions.size() * n_properties_per_particle());
-      // Find the bounding box level that approximatively corresponds to the max
-      // cells desired
-      unsigned int bounding_box_level = 0;
-      while ((bounding_box_level < triangulation->n_levels()) &&
-             (triangulation->n_cells(bounding_box_level) < max_cells))
-        bounding_box_level++;
-
-      // Distribute the local points to the processor that owns them
-      // on the triangulation
-      auto my_bounding_box = GridTools::compute_mesh_predicate_bounding_box(
-        *triangulation, IteratorFilters::LocallyOwnedCell());
-
-      auto global_bounding_boxes =
-        Utilities::MPI::all_gather(triangulation->get_communicator(),
-                                   my_bounding_box);
 
       const auto my_cpu =
         Utilities::MPI::this_mpi_process(triangulation->get_communicator());
