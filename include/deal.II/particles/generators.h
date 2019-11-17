@@ -16,6 +16,7 @@
 #ifndef dealii_particles_particle_generator_h
 #define dealii_particles_particle_generator_h
 
+#include <deal.II/base/bounding_box.h>
 #include <deal.II/base/function.h>
 
 #include <deal.II/distributed/tria.h>
@@ -177,9 +178,13 @@ namespace Particles
      * the number of dofs of the DoFHandler that is passed that are within the
      * triangulation and whose components are within the ComponentMask.
      *
-     * @param[in] triangulation The triangulation associated with the @p particle_handler.
+     * @param[in] a DOF handler that may live on another triangulation that is
+     * used to establsh the positions of the particles
      *
-     * @param[in] a DOF handler that may live on another triangulation
+     * @param[in] A vector that contains all the bounding boxes for all
+     * processor. This vector can be established by first using
+     * 'GridTools::compute_mesh_predicate_bounding_box()' and gathering all the
+     * bounding boxes using 'Utilities::MPI::all_gather.
      *
      * @param[in,out] particle_handler The particle handler that will take
      * ownership of the generated particles.
@@ -195,13 +200,13 @@ namespace Particles
      */
     template <int dim, int spacedim = dim>
     void
-    dof_support_points(const Triangulation<dim, spacedim> &triangulation,
-                       const DoFHandler<dim, spacedim> &   particle_dof_handler,
-                       ParticleHandler<dim, spacedim> &    particle_handler,
-                       const Mapping<dim, spacedim> &      mapping =
+    dof_support_points(const DoFHandler<dim, spacedim> &particle_dof_handler,
+                       const std::vector<std::vector<BoundingBox<spacedim>>>
+                         &                             global_bounding_boxes,
+                       ParticleHandler<dim, spacedim> &particle_handler,
+                       const Mapping<dim, spacedim> &  mapping =
                          StaticMappingQ1<dim, spacedim>::mapping,
-                       const ComponentMask &components = ComponentMask(),
-                       const unsigned int   max_cells  = 0)
+                       const ComponentMask &components = ComponentMask())
     {
       const auto &fe = particle_dof_handler.get_fe();
 
@@ -225,7 +230,8 @@ namespace Particles
       for (auto const &element : support_points_map)
         support_points_vec.push_back(element.second);
 
-      particle_handler.insert_global_particles(support_points_vec, max_cells);
+      particle_handler.insert_global_particles(support_points_vec,
+                                               global_bounding_boxes);
     }
 
     /**
@@ -235,9 +241,16 @@ namespace Particles
      * the number of dofs of the DoFHandler that is passed that are within the
      * triangulation and whose components are within the ComponentMask.
      *
-     * @param[in] triangulation The triangulation associated with the @p particle_handler.
+     * @param[in] triangulation The non-matching triangulation which is used to
+     * insert the particles into the domain.
      *
-     * @param[in] a DOF handler that may live on another triangulation
+     * @param[in] particle_reference_location The particle reference location
+     * that correspond to where the particles will be inserted within the cells
+     *
+     * @param[in] A vector that contains all the bounding boxes for all
+     * processor. This vector can be established by first using
+     * 'GridTools::compute_mesh_predicate_bounding_box()' and gathering all the
+     * bounding boxes using 'Utilities::MPI::all_gather.
      *
      * @param[in,out] particle_handler The particle handler that will take
      * ownership of the generated particles.
@@ -254,19 +267,16 @@ namespace Particles
     template <int dim, int spacedim = dim>
     void
     non_matching_quadrature_points(
-      const Triangulation<dim, spacedim> &triangulation,
-      const DoFHandler<dim, spacedim> &   particle_dof_handler,
+      const Triangulation<dim, spacedim> &particle_tria,
       const std::vector<Point<dim>> &     particle_reference_locations,
-      ParticleHandler<dim, spacedim> &    particle_handler,
-      const Mapping<dim, spacedim> &      mapping =
+      const std::vector<std::vector<BoundingBox<spacedim>>>
+        &                             global_bounding_boxes,
+      ParticleHandler<dim, spacedim> &particle_handler,
+      const Mapping<dim, spacedim> &  mapping =
         StaticMappingQ1<dim, spacedim>::mapping,
       const ComponentMask &components = ComponentMask(),
       const unsigned int   max_cells  = 0)
     {
-      const auto &particle_tria = particle_dof_handler.get_triangulation();
-      const auto &particle_fe   = particle_dof_handler.get_fe();
-      //      types::particle_index particle_index = 0;
-
       std::vector<Point<spacedim>> points_to_generate;
 
       //       Loop through cells and gather gauss points
@@ -284,7 +294,8 @@ namespace Particles
                 }
             }
         }
-      particle_handler.insert_global_particles(points_to_generate, max_cells);
+      particle_handler.insert_global_particles(points_to_generate,
+                                               global_bounding_boxes);
     }
   } // namespace Generators
 } // namespace Particles

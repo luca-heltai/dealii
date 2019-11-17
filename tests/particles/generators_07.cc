@@ -17,6 +17,7 @@
 // check the creation and destruction of particle within the particle handler
 // class using a particle generator based on a DoFHandler
 
+#include <deal.II/base/bounding_box.h>
 #include <deal.II/base/function_lib.h>
 
 #include <deal.II/distributed/tria.h>
@@ -57,12 +58,19 @@ test()
     MPI_COMM_WORLD);
   GridGenerator::hyper_cube(particles_tr, 0.1, 0.9);
 
+  // Generate the necessary bounding boxes for the generator
+  auto my_bounding_box = GridTools::compute_mesh_predicate_bounding_box(
+    tr, IteratorFilters::LocallyOwnedCell());
+  auto global_bounding_boxes =
+    Utilities::MPI::all_gather(MPI_COMM_WORLD, my_bounding_box);
 
   DoFHandler<dim, spacedim> particles_dof_handler(particles_tr);
   FE_Q<dim, spacedim>       particles_fe(1);
   particles_dof_handler.distribute_dofs(particles_fe);
-  Particles::Generators::dof_support_points(tr,
-                                            particles_dof_handler,
+
+
+  Particles::Generators::dof_support_points(particles_dof_handler,
+                                            global_bounding_boxes,
                                             particle_handler);
 
 

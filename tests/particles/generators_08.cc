@@ -59,13 +59,15 @@ test()
 
   QGauss<dim> quadrature(2);
 
+  // Generate the necessary bounding boxes for the generator
+  auto my_bounding_box = GridTools::compute_mesh_predicate_bounding_box(
+    tr, IteratorFilters::LocallyOwnedCell());
+  auto global_bounding_boxes =
+    Utilities::MPI::all_gather(MPI_COMM_WORLD, my_bounding_box);
 
-  DoFHandler<dim, spacedim> particles_dof_handler(particles_tr);
-  FE_Q<dim, spacedim>       particles_fe(1);
-  particles_dof_handler.distribute_dofs(particles_fe);
-  Particles::Generators::non_matching_quadrature_points(tr,
-                                                        particles_dof_handler,
+  Particles::Generators::non_matching_quadrature_points(particles_tr,
                                                         quadrature.get_points(),
+                                                        global_bounding_boxes,
                                                         particle_handler);
 
 
