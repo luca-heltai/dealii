@@ -15,7 +15,7 @@
 
 // Test insert_global_particles. Make sure we don't lose particles
 // along the way. Test the case where all particles are owned by a
-// single mpi process
+// single mpi process, and where we add one property for particle.
 
 #include <deal.II/base/mpi.h>
 #include <deal.II/base/utilities.h>
@@ -75,15 +75,6 @@ int
 main(int argc, char *argv[])
 {
   Utilities::MPI::MPI_InitFinalize mpi_initialization(argc, argv, 1);
-
-  if (Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
-    {
-      std::cout << "My pid: " << getpid() << std::endl;
-      std::cout << "Press [Enter] key to start...";
-      if (std::cin.get() == '\n')
-        {
-        };
-    }
 
   MPILogInitAll all;
 

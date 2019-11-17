@@ -427,7 +427,6 @@ namespace Particles
           // were sent to me in the call above.
           std::vector<double> local_properties;
           local_properties.reserve(n_locally_owned_particles() *
-
                                    n_properties_per_particle());
 
           // Compute the association between particle id and start of
@@ -436,6 +435,7 @@ namespace Particles
           for (const auto &it : cpu_to_indices)
             if (it.first != my_cpu)
               {
+                unsigned int sequential_index = 0;
                 // Process all properties coming from other mpi processes
                 for (const auto &el : it.second)
                   {
@@ -448,10 +448,11 @@ namespace Particles
                       local_properties.end(),
                       locally_owned_properties_from_other_cpus.at(it.first)
                           .begin() +
-                        el * n_properties_per_particle(),
+                        sequential_index * n_properties_per_particle(),
                       locally_owned_properties_from_other_cpus.at(it.first)
                           .begin() +
-                        (el + 1) * n_properties_per_particle());
+                        (sequential_index + 1) * n_properties_per_particle());
+                    sequential_index++;
                   }
               }
             else
@@ -472,7 +473,6 @@ namespace Particles
                                                 n_properties_per_particle());
                   }
               }
-
           // Actually fill the property pool of each particle.
           for (auto particle : *this)
             {

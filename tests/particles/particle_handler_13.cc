@@ -15,7 +15,7 @@
 
 // Test insert_global_particles. Make sure we don't lose particles
 // along the way. Test the case where all particles are owned by a
-// single mpi process, and where we add one property for particle.
+// single mpi process, and where we add two properties per particle.
 
 #include <deal.II/base/mpi.h>
 #include <deal.II/base/utilities.h>
@@ -48,7 +48,7 @@ test()
 
   Particles::ParticleHandler<dim, spacedim> particle_handler(tr, mapping, 2);
 
-  const unsigned int n_points = 10;
+  const unsigned int n_points = 3;
   const unsigned int my_cpu = Utilities::MPI::this_mpi_process(MPI_COMM_WORLD);
   const unsigned int n_cpus = Utilities::MPI::n_mpi_processes(MPI_COMM_WORLD);
   Testing::srand(my_cpu + 1);
@@ -64,6 +64,24 @@ test()
 
   auto cpu_to_index =
     particle_handler.insert_global_particles(points, properties);
+
+  for (const auto &c : cpu_to_index)
+    {
+      deallog << "From cpu: " << c.first << " I got : ";
+      c.second.print(deallog);
+    }
+
+  if (cpu_to_index.find(my_cpu) != cpu_to_index.end())
+    cpu_to_index.erase(cpu_to_index.find(my_cpu));
+  auto received = Utilities::MPI::some_to_some(MPI_COMM_WORLD, cpu_to_index);
+
+
+  for (const auto &c : received)
+    {
+      deallog << "To cpu : " << c.first << " I sent : ";
+      c.second.print(deallog);
+    }
+
 
   for (auto p : particle_handler)
     {
@@ -85,10 +103,4 @@ main(int argc, char *argv[])
   deallog.push("2d/2d");
   test<2, 2>();
   deallog.pop();
-  // deallog.push("2d/3d");
-  // test<2, 3>();
-  // deallog.pop();
-  //  deallog.push("3d/3d");
-  //  test<3, 3>();
-  //  deallog.pop();
 }
