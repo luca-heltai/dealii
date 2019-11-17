@@ -258,6 +258,14 @@ namespace Particles
      * @param[in] A vector of points that do not need to be on the local
      * processor
      *
+     * @param[in] (Optional) a vector of properties associated with each
+     * local point. The size of the vector should be either zero (no
+     * properties will be transfered nor attached to the generated particles)
+     * or it should be `positions.size()*this->n_properties_per_particle()`.
+     * Notice that this function call will tranfer the properties from the
+     * local mpi process to the final mpi process that will own each of the
+     * particle, and it may therefore be communication intensive.
+     *
      * @param[in] (Optional) a maximum number of cell that is used to
      * guide the bounding box creation refinement level. Defaut value is
      * invalid_unsigned_int int which means that the finest cells are the
@@ -273,8 +281,12 @@ namespace Particles
     std::map<unsigned int, IndexSet>
     insert_global_particles(
       const std::vector<Point<spacedim>> &positions,
+      const std::vector<double> &         properties = std::vector<double>(),
       unsigned int max_cells = numbers::invalid_unsigned_int)
     {
+      if (!properties.empty())
+        AssertDimension(properties.size(),
+                        positions.size() * n_properties_per_particle());
       // Find the bounding box level that approximatively corresponds to the max
       // cells desired
       unsigned int bounding_box_level = 0;
@@ -291,6 +303,11 @@ namespace Particles
         Utilities::MPI::all_gather(triangulation->get_communicator(),
                                    my_bounding_box);
 
+      const auto my_cpu =
+        Utilities::MPI::this_mpi_process(triangulation->get_communicator());
+
+      const auto n_cpus =
+        Utilities::MPI::n_mpi_processes(triangulation->get_communicator());
 
       GridTools::Cache<dim, spacedim> cache(*triangulation, *mapping);
 
@@ -300,8 +317,8 @@ namespace Particles
                                    positions.size());
 
       // Calculate all starting points locally
-      std::vector<unsigned int> starting_points(
-        Utilities::MPI::n_mpi_processes(triangulation->get_communicator()));
+      std::vector<unsigned int> starting_points(n_cpus);
+
       for (unsigned int i = 0; i < starting_points.size(); ++i)
         {
           starting_points[i] = std::accumulate(n_particles_per_proc.begin(),
@@ -331,6 +348,8 @@ namespace Particles
                     Particle<dim, spacedim>>
         particles;
 
+      // Create the map of cpu to indices, indicating whom sent us what
+      // point
       std::map<unsigned int, IndexSet> cpu_to_indices;
 
       for (unsigned int i_cell = 0; i_cell < cell_iterators.size(); ++i_cell)
@@ -359,6 +378,114 @@ namespace Particles
         }
 
       this->insert_particles(particles);
+      for (auto &c : cpu_to_indices)
+        c.second.compress();
+
+      // Take care of properties, if the input vector contains them.
+      if (properties.size())
+        {
+          // [TODO]: fix this in some_to_some, to allow communication from
+          // my cpu to my cpu.
+          auto cpu_to_indices_to_send = cpu_to_indices;
+          if (cpu_to_indices_to_send.find(my_cpu) !=
+              cpu_to_indices_to_send.end())
+            cpu_to_indices_to_send.erase(cpu_to_indices_to_send.find(my_cpu));
+
+          // Gather whom I sent my own particles to, to decide whom to send
+          // the particle properties
+          auto send_to_cpu =
+            Utilities::MPI::some_to_some(triangulation->get_communicator(),
+                                         cpu_to_indices_to_send);
+          std::map<unsigned int, std::vector<double>>
+            non_locally_owned_properties;
+
+          // Prepare the vector of non_locally_owned properties,
+          for (const auto &it : send_to_cpu)
+            {
+              std::vector<double> properties_to_send;
+              properties_to_send.reserve(it.second.n_elements() *
+                                         n_properties_per_particle());
+
+              for (const auto &el : it.second)
+                properties_to_send.insert(
+                  properties_to_send.end(),
+                  properties.begin() + el * n_properties_per_particle(),
+                  properties.begin() + (el + 1) * n_properties_per_particle());
+
+              non_locally_owned_properties.insert(
+                {it.first, properties_to_send});
+            }
+
+          // Send the non locally owned properties to each mpi process
+          // that needs them
+          auto locally_owned_properties_from_other_cpus =
+            Utilities::MPI::some_to_some(triangulation->get_communicator(),
+                                         non_locally_owned_properties);
+
+          // Store all local properties in a single vector. This includes
+          // properties coming from my own mpi process, and properties that
+          // were sent to me in the call above.
+          std::vector<double> local_properties;
+          local_properties.reserve(n_locally_owned_particles() *
+
+                                   n_properties_per_particle());
+
+          // Compute the association between particle id and start of
+          // property data in the vector containing all local properties
+          std::map<types::particle_index, unsigned int> property_start;
+          for (const auto &it : cpu_to_indices)
+            if (it.first != my_cpu)
+              {
+                // Process all properties coming from other mpi processes
+                for (const auto &el : it.second)
+                  {
+                    types::particle_index particle_id =
+                      el + starting_points[it.first];
+                    property_start.insert(
+                      {particle_id, local_properties.size()});
+
+                    local_properties.insert(
+                      local_properties.end(),
+                      locally_owned_properties_from_other_cpus.at(it.first)
+                          .begin() +
+                        el * n_properties_per_particle(),
+                      locally_owned_properties_from_other_cpus.at(it.first)
+                          .begin() +
+                        (el + 1) * n_properties_per_particle());
+                  }
+              }
+            else
+              {
+                // Process all properties that we already own
+                for (const auto &el : it.second)
+                  {
+                    types::particle_index particle_id =
+                      el + starting_points[my_cpu];
+                    property_start.insert(
+                      {particle_id, local_properties.size()});
+
+                    local_properties.insert(local_properties.end(),
+                                            properties.begin() +
+                                              el * n_properties_per_particle(),
+                                            properties.begin() +
+                                              (el + 1) *
+                                                n_properties_per_particle());
+                  }
+              }
+
+          // Actually fill the property pool of each particle.
+          for (auto particle : *this)
+            {
+              particle.set_property_pool(get_property_pool());
+              const auto id = particle.get_id();
+              Assert(property_start.find(id) != property_start.end(),
+                     ExcInternalError());
+              const auto start = property_start[id];
+              particle.set_properties({local_properties.begin() + start,
+                                       local_properties.begin() + start +
+                                         n_properties_per_particle()});
+            }
+        }
       return cpu_to_indices;
     }
 
@@ -453,12 +580,12 @@ namespace Particles
       const;
 
     /**
-     * Find and update the cells containing each particle for all locally owned
-     * particles. If particles moved out of the local subdomain
-     * they will be sent to their new process and inserted there.
-     * After this function call every particle is either on its current
-     * process and in its current cell, or deleted (if it could not find
-     * its new process or cell).
+     * Find and update the cells containing each particle for all locally
+     * owned particles. If particles moved out of the local subdomain they
+     * will be sent to their new process and inserted there. After this
+     * function call every particle is either on its current process and in
+     * its current cell, or deleted (if it could not find its new process or
+     * cell).
      */
     void
     sort_particles_into_subdomains_and_cells();
@@ -655,7 +782,8 @@ namespace Particles
         &data_range);
   };
 
-  /* ---------------------- inline and template functions ------------------ */
+  /* ---------------------- inline and template functions ------------------
+   */
 
   template <int dim, int spacedim>
   template <class Archive>
