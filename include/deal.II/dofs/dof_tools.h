@@ -2465,10 +2465,9 @@ namespace DoFTools
                                       fe,
                                       quad,
                                       update_quadrature_points);
-    auto cell = dof_handler.begin_active(), endc = dof_handler.end();
 
     std::vector<types::global_dof_index> local_dof_indices;
-    for (; cell != endc; ++cell)
+    for (const auto &cell : dof_handler.active_cell_iterators())
       // only work on locally relevant cells
       if (cell->is_artificial() == false)
         {

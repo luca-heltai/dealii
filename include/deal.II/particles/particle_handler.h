@@ -20,6 +20,7 @@
 #include <deal.II/base/mpi.h>
 #include <deal.II/base/smartpointer.h>
 #include <deal.II/base/subscriptor.h>
+#include <deal.II/base/utilities.h>
 
 #include <deal.II/distributed/tria.h>
 
@@ -369,7 +370,10 @@ namespace Particles
         c.second.compress();
 
       // Take care of properties, if the input vector contains them.
-      if (properties.size())
+      const auto sum_pro =
+        Utilities::MPI::sum(properties.size(),
+                            triangulation->get_communicator());
+      if (sum_pro)
         {
           // [TODO]: fix this in some_to_some, to allow communication from
           // my cpu to my cpu.
