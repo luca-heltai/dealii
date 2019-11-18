@@ -217,11 +217,82 @@ namespace NonMatching
         }
     }
 
+    template <class Matrix, typename number = double>
+    void
+    create_interpolation_matrix(Matrix &                         matrix,
+                                const AffineConstraints<number> &constraints =
+                                  AffineConstraints<number>()) const
+    {
+      if (particle_handler->n_locally_owned_particles() == 0)
+        {
+          matrix.compress(VectorOperation::add);
+          return; // nothing else to do here
+        }
+
+      AssertDimension(matrix.n(), dh1->n_dofs());
+      AssertDimension(matrix.m(), dh2->n_dofs());
+
+      auto       particle = particle_handler->begin();
+      const auto max_particles_per_cell =
+        particle_handler->n_global_max_particles_per_cell();
+
+      std::vector<types::global_dof_index> dof_indices1(fe1->dofs_per_cell);
+      std::vector<types::global_dof_index> dof_indices2(
+        particle_handler->n_global_max_particles_per_cell());
+
+      FullMatrix<double> local_matrix(max_particles_per_cell * n_comps,
+                                      fe1->dofs_per_cell);
+
+
+      while (particle != particle_handler->end())
+        {
+          const auto &cell = particle->get_surrounding_cell(*tria1);
+          const auto &dh_cell =
+            typename DoFHandler<dim, spacedim>::cell_iterator(*cell, dh1);
+          dh_cell->get_dof_indices(dof_indices1);
+
+          const auto pic         = particle_handler->particles_in_cell(cell);
+          const auto n_particles = particle_handler->n_particles_in_cell(cell);
+          dof_indices2.resize(n_particles * n_comps);
+          local_matrix.reinit({n_particles * n_comps, fe1->dofs_per_cell});
+
+          Assert(pic.begin() == particle, ExcInternalError());
+          for (unsigned int i = 0; particle != pic.end(); ++particle, ++i)
+            {
+              const auto &reference_location =
+                particle->get_reference_location();
+
+              const auto properties = particle->get_properties();
+
+              for (unsigned int d = 0; d < n_comps; ++d)
+                dof_indices2[i * n_comps + d] =
+                  static_cast<types::global_dof_index>(properties[1 + d]);
+
+              for (unsigned int j = 0; j < fe1->dofs_per_cell; ++j)
+                {
+                  const auto comp_j =
+                    gtl1[fe1->system_to_component_index(j).first];
+                  if (comp_j != numbers::invalid_unsigned_int)
+                    {
+                      const auto li = i * n_comps + comp_j;
+                      local_matrix(li, j) =
+                        fe1->shape_value(j, reference_location);
+                    }
+                }
+            }
+          constraints.distribute_local_to_global(local_matrix,
+                                                 dof_indices2,
+                                                 dof_indices1,
+                                                 matrix);
+        }
+      matrix.compress(VectorOperation::add);
+    }
+
     const Particles::ParticleHandler<spacedim> &
     get_particle_handler() const
     {
       Assert(particle_handler,
-             ExcMessage("You need to call one of the build "
+             ExcMessage("You need to call possibly_generate_particle_handler "
                         "function first."));
       return *particle_handler;
     }

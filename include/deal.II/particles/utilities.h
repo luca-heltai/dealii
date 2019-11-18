@@ -203,10 +203,13 @@ namespace Particles
         AffineConstraints<number>(),
       const ComponentMask &space_comps = ComponentMask())
     {
-      AssertDimension(matrix.n(), space_dh.n_dofs());
-
       if (particle_handler.n_locally_owned_particles() == 0)
-        return; // nothing to do here
+        {
+          matrix.compress(VectorOperation::add);
+          return; // nothing else to do here
+        }
+
+      AssertDimension(matrix.n(), space_dh.n_dofs());
 
       const auto &tria     = space_dh.get_triangulation();
       const auto &fe       = space_dh.get_fe();

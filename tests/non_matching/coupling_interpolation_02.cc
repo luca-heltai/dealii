@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2018 by the deal.II authors
+// Copyright (C) 2019 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -12,6 +12,8 @@
 // the top level directory of deal.II.
 //
 // ---------------------------------------------------------------------
+
+// Construct a sparsity pattern using NonMatching::DoFHandlerCoupling
 
 #include <deal.II/base/point.h>
 #include <deal.II/base/tensor.h>
@@ -28,6 +30,7 @@
 #include <deal.II/lac/sparsity_pattern.h>
 
 #include <deal.II/non_matching/coupling.h>
+#include <deal.II/non_matching/dof_handler_coupling.h>
 
 #include <deal.II/numerics/matrix_tools.h>
 
@@ -44,79 +47,59 @@ test()
 {
   deallog << "dim: " << dim << ", spacedim: " << spacedim << std::endl;
 
-  Triangulation<dim, spacedim>      tria;
-  Triangulation<spacedim, spacedim> space_tria;
+  parallel::distributed::Triangulation<spacedim>      tria1(MPI_COMM_WORLD);
+  parallel::distributed::Triangulation<dim, spacedim> tria2(MPI_COMM_WORLD);
 
-  GridGenerator::hyper_cube(tria, -.4, .3);
-  GridGenerator::hyper_cube(space_tria, -1, 1);
+  GridGenerator::hyper_cube(tria1, -1, 1);
+  GridGenerator::hyper_cube(tria2, -1, 1);
 
-  tria.refine_global(1);
-  space_tria.refine_global(2);
+  tria1.refine_global(2);
+  tria2.refine_global(1);
 
-  FE_Q<dim, spacedim>      fe(1);
-  FE_Q<spacedim, spacedim> space_fe(1);
+  FE_Q<spacedim>      fe1(1);
+  FE_Q<dim, spacedim> fe2(1);
 
-  deallog << "FE      : " << fe.get_name() << std::endl
-          << "Space FE: " << space_fe.get_name() << std::endl;
+  deallog << "FE 1 : " << fe1.get_name() << std::endl
+          << "FE 2 : " << fe2.get_name() << std::endl;
 
-  DoFHandler<dim, spacedim>      dh(tria);
-  DoFHandler<spacedim, spacedim> space_dh(space_tria);
+  DoFHandler<spacedim>      dh1(tria1);
+  DoFHandler<dim, spacedim> dh2(tria2);
 
-  dh.distribute_dofs(fe);
-  space_dh.distribute_dofs(space_fe);
+  dh1.distribute_dofs(fe1);
+  dh2.distribute_dofs(fe2);
 
-  deallog << "Dofs      : " << dh.n_dofs() << std::endl
-          << "Space dofs: " << space_dh.n_dofs() << std::endl;
+  deallog << "Dofs 1 : " << dh1.n_dofs() << std::endl
+          << "Dofs 2 : " << dh2.n_dofs() << std::endl;
 
-  QGauss<dim> quad(3); // Quadrature for coupling
+  NonMatching::DoFHandlerCoupling<dim, spacedim> dhc(dh1, dh2);
 
+  const auto locally_owned2  = dh2.locally_owned_dofs();
+  const auto globally_owned2 = dh2.n_locally_owned_dofs_per_processor();
 
   SparsityPattern sparsity;
   {
-    DynamicSparsityPattern dsp(space_dh.n_dofs(), dh.n_dofs());
-    NonMatching::create_coupling_sparsity_pattern(space_dh, dh, quad, dsp);
+    DynamicSparsityPattern dsp(dh2.n_dofs(), dh1.n_dofs());
+    dhc.create_interpolation_sparsity_pattern(dsp);
+
+    SparsityTools::distribute_sparsity_pattern(dsp,
+                                               globally_owned2,
+                                               MPI_COMM_WORLD,
+                                               locally_owned2);
     sparsity.copy_from(dsp);
   }
-  SparseMatrix<double> coupling(sparsity);
-  NonMatching::create_coupling_mass_matrix(space_dh, dh, quad, coupling);
 
-  SparsityPattern mass_sparsity;
-  {
-    DynamicSparsityPattern dsp(dh.n_dofs(), dh.n_dofs());
-    DoFTools::make_sparsity_pattern(dh, dsp);
-    mass_sparsity.copy_from(dsp);
-  }
-  SparseMatrix<double> mass_matrix(mass_sparsity);
-  MatrixTools::create_mass_matrix(dh, quad, mass_matrix);
-
-  SparseDirectUMFPACK mass_matrix_inv;
-  mass_matrix_inv.factorize(mass_matrix);
-
-  // now take ones in space, project them onto the immersed space,
-  // get back ones, and check for the error.
-  Vector<double> space_ones(space_dh.n_dofs());
-  Vector<double> ones(dh.n_dofs());
-
-  space_ones = 1.0;
-  coupling.Tvmult(ones, space_ones);
-  mass_matrix_inv.solve(ones);
-
-  Vector<double> real_ones(dh.n_dofs());
-  real_ones = 1.0;
-  ones -= real_ones;
-
-  deallog << "Error on constants: " << ones.l2_norm() << std::endl;
+  SparseMatrix<double> matrix(sparsity);
+  dhc.create_interpolation_matrix(matrix);
+  matrix.print(deallog.get_file_stream());
 }
 
 
 
 int
-main()
+main(int argc, char **argv)
 {
-  initlog();
-  test<1, 1>();
-  test<1, 2>();
+  Utilities::MPI::MPI_InitFinalize mpi_initialization(argc, argv, 1);
+  MPILogInitAll                    all;
+
   test<2, 2>();
-  test<2, 3>();
-  test<3, 3>();
 }
