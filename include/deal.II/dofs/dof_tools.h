@@ -1757,11 +1757,13 @@ namespace DoFTools
       }
 
     // sort, compress out duplicates, fill into index set
-    std::vector<IndexSet> index_per_comp(mask.n_selected_components(),
+    std::vector<IndexSet> index_per_comp(mask.size(),
                                          IndexSet(dof_handler.n_dofs()));
 
     for (unsigned int i = 0; i < dofs_per_comp.size(); ++i)
       {
+        if (dofs_per_comp[i].empty())
+          continue;
         std::sort(dofs_per_comp[i].begin(), dofs_per_comp[i].end());
         index_per_comp[i].add_indices(dofs_per_comp[i].begin(),
                                       std::unique(dofs_per_comp[i].begin(),
