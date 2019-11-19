@@ -106,7 +106,7 @@ namespace Step70
     double       viscosity       = 1.0;
   };
 
-  template <int dim, int spacedim>
+  template <int dim, int spacedim = dim>
   class StokesImmersedProblem
   {
   public:
@@ -168,7 +168,12 @@ namespace Step70
             typename Triangulation<spacedim>::MeshSmoothing(
               Triangulation<spacedim>::smoothing_on_refinement |
               Triangulation<spacedim>::smoothing_on_coarsening))
+    , tria2(mpi_communicator,
+            typename Triangulation<dim, spacedim>::MeshSmoothing(
+              Triangulation<dim, spacedim>::smoothing_on_refinement |
+              Triangulation<dim, spacedim>::smoothing_on_coarsening))
     , dh1(tria1)
+    , dh2(tria2)
     , pcout(std::cout,
             (Utilities::MPI::this_mpi_process(mpi_communicator) == 0))
     , computing_timer(mpi_communicator,
@@ -300,31 +305,32 @@ namespace Step70
     preconditioner_matrix = 0;
     system_rhs            = 0;
 
-    const QGauss<spacedim> quadrature_formula(velocity_degree + 1);
+    const QGauss<spacedim> quadrature_formula(par.velocity_degree + 1);
 
-    FEValues<spacedim> fe_values(fe,
+    FEValues<spacedim> fe_values(*fe1,
                                  quadrature_formula,
                                  update_values | update_gradients |
                                    update_quadrature_points |
                                    update_JxW_values);
 
-    const unsigned int dofs_per_cell = fe.dofs_per_cell;
+    const unsigned int dofs_per_cell = fe1->dofs_per_cell;
     const unsigned int n_q_points    = quadrature_formula.size();
 
     FullMatrix<double> cell_matrix(dofs_per_cell, dofs_per_cell);
     FullMatrix<double> cell_matrix2(dofs_per_cell, dofs_per_cell);
     Vector<double>     cell_rhs(dofs_per_cell);
 
-    const RightHandSide<spacedim> right_hand_side;
-    std::vector<Vector<double>> rhs_values(n_q_points, Vector<double>(dim + 1));
+    const ConstantFunction<spacedim> right_hand_side(spacedim + 1);
+    std::vector<Vector<double>>      rhs_values(n_q_points,
+                                                Vector<double>(spacedim + 1));
 
-    std::vector<Tensor<2, dim>> grad_phi_u(dofs_per_cell);
-    std::vector<double>         div_phi_u(dofs_per_cell);
-    std::vector<double>         phi_p(dofs_per_cell);
+    std::vector<Tensor<2, spacedim>> grad_phi_u(dofs_per_cell);
+    std::vector<double>              div_phi_u(dofs_per_cell);
+    std::vector<double>              phi_p(dofs_per_cell);
 
     std::vector<types::global_dof_index> local_dof_indices(dofs_per_cell);
     const FEValuesExtractors::Vector     velocities(0);
-    const FEValuesExtractors::Scalar     pressure(dim);
+    const FEValuesExtractors::Scalar     pressure(spacedim);
 
     for (const auto &cell : dh1.active_cell_iterators())
       if (cell->is_locally_owned())
@@ -350,17 +356,17 @@ namespace Step70
                   for (unsigned int j = 0; j < dofs_per_cell; ++j)
                     {
                       cell_matrix(i, j) +=
-                        (viscosity *
+                        (par.viscosity *
                            scalar_product(grad_phi_u[i], grad_phi_u[j]) -
                          div_phi_u[i] * phi_p[j] - phi_p[i] * div_phi_u[j]) *
                         fe_values.JxW(q);
 
-                      cell_matrix2(i, j) += 1.0 / viscosity * phi_p[i] *
+                      cell_matrix2(i, j) += 1.0 / par.viscosity * phi_p[i] *
                                             phi_p[j] * fe_values.JxW(q);
                     }
 
                   const unsigned int component_i =
-                    fe.system_to_component_index(i).first;
+                    fe1->system_to_component_index(i).first;
                   cell_rhs(i) += fe_values.shape_value(i, q) *
                                  rhs_values[q](component_i) * fe_values.JxW(q);
                 }
@@ -411,13 +417,16 @@ namespace Step70
       prec_S.initialize(preconditioner_matrix.block(1, 1), data);
     }
 
-    using mp_inverse_t = LinearSolvers::InverseMatrix<LA::MPI::SparseMatrix,
-                                                      LA::MPI::PreconditionAMG>;
-    const mp_inverse_t mp_inverse(preconditioner_matrix.block(1, 1), prec_S);
+    //    using mp_inverse_t =
+    //    LinearSolvers::InverseMatrix<LA::MPI::SparseMatrix,
+    //                                                      LA::MPI::PreconditionAMG>;
+    //    const mp_inverse_t mp_inverse(preconditioner_matrix.block(1, 1),
+    //    prec_S);
 
-    const LinearSolvers::BlockDiagonalPreconditioner<LA::MPI::PreconditionAMG,
-                                                     mp_inverse_t>
-      preconditioner(prec_A, mp_inverse);
+    //    const
+    //    LinearSolvers::BlockDiagonalPreconditioner<LA::MPI::PreconditionAMG,
+    //                                                     mp_inverse_t>
+    //      preconditioner(prec_A, mp_inverse);
 
     SolverControl solver_control(system_matrix.m(),
                                  1e-10 * system_rhs.l2_norm());
@@ -431,7 +440,8 @@ namespace Step70
     solver.solve(system_matrix,
                  distributed_solution,
                  system_rhs,
-                 preconditioner);
+                 PreconditionIdentity());
+    // preconditioner);
 
     pcout << "   Solved in " << solver_control.last_step() << " iterations."
           << std::endl;
@@ -441,9 +451,9 @@ namespace Step70
     locally_relevant_solution = distributed_solution;
     const double mean_pressure =
       VectorTools::compute_mean_value(dh1,
-                                      QGauss<spacedim>(velocity_degree + 2),
+                                      QGauss<spacedim>(par.velocity_degree + 2),
                                       locally_relevant_solution,
-                                      dim);
+                                      spacedim);
     distributed_solution.block(1).add(-mean_pressure);
     locally_relevant_solution.block(1) = distributed_solution.block(1);
   }
@@ -465,34 +475,36 @@ namespace Step70
     const unsigned int cycle) const
   {
     {
-      const ComponentSelectFunction<spacedim> pressure_mask(dim, dim + 1);
-      const ComponentSelectFunction<spacedim> velocity_mask(std::make_pair(0,
-                                                                           dim),
-                                                            dim + 1);
+      const ComponentSelectFunction<spacedim> pressure_mask(spacedim,
+                                                            spacedim + 1);
+      const ComponentSelectFunction<spacedim> velocity_mask(
+        std::make_pair(0, spacedim), spacedim + 1);
 
       Vector<double>   cellwise_errors(tria1.n_active_cells());
-      QGauss<spacedim> quadrature(velocity_degree + 2);
+      QGauss<spacedim> quadrature(par.velocity_degree + 2);
 
-      VectorTools::integrate_difference(dh1,
-                                        locally_relevant_solution,
-                                        ExactSolution<spacedim>(),
-                                        cellwise_errors,
-                                        quadrature,
-                                        VectorTools::L2_norm,
-                                        &velocity_mask);
+      VectorTools::integrate_difference(
+        dh1,
+        locally_relevant_solution,
+        ConstantFunction<spacedim>(1, spacedim + 1),
+        cellwise_errors,
+        quadrature,
+        VectorTools::L2_norm,
+        &velocity_mask);
 
       const double error_u_l2 =
         VectorTools::compute_global_error(tria1,
                                           cellwise_errors,
                                           VectorTools::L2_norm);
 
-      VectorTools::integrate_difference(dh1,
-                                        locally_relevant_solution,
-                                        ExactSolution<spacedim>(),
-                                        cellwise_errors,
-                                        quadrature,
-                                        VectorTools::L2_norm,
-                                        &pressure_mask);
+      VectorTools::integrate_difference(
+        dh1,
+        locally_relevant_solution,
+        ConstantFunction<spacedim>(1.0, spacedim + 1),
+        cellwise_errors,
+        quadrature,
+        VectorTools::L2_norm,
+        &pressure_mask);
 
       const double error_p_l2 =
         VectorTools::compute_global_error(tria1,
@@ -504,7 +516,7 @@ namespace Step70
     }
 
 
-    std::vector<std::string> solution_names(dim, "velocity");
+    std::vector<std::string> solution_names(spacedim, "velocity");
     solution_names.emplace_back("pressure");
     std::vector<DataComponentInterpretation::DataComponentInterpretation>
       data_component_interpretation(
@@ -513,7 +525,7 @@ namespace Step70
       DataComponentInterpretation::component_is_scalar);
 
     DataOut<spacedim> data_out;
-    data_out.attach_dh1(dh1);
+    data_out.attach_dof_handler(dh1);
     data_out.add_data_vector(locally_relevant_solution,
                              solution_names,
                              DataOut<spacedim>::type_dof_data,
@@ -521,7 +533,9 @@ namespace Step70
 
     LA::MPI::BlockVector interpolated;
     interpolated.reinit(owned1, MPI_COMM_WORLD);
-    VectorTools::interpolate(dh1, ExactSolution<spacedim>(), interpolated);
+    VectorTools::interpolate(dh1,
+                             ConstantFunction<spacedim>(1.0, spacedim + 1),
+                             interpolated);
 
     LA::MPI::BlockVector interpolated_relevant(owned1,
                                                relevant1,
@@ -611,11 +625,14 @@ int main(int argc, char *argv[])
   try
     {
       using namespace dealii;
-      using namespace Step55;
+      using namespace Step70;
 
       Utilities::MPI::MPI_InitFinalize mpi_initialization(argc, argv, 1);
 
-      StokesProblem<2> problem(2);
+      StokesImmersedProblemParameters par;
+      par.initialize("parameters.prm", "used_parameters.prm");
+
+      StokesImmersedProblem<2> problem(par);
       problem.run();
     }
   catch (std::exception &exc)
