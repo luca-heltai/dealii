@@ -1,6 +1,6 @@
 /* ---------------------------------------------------------------------
  *
- * Copyright (C) 2016 - 2019 by the deal.II authors
+ * Copyright (C) 2019 by the deal.II authors
  *
  * This file is part of the deal.II library.
  *
@@ -14,7 +14,7 @@
  * ---------------------------------------------------------------------
 
  *
- * Author: Timo Heister, Clemson University, 2016
+ * Authors: Luca Heltai, Bruno Blais, 2019
  */
 
 #include <deal.II/base/quadrature_lib.h>
@@ -57,6 +57,7 @@ namespace LA
 #include <deal.II/grid/tria_iterator.h>
 #include <deal.II/grid/manifold_lib.h>
 #include <deal.II/grid/grid_tools.h>
+
 #include <deal.II/dofs/dof_handler.h>
 #include <deal.II/dofs/dof_renumbering.h>
 #include <deal.II/dofs/dof_accessor.h>
@@ -64,6 +65,8 @@ namespace LA
 #include <deal.II/fe/fe_values.h>
 #include <deal.II/fe/fe_q.h>
 #include <deal.II/fe/fe_system.h>
+#include <deal.II/fe/mapping_fe_field.h>
+
 #include <deal.II/numerics/vector_tools.h>
 #include <deal.II/numerics/data_out.h>
 #include <deal.II/numerics/error_estimator.h>
@@ -75,187 +78,39 @@ namespace LA
 #include <deal.II/distributed/tria.h>
 #include <deal.II/distributed/grid_refinement.h>
 
+#include <deal.II/base/parameter_acceptor.h>
+
 #include <cmath>
 #include <fstream>
 #include <iostream>
 
-namespace Step55
+namespace Step70
 {
   using namespace dealii;
 
-
-
-  namespace LinearSolvers
+  class StokesImmersedProblemParameters : public ParameterAcceptor
   {
-    template <class Matrix, class Preconditioner>
-    class InverseMatrix : public Subscriptor
+  public:
+    StokesImmersedProblemParameters()
+      : ParameterAcceptor("Stokes Immersed Problem")
     {
-    public:
-      InverseMatrix(const Matrix &m, const Preconditioner &preconditioner);
-
-      template <typename VectorType>
-      void vmult(VectorType &dst, const VectorType &src) const;
-
-    private:
-      const SmartPointer<const Matrix> matrix;
-      const Preconditioner &           preconditioner;
-    };
-
-
-    template <class Matrix, class Preconditioner>
-    InverseMatrix<Matrix, Preconditioner>::InverseMatrix(
-      const Matrix &        m,
-      const Preconditioner &preconditioner)
-      : matrix(&m)
-      , preconditioner(preconditioner)
-    {}
-
-
-
-    template <class Matrix, class Preconditioner>
-    template <typename VectorType>
-    void
-    InverseMatrix<Matrix, Preconditioner>::vmult(VectorType &      dst,
-                                                 const VectorType &src) const
-    {
-      SolverControl solver_control(src.size(), 1e-8 * src.l2_norm());
-      SolverCG<LA::MPI::Vector> cg(solver_control);
-      dst = 0;
-
-      try
-        {
-          cg.solve(*matrix, dst, src, preconditioner);
-        }
-      catch (std::exception &e)
-        {
-          Assert(false, ExcMessage(e.what()));
-        }
+      add_parameter("Velocity degree",
+                    velocity_degree,
+                    "",
+                    this->prm,
+                    Patterns::Integer(1));
+      add_parameter("Viscosity", viscosity);
     }
 
-
-    template <class PreconditionerA, class PreconditionerS>
-    class BlockDiagonalPreconditioner : public Subscriptor
-    {
-    public:
-      BlockDiagonalPreconditioner(const PreconditionerA &preconditioner_A,
-                                  const PreconditionerS &preconditioner_S);
-
-      void vmult(LA::MPI::BlockVector &      dst,
-                 const LA::MPI::BlockVector &src) const;
-
-    private:
-      const PreconditionerA &preconditioner_A;
-      const PreconditionerS &preconditioner_S;
-    };
-
-    template <class PreconditionerA, class PreconditionerS>
-    BlockDiagonalPreconditioner<PreconditionerA, PreconditionerS>::
-      BlockDiagonalPreconditioner(const PreconditionerA &preconditioner_A,
-                                  const PreconditionerS &preconditioner_S)
-      : preconditioner_A(preconditioner_A)
-      , preconditioner_S(preconditioner_S)
-    {}
-
-
-    template <class PreconditionerA, class PreconditionerS>
-    void BlockDiagonalPreconditioner<PreconditionerA, PreconditionerS>::vmult(
-      LA::MPI::BlockVector &      dst,
-      const LA::MPI::BlockVector &src) const
-    {
-      preconditioner_A.vmult(dst.block(0), src.block(0));
-      preconditioner_S.vmult(dst.block(1), src.block(1));
-    }
-
-  } // namespace LinearSolvers
-
-
-
-  template <int dim>
-  class RightHandSide : public Function<dim>
-  {
-  public:
-    RightHandSide()
-      : Function<dim>(dim + 1)
-    {}
-
-    virtual void vector_value(const Point<dim> &p,
-                              Vector<double> &  value) const override;
+    unsigned int velocity_degree = 2;
+    double       viscosity       = 1.0;
   };
 
-
-  template <int dim>
-  void RightHandSide<dim>::vector_value(const Point<dim> &p,
-                                        Vector<double> &  values) const
-  {
-    const double R_x = p[0];
-    const double R_y = p[1];
-
-    const double pi  = numbers::PI;
-    const double pi2 = pi * pi;
-    values[0] =
-      -1.0L / 2.0L * (-2 * sqrt(25.0 + 4 * pi2) + 10.0) *
-        exp(R_x * (-2 * sqrt(25.0 + 4 * pi2) + 10.0)) -
-      0.4 * pi2 * exp(R_x * (-sqrt(25.0 + 4 * pi2) + 5.0)) * cos(2 * R_y * pi) +
-      0.1 * pow(-sqrt(25.0 + 4 * pi2) + 5.0, 2) *
-        exp(R_x * (-sqrt(25.0 + 4 * pi2) + 5.0)) * cos(2 * R_y * pi);
-    values[1] = 0.2 * pi * (-sqrt(25.0 + 4 * pi2) + 5.0) *
-                  exp(R_x * (-sqrt(25.0 + 4 * pi2) + 5.0)) * sin(2 * R_y * pi) -
-                0.05 * pow(-sqrt(25.0 + 4 * pi2) + 5.0, 3) *
-                  exp(R_x * (-sqrt(25.0 + 4 * pi2) + 5.0)) * sin(2 * R_y * pi) /
-                  pi;
-    values[2] = 0;
-  }
-
-
-  template <int dim>
-  class ExactSolution : public Function<dim>
+  template <int dim, int spacedim>
+  class StokesImmersedProblem
   {
   public:
-    ExactSolution()
-      : Function<dim>(dim + 1)
-    {}
-
-    virtual void vector_value(const Point<dim> &p,
-                              Vector<double> &  value) const override;
-  };
-
-  template <int dim>
-  void ExactSolution<dim>::vector_value(const Point<dim> &p,
-                                        Vector<double> &  values) const
-  {
-    const double R_x = p[0];
-    const double R_y = p[1];
-
-    const double pi  = numbers::PI;
-    const double pi2 = pi * pi;
-    values[0] =
-      -exp(R_x * (-sqrt(25.0 + 4 * pi2) + 5.0)) * cos(2 * R_y * pi) + 1;
-    values[1] = (1.0L / 2.0L) * (-sqrt(25.0 + 4 * pi2) + 5.0) *
-                exp(R_x * (-sqrt(25.0 + 4 * pi2) + 5.0)) * sin(2 * R_y * pi) /
-                pi;
-    values[2] =
-      -1.0L / 2.0L * exp(R_x * (-2 * sqrt(25.0 + 4 * pi2) + 10.0)) -
-      2.0 *
-        (-6538034.74494422 +
-         0.0134758939981709 * exp(4 * sqrt(25.0 + 4 * pi2))) /
-        (-80.0 * exp(3 * sqrt(25.0 + 4 * pi2)) +
-         16.0 * sqrt(25.0 + 4 * pi2) * exp(3 * sqrt(25.0 + 4 * pi2))) -
-      1634508.68623606 * exp(-3.0 * sqrt(25.0 + 4 * pi2)) /
-        (-10.0 + 2.0 * sqrt(25.0 + 4 * pi2)) +
-      (-0.00673794699908547 * exp(sqrt(25.0 + 4 * pi2)) +
-       3269017.37247211 * exp(-3 * sqrt(25.0 + 4 * pi2))) /
-        (-8 * sqrt(25.0 + 4 * pi2) + 40.0) +
-      0.00336897349954273 * exp(1.0 * sqrt(25.0 + 4 * pi2)) /
-        (-10.0 + 2.0 * sqrt(25.0 + 4 * pi2));
-  }
-
-
-
-  template <int dim>
-  class StokesProblem
-  {
-  public:
-    StokesProblem(unsigned int velocity_degree);
+    StokesImmersedProblem(const StokesImmersedProblemParameters &par);
 
     void run();
 
@@ -267,20 +122,33 @@ namespace Step55
     void refine_grid();
     void output_results(const unsigned int cycle) const;
 
-    unsigned int velocity_degree;
-    double       viscosity;
-    MPI_Comm     mpi_communicator;
+    const StokesImmersedProblemParameters &par;
 
-    FESystem<dim>                             fe;
-    parallel::distributed::Triangulation<dim> triangulation;
-    DoFHandler<dim>                           dof_handler;
+    MPI_Comm mpi_communicator;
 
-    std::vector<IndexSet> owned_partitioning;
-    std::vector<IndexSet> relevant_partitioning;
+    std::unique_ptr<FESystem<spacedim>>      fe1;
+    std::unique_ptr<FESystem<dim, spacedim>> fe2;
+
+    parallel::distributed::Triangulation<spacedim>      tria1;
+    parallel::distributed::Triangulation<dim, spacedim> tria2;
+
+    DoFHandler<spacedim>      dh1;
+    DoFHandler<dim, spacedim> dh2;
+
+    std::unique_ptr<MappingFEField<dim, spacedim>> mapping2;
+
+    std::vector<IndexSet> owned1;
+    std::vector<IndexSet> owned2;
+
+    std::vector<IndexSet> relevant1;
+    std::vector<IndexSet> relevant2;
+
 
     AffineConstraints<double> constraints;
 
     LA::MPI::BlockSparseMatrix system_matrix;
+    LA::MPI::BlockSparseMatrix coupling_matrix;
+
     LA::MPI::BlockSparseMatrix preconditioner_matrix;
     LA::MPI::BlockVector       locally_relevant_solution;
     LA::MPI::BlockVector       system_rhs;
@@ -291,17 +159,16 @@ namespace Step55
 
 
 
-  template <int dim>
-  StokesProblem<dim>::StokesProblem(unsigned int velocity_degree)
-    : velocity_degree(velocity_degree)
-    , viscosity(0.1)
+  template <int dim, int spacedim>
+  StokesImmersedProblem<dim, spacedim>::StokesImmersedProblem(
+    const StokesImmersedProblemParameters &par)
+    : par(par)
     , mpi_communicator(MPI_COMM_WORLD)
-    , fe(FE_Q<dim>(velocity_degree), dim, FE_Q<dim>(velocity_degree - 1), 1)
-    , triangulation(mpi_communicator,
-                    typename Triangulation<dim>::MeshSmoothing(
-                      Triangulation<dim>::smoothing_on_refinement |
-                      Triangulation<dim>::smoothing_on_coarsening))
-    , dof_handler(triangulation)
+    , tria1(mpi_communicator,
+            typename Triangulation<spacedim>::MeshSmoothing(
+              Triangulation<spacedim>::smoothing_on_refinement |
+              Triangulation<spacedim>::smoothing_on_coarsening))
+    , dh1(tria1)
     , pcout(std::cout,
             (Utilities::MPI::this_mpi_process(mpi_communicator) == 0))
     , computing_timer(mpi_communicator,
@@ -311,55 +178,62 @@ namespace Step55
   {}
 
 
-  template <int dim>
-  void StokesProblem<dim>::make_grid()
+  template <int dim, int spacedim>
+  void StokesImmersedProblem<dim, spacedim>::make_grid()
   {
-    GridGenerator::hyper_cube(triangulation, -0.5, 1.5);
-    triangulation.refine_global(3);
+    GridGenerator::hyper_cube(tria1, -0.5, 1.5);
+    tria1.refine_global(3);
   }
 
-  template <int dim>
-  void StokesProblem<dim>::setup_system()
+  template <int dim, int spacedim>
+  void StokesImmersedProblem<dim, spacedim>::setup_system()
   {
     TimerOutput::Scope t(computing_timer, "setup");
 
-    dof_handler.distribute_dofs(fe);
+    fe1 =
+      std::make_unique<FESystem<spacedim>>(FE_Q<spacedim>(par.velocity_degree),
+                                           spacedim,
+                                           FE_Q<spacedim>(par.velocity_degree -
+                                                          1),
+                                           1);
+
+    fe2 = std::make_unique<FESystem<dim, spacedim>>(
+      FE_Q<dim, spacedim>(par.velocity_degree), spacedim);
+
+    dh1.distribute_dofs(*fe1);
 
     std::vector<unsigned int> stokes_sub_blocks(dim + 1, 0);
     stokes_sub_blocks[dim] = 1;
-    DoFRenumbering::component_wise(dof_handler, stokes_sub_blocks);
+    DoFRenumbering::component_wise(dh1, stokes_sub_blocks);
 
     std::vector<types::global_dof_index> dofs_per_block(2);
-    DoFTools::count_dofs_per_block(dof_handler,
-                                   dofs_per_block,
-                                   stokes_sub_blocks);
+    DoFTools::count_dofs_per_block(dh1, dofs_per_block, stokes_sub_blocks);
 
     const unsigned int n_u = dofs_per_block[0], n_p = dofs_per_block[1];
 
-    pcout << "   Number of degrees of freedom: " << dof_handler.n_dofs() << " ("
-          << n_u << '+' << n_p << ')' << std::endl;
+    pcout << "   Number of degrees of freedom: " << dh1.n_dofs() << " (" << n_u
+          << '+' << n_p << ')' << std::endl;
 
-    owned_partitioning.resize(2);
-    owned_partitioning[0] = dof_handler.locally_owned_dofs().get_view(0, n_u);
-    owned_partitioning[1] =
-      dof_handler.locally_owned_dofs().get_view(n_u, n_u + n_p);
+    owned1.resize(2);
+    owned1[0] = dh1.locally_owned_dofs().get_view(0, n_u);
+    owned1[1] = dh1.locally_owned_dofs().get_view(n_u, n_u + n_p);
 
     IndexSet locally_relevant_dofs;
-    DoFTools::extract_locally_relevant_dofs(dof_handler, locally_relevant_dofs);
-    relevant_partitioning.resize(2);
-    relevant_partitioning[0] = locally_relevant_dofs.get_view(0, n_u);
-    relevant_partitioning[1] = locally_relevant_dofs.get_view(n_u, n_u + n_p);
+    DoFTools::extract_locally_relevant_dofs(dh1, locally_relevant_dofs);
+    relevant1.resize(2);
+    relevant1[0] = locally_relevant_dofs.get_view(0, n_u);
+    relevant1[1] = locally_relevant_dofs.get_view(n_u, n_u + n_p);
 
     {
       constraints.reinit(locally_relevant_dofs);
 
       FEValuesExtractors::Vector velocities(0);
-      DoFTools::make_hanging_node_constraints(dof_handler, constraints);
-      VectorTools::interpolate_boundary_values(dof_handler,
+      DoFTools::make_hanging_node_constraints(dh1, constraints);
+      VectorTools::interpolate_boundary_values(dh1,
                                                0,
-                                               ExactSolution<dim>(),
+                                               ConstantFunction<spacedim>(0),
                                                constraints,
-                                               fe.component_mask(velocities));
+                                               fe1->component_mask(velocities));
       constraints.close();
     }
 
@@ -378,16 +252,15 @@ namespace Step55
 
       BlockDynamicSparsityPattern dsp(dofs_per_block, dofs_per_block);
 
-      DoFTools::make_sparsity_pattern(
-        dof_handler, coupling, dsp, constraints, false);
+      DoFTools::make_sparsity_pattern(dh1, coupling, dsp, constraints, false);
 
       SparsityTools::distribute_sparsity_pattern(
         dsp,
-        dof_handler.compute_locally_owned_dofs_per_processor(),
+        dh1.compute_locally_owned_dofs_per_processor(),
         mpi_communicator,
         locally_relevant_dofs);
 
-      system_matrix.reinit(owned_partitioning, dsp, mpi_communicator);
+      system_matrix.reinit(owned1, dsp, mpi_communicator);
     }
 
     {
@@ -403,28 +276,23 @@ namespace Step55
 
       BlockDynamicSparsityPattern dsp(dofs_per_block, dofs_per_block);
 
-      DoFTools::make_sparsity_pattern(
-        dof_handler, coupling, dsp, constraints, false);
+      DoFTools::make_sparsity_pattern(dh1, coupling, dsp, constraints, false);
       SparsityTools::distribute_sparsity_pattern(
         dsp,
-        dof_handler.compute_locally_owned_dofs_per_processor(),
+        dh1.compute_locally_owned_dofs_per_processor(),
         mpi_communicator,
         locally_relevant_dofs);
-      preconditioner_matrix.reinit(owned_partitioning,
-                                   dsp,
-                                   mpi_communicator);
+      preconditioner_matrix.reinit(owned1, dsp, mpi_communicator);
     }
 
-    locally_relevant_solution.reinit(owned_partitioning,
-                                     relevant_partitioning,
-                                     mpi_communicator);
-    system_rhs.reinit(owned_partitioning, mpi_communicator);
+    locally_relevant_solution.reinit(owned1, relevant1, mpi_communicator);
+    system_rhs.reinit(owned1, mpi_communicator);
   }
 
 
 
-  template <int dim>
-  void StokesProblem<dim>::assemble_system()
+  template <int dim, int spacedim>
+  void StokesImmersedProblem<dim, spacedim>::assemble_system()
   {
     TimerOutput::Scope t(computing_timer, "assembly");
 
@@ -432,12 +300,13 @@ namespace Step55
     preconditioner_matrix = 0;
     system_rhs            = 0;
 
-    const QGauss<dim> quadrature_formula(velocity_degree + 1);
+    const QGauss<spacedim> quadrature_formula(velocity_degree + 1);
 
-    FEValues<dim> fe_values(fe,
-                            quadrature_formula,
-                            update_values | update_gradients |
-                              update_quadrature_points | update_JxW_values);
+    FEValues<spacedim> fe_values(fe,
+                                 quadrature_formula,
+                                 update_values | update_gradients |
+                                   update_quadrature_points |
+                                   update_JxW_values);
 
     const unsigned int dofs_per_cell = fe.dofs_per_cell;
     const unsigned int n_q_points    = quadrature_formula.size();
@@ -446,7 +315,7 @@ namespace Step55
     FullMatrix<double> cell_matrix2(dofs_per_cell, dofs_per_cell);
     Vector<double>     cell_rhs(dofs_per_cell);
 
-    const RightHandSide<dim>    right_hand_side;
+    const RightHandSide<spacedim> right_hand_side;
     std::vector<Vector<double>> rhs_values(n_q_points, Vector<double>(dim + 1));
 
     std::vector<Tensor<2, dim>> grad_phi_u(dofs_per_cell);
@@ -457,7 +326,7 @@ namespace Step55
     const FEValuesExtractors::Vector     velocities(0);
     const FEValuesExtractors::Scalar     pressure(dim);
 
-    for (const auto &cell : dof_handler.active_cell_iterators())
+    for (const auto &cell : dh1.active_cell_iterators())
       if (cell->is_locally_owned())
         {
           cell_matrix  = 0;
@@ -517,8 +386,8 @@ namespace Step55
 
 
 
-  template <int dim>
-  void StokesProblem<dim>::solve()
+  template <int dim, int spacedim>
+  void StokesImmersedProblem<dim, spacedim>::solve()
   {
     TimerOutput::Scope t(computing_timer, "solve");
 
@@ -555,8 +424,7 @@ namespace Step55
 
     SolverMinRes<LA::MPI::BlockVector> solver(solver_control);
 
-    LA::MPI::BlockVector distributed_solution(owned_partitioning,
-                                              mpi_communicator);
+    LA::MPI::BlockVector distributed_solution(owned1, mpi_communicator);
 
     constraints.set_zero(distributed_solution);
 
@@ -572,8 +440,8 @@ namespace Step55
 
     locally_relevant_solution = distributed_solution;
     const double mean_pressure =
-      VectorTools::compute_mean_value(dof_handler,
-                                      QGauss<dim>(velocity_degree + 2),
+      VectorTools::compute_mean_value(dh1,
+                                      QGauss<spacedim>(velocity_degree + 2),
                                       locally_relevant_solution,
                                       dim);
     distributed_solution.block(1).add(-mean_pressure);
@@ -582,50 +450,52 @@ namespace Step55
 
 
 
-  template <int dim>
-  void StokesProblem<dim>::refine_grid()
+  template <int dim, int spacedim>
+  void StokesImmersedProblem<dim, spacedim>::refine_grid()
   {
     TimerOutput::Scope t(computing_timer, "refine");
 
-    triangulation.refine_global();
+    tria1.refine_global();
   }
 
 
 
-  template <int dim>
-  void StokesProblem<dim>::output_results(const unsigned int cycle) const
+  template <int dim, int spacedim>
+  void StokesImmersedProblem<dim, spacedim>::output_results(
+    const unsigned int cycle) const
   {
     {
-      const ComponentSelectFunction<dim> pressure_mask(dim, dim + 1);
-      const ComponentSelectFunction<dim> velocity_mask(std::make_pair(0, dim),
-                                                       dim + 1);
+      const ComponentSelectFunction<spacedim> pressure_mask(dim, dim + 1);
+      const ComponentSelectFunction<spacedim> velocity_mask(std::make_pair(0,
+                                                                           dim),
+                                                            dim + 1);
 
-      Vector<double> cellwise_errors(triangulation.n_active_cells());
-      QGauss<dim>    quadrature(velocity_degree + 2);
+      Vector<double>   cellwise_errors(tria1.n_active_cells());
+      QGauss<spacedim> quadrature(velocity_degree + 2);
 
-      VectorTools::integrate_difference(dof_handler,
+      VectorTools::integrate_difference(dh1,
                                         locally_relevant_solution,
-                                        ExactSolution<dim>(),
+                                        ExactSolution<spacedim>(),
                                         cellwise_errors,
                                         quadrature,
                                         VectorTools::L2_norm,
                                         &velocity_mask);
 
       const double error_u_l2 =
-        VectorTools::compute_global_error(triangulation,
+        VectorTools::compute_global_error(tria1,
                                           cellwise_errors,
                                           VectorTools::L2_norm);
 
-      VectorTools::integrate_difference(dof_handler,
+      VectorTools::integrate_difference(dh1,
                                         locally_relevant_solution,
-                                        ExactSolution<dim>(),
+                                        ExactSolution<spacedim>(),
                                         cellwise_errors,
                                         quadrature,
                                         VectorTools::L2_norm,
                                         &pressure_mask);
 
       const double error_p_l2 =
-        VectorTools::compute_global_error(triangulation,
+        VectorTools::compute_global_error(tria1,
                                           cellwise_errors,
                                           VectorTools::L2_norm);
 
@@ -642,19 +512,19 @@ namespace Step55
     data_component_interpretation.push_back(
       DataComponentInterpretation::component_is_scalar);
 
-    DataOut<dim> data_out;
-    data_out.attach_dof_handler(dof_handler);
+    DataOut<spacedim> data_out;
+    data_out.attach_dh1(dh1);
     data_out.add_data_vector(locally_relevant_solution,
                              solution_names,
-                             DataOut<dim>::type_dof_data,
+                             DataOut<spacedim>::type_dof_data,
                              data_component_interpretation);
 
     LA::MPI::BlockVector interpolated;
-    interpolated.reinit(owned_partitioning, MPI_COMM_WORLD);
-    VectorTools::interpolate(dof_handler, ExactSolution<dim>(), interpolated);
+    interpolated.reinit(owned1, MPI_COMM_WORLD);
+    VectorTools::interpolate(dh1, ExactSolution<spacedim>(), interpolated);
 
-    LA::MPI::BlockVector interpolated_relevant(owned_partitioning,
-                                               relevant_partitioning,
+    LA::MPI::BlockVector interpolated_relevant(owned1,
+                                               relevant1,
                                                MPI_COMM_WORLD);
     interpolated_relevant = interpolated;
     {
@@ -662,21 +532,21 @@ namespace Step55
       solution_names.emplace_back("ref_p");
       data_out.add_data_vector(interpolated_relevant,
                                solution_names,
-                               DataOut<dim>::type_dof_data,
+                               DataOut<spacedim>::type_dof_data,
                                data_component_interpretation);
     }
 
 
-    Vector<float> subdomain(triangulation.n_active_cells());
+    Vector<float> subdomain(tria1.n_active_cells());
     for (unsigned int i = 0; i < subdomain.size(); ++i)
-      subdomain(i) = triangulation.locally_owned_subdomain();
+      subdomain(i) = tria1.locally_owned_subdomain();
     data_out.add_data_vector(subdomain, "subdomain");
 
     data_out.build_patches();
 
     const std::string filename =
       ("solution-" + Utilities::int_to_string(cycle, 2) + "." +
-       Utilities::int_to_string(triangulation.locally_owned_subdomain(), 4));
+       Utilities::int_to_string(tria1.locally_owned_subdomain(), 4));
     std::ofstream output((filename + ".vtu"));
     data_out.write_vtu(output);
 
@@ -697,8 +567,8 @@ namespace Step55
 
 
 
-  template <int dim>
-  void StokesProblem<dim>::run()
+  template <int dim, int spacedim>
+  void StokesImmersedProblem<dim, spacedim>::run()
   {
 #ifdef USE_PETSC_LA
     pcout << "Running using PETSc." << std::endl;
@@ -732,7 +602,7 @@ namespace Step55
         pcout << std::endl;
       }
   }
-} // namespace Step55
+} // namespace Step70
 
 
 
