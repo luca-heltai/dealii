@@ -17,6 +17,7 @@
 #define dealii_particles_particle_handler_h
 
 #include <deal.II/base/array_view.h>
+#include <deal.II/base/data_out_base.h>
 #include <deal.II/base/mpi.h>
 #include <deal.II/base/smartpointer.h>
 #include <deal.II/base/subscriptor.h>
@@ -612,6 +613,29 @@ namespace Particles
     void
     serialize(Archive &ar, const unsigned int version);
 
+    /**
+     * Write the particle position to a stream
+     * This function currently only outputs the particle position
+     * and does not output the property pool associated with the particles
+     * // TODO  - Add the information of the property pool to the particles
+     *
+     * @param[in] out A stream to which the file will be written
+     *
+     * @return A pair of maps from owner to IndexSet, that contains the local
+     * indices of the points that other mpi processes have sent to the current
+     * processor, and a map that identifies the new owner of the points that
+     * were originally located on this processor.
+     *
+     * @author : Bruno Blais, Luca Heltai 2019
+     */
+
+    //    void
+    //    write_particle_vtu(std::ostream &out)
+    //    {
+    //      Visualization<dim, spacedim> particle_vis;
+    //      particle_vis.build_patches()
+    //    }
+
   private:
     /**
      * Address of the triangulation to work on.
@@ -773,8 +797,78 @@ namespace Particles
         &data_range);
   };
 
+  /**
+   * This class manages the DataOut of a Particle Handler
+   * It currently only supports witing the particle position
+   * and their ID
+   *
+   * @ingroup Particle
+   *
+   * @author : Bruno Blais, Luca Heltai 2019
+   */
+
+  template <int dim, int spacedim>
+  class ParticleOutput : public dealii::DataOutInterface<0, spacedim>
+  {
+  public:
+    ParticleOutput() = default;
+
+    void
+    build_patches(const Particles::ParticleHandler<dim, spacedim> &particles)
+    {
+      dataset_names.reserve(1);
+      dataset_names.emplace_back("id");
+      patches.resize(particles.n_locally_owned_particles());
+
+      auto particle = particles.begin();
+      for (unsigned int i = 0; particle != particles.end(); ++particle, ++i)
+        {
+          patches[i].vertices[0]    = particle->get_location();
+          patches[i].patch_index    = i;
+          patches[i].n_subdivisions = 1;
+          patches[i].data.reinit(dataset_names.size(), 1);
+
+          patches[i].data(0, 0) = particle->get_id();
+        }
+    }
+
+
+
+    ~ParticleOutput() = default;
+
+  protected:
+    /**
+     * Implementation of the corresponding function of the base class.
+     */
+    virtual const std::vector<DataOutBase::Patch<0, spacedim>> &
+    get_patches() const
+    {
+      return patches;
+    }
+
+    /**
+     * Implementation of the corresponding function of the base class.
+     */
+    virtual std::vector<std::string>
+    get_dataset_names() const
+    {
+      return dataset_names;
+    }
+
+  private:
+    std::vector<DataOutBase::Patch<0, spacedim>> patches;
+
+    /**
+     * A list of field names for all data components stored in patches.
+     */
+    std::vector<std::string> dataset_names;
+  };
+
+
   /* ---------------------- inline and template functions ------------------
    */
+
+
 
   template <int dim, int spacedim>
   template <class Archive>
