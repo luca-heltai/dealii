@@ -17,10 +17,9 @@
  * Authors: Luca Heltai, Bruno Blais, 2019
  */
 
-#include <deal.II/base/quadrature_lib.h>
 #include <deal.II/base/function.h>
+#include <deal.II/base/quadrature_lib.h>
 #include <deal.II/base/timer.h>
-
 
 #include <deal.II/lac/generic_linear_algebra.h>
 
@@ -39,50 +38,57 @@ namespace LA
 #endif
 } // namespace LA
 
-#include <deal.II/lac/vector.h>
+#include <deal.II/base/conditional_ostream.h>
+#include <deal.II/base/index_set.h>
+#include <deal.II/base/parameter_acceptor.h>
+#include <deal.II/base/utilities.h>
+
+#include <deal.II/distributed/grid_refinement.h>
+#include <deal.II/distributed/tria.h>
+
+#include <deal.II/dofs/dof_accessor.h>
+#include <deal.II/dofs/dof_handler.h>
+#include <deal.II/dofs/dof_renumbering.h>
+#include <deal.II/dofs/dof_tools.h>
+
+#include <deal.II/fe/fe_q.h>
+#include <deal.II/fe/fe_system.h>
+#include <deal.II/fe/fe_values.h>
+#include <deal.II/fe/mapping_fe_field.h>
+#include <deal.II/fe/mapping_q.h>
+
+#include <deal.II/grid/grid_generator.h>
+#include <deal.II/grid/grid_tools.h>
+#include <deal.II/grid/manifold_lib.h>
+#include <deal.II/grid/tria_accessor.h>
+#include <deal.II/grid/tria_iterator.h>
+
+#include <deal.II/lac/affine_constraints.h>
+#include <deal.II/lac/dynamic_sparsity_pattern.h>
 #include <deal.II/lac/full_matrix.h>
+#include <deal.II/lac/petsc_precondition.h>
+#include <deal.II/lac/petsc_solver.h>
+#include <deal.II/lac/petsc_sparse_matrix.h>
+#include <deal.II/lac/petsc_vector.h>
 #include <deal.II/lac/solver_cg.h>
 #include <deal.II/lac/solver_gmres.h>
 #include <deal.II/lac/solver_minres.h>
-#include <deal.II/lac/affine_constraints.h>
-#include <deal.II/lac/dynamic_sparsity_pattern.h>
+#include <deal.II/lac/sparsity_tools.h>
+#include <deal.II/lac/vector.h>
 
-#include <deal.II/lac/petsc_sparse_matrix.h>
-#include <deal.II/lac/petsc_vector.h>
-#include <deal.II/lac/petsc_solver.h>
-#include <deal.II/lac/petsc_precondition.h>
+#include <deal.II/non_matching/dof_handler_coupling.h>
 
-#include <deal.II/grid/grid_generator.h>
-#include <deal.II/grid/tria_accessor.h>
-#include <deal.II/grid/tria_iterator.h>
-#include <deal.II/grid/manifold_lib.h>
-#include <deal.II/grid/grid_tools.h>
-
-#include <deal.II/dofs/dof_handler.h>
-#include <deal.II/dofs/dof_renumbering.h>
-#include <deal.II/dofs/dof_accessor.h>
-#include <deal.II/dofs/dof_tools.h>
-#include <deal.II/fe/fe_values.h>
-#include <deal.II/fe/fe_q.h>
-#include <deal.II/fe/fe_system.h>
-#include <deal.II/fe/mapping_fe_field.h>
-
-#include <deal.II/numerics/vector_tools.h>
 #include <deal.II/numerics/data_out.h>
 #include <deal.II/numerics/error_estimator.h>
+#include <deal.II/numerics/vector_tools.h>
 
-#include <deal.II/base/utilities.h>
-#include <deal.II/base/conditional_ostream.h>
-#include <deal.II/base/index_set.h>
-#include <deal.II/lac/sparsity_tools.h>
-#include <deal.II/distributed/tria.h>
-#include <deal.II/distributed/grid_refinement.h>
-
-#include <deal.II/base/parameter_acceptor.h>
+#include <deal.II/particles/generators.h>
+#include <deal.II/particles/particle_handler.h>
 
 #include <cmath>
 #include <fstream>
 #include <iostream>
+#include <memory>
 
 namespace Step70
 {
@@ -100,10 +106,43 @@ namespace Step70
                     this->prm,
                     Patterns::Integer(1));
       add_parameter("Viscosity", viscosity);
+
+      add_parameter("Initial fluid refinement",
+                    initial_fluid_refinement,
+                    "Initial mesh refinement used for the fluid domain Omega");
+
+      add_parameter("Initial solid refinement",
+                    initial_solid_refinement,
+                    "Initial mesh refinement used for the solid domain Gamma");
+
+      add_parameter(
+        "Particle insertion refinement",
+        particle_insertion_refinement,
+        "Refinement of the volumetric mesh used to insert the particles");
+
+      add_parameter("Particle insertion radius",
+                    particle_insertion_radius,
+                    "Radius of the ball used to insert the particles");
+
+
+      add_parameter("Angular velocity",
+                    angular_velocity,
+                    "Angular velocity (dtheta#/dt in rad/s");
+
+      add_parameter(
+        "Homogeneous Dirichlet boundary ids",
+        homogeneous_dirichlet_ids,
+        "Boundary Ids over which homogeneous Dirichlet boundary conditions are applied");
     }
 
-    unsigned int velocity_degree = 2;
-    double       viscosity       = 1.0;
+    unsigned int                  velocity_degree               = 2;
+    double                        viscosity                     = 1.0;
+    unsigned int                  initial_fluid_refinement      = 3;
+    unsigned int                  initial_solid_refinement      = 3;
+    double                        angular_velocity              = 2. * M_PI;
+    unsigned int                  particle_insertion_refinement = 1;
+    double                        particle_insertion_radius     = 0.1;
+    std::list<types::boundary_id> homogeneous_dirichlet_ids{0, 1, 2, 3};
   };
 
   template <int dim, int spacedim = dim>
@@ -112,15 +151,26 @@ namespace Step70
   public:
     StokesImmersedProblem(const StokesImmersedProblemParameters &par);
 
-    void run();
+    void
+    run();
 
   private:
-    void make_grid();
-    void setup_system();
-    void assemble_system();
-    void solve();
-    void refine_grid();
-    void output_results(const unsigned int cycle) const;
+    void
+    make_grid();
+    void
+    setup_tracer_particles();
+    void
+    setup_system();
+    void
+    assemble_system();
+    void
+    solve();
+    void
+    refine_grid();
+    void
+    output_results(const unsigned int cycle) const;
+    void
+    output_particles(const unsigned int iter) const;
 
     const StokesImmersedProblemParameters &par;
 
@@ -131,6 +181,8 @@ namespace Step70
 
     parallel::distributed::Triangulation<spacedim>      tria1;
     parallel::distributed::Triangulation<dim, spacedim> tria2;
+
+
 
     DoFHandler<spacedim>      dh1;
     DoFHandler<dim, spacedim> dh2;
@@ -152,6 +204,8 @@ namespace Step70
     LA::MPI::BlockSparseMatrix preconditioner_matrix;
     LA::MPI::BlockVector       locally_relevant_solution;
     LA::MPI::BlockVector       system_rhs;
+
+    Particles::ParticleHandler<dim, spacedim> particle_handler;
 
     ConditionalOStream pcout;
     TimerOutput        computing_timer;
@@ -184,14 +238,81 @@ namespace Step70
 
 
   template <int dim, int spacedim>
-  void StokesImmersedProblem<dim, spacedim>::make_grid()
+  void
+  StokesImmersedProblem<dim, spacedim>::make_grid()
   {
-    GridGenerator::hyper_cube(tria1, -0.5, 1.5);
-    tria1.refine_global(3);
+    GridGenerator::hyper_cube(tria1, -1, 1);
+    tria1.refine_global(par.initial_fluid_refinement);
+
+    std::vector<Point<spacedim>> pts_rectangle;
+    if (spacedim == 2)
+      {
+        pts_rectangle.emplace_back(Point<spacedim>(-0.1, -0.1));
+        pts_rectangle.emplace_back(Point<spacedim>(0.1, 0.1));
+      }
+    else if (spacedim == 3)
+      {
+        pts_rectangle.emplace_back(Point<spacedim>(-0.1, -0.1, -0.1));
+        pts_rectangle.emplace_back(Point<spacedim>(0.1, 0.1, 0.1));
+      }
+
+    GridGenerator::hyper_rectangle(tria2, pts_rectangle[0], pts_rectangle[1]);
+    tria2.refine_global(par.initial_solid_refinement);
   }
 
   template <int dim, int spacedim>
-  void StokesImmersedProblem<dim, spacedim>::setup_system()
+  void
+  StokesImmersedProblem<dim, spacedim>::setup_tracer_particles()
+  {
+    // Generate a triangulation that will be used to decide the position
+    // of the particles to insert. In this case we choose an hyper_ball, a
+    // circle (spacedim==2) or a sphere (spacedim==3) filled with particles are
+    // the position of the support points of the triangulation
+    parallel::distributed::Triangulation<spacedim> particle_insert_tria(
+      mpi_communicator);
+    Point<spacedim> pt_ball;
+    if (spacedim == 2)
+      pt_ball = Point<spacedim>(0.3, 0.3);
+    else if (spacedim == 3)
+      pt_ball = Point<spacedim>(0.3, 0.3, 0.3);
+
+    GridGenerator::hyper_ball<spacedim>(particle_insert_tria,
+                                        pt_ball,
+                                        par.particle_insertion_radius);
+    particle_insert_tria.refine_global(par.particle_insertion_refinement);
+
+    // Generate the support point on the triangulation that will be used as
+    // particle insertion point
+    DoFHandler<dim, spacedim> particles_dof_handler(particle_insert_tria);
+    FE_Q<dim, spacedim>       particles_fe(1);
+    particles_dof_handler.distribute_dofs(particles_fe);
+
+    // Create the particle handler associated with the fluid triangulation
+    MappingQ<dim, spacedim> mapping(1);
+    particle_handler.initialize(tria1, mapping);
+    //      std::make_unique<Particles::ParticleHandler<dim, spacedim>>(
+    //        Particles::ParticleHandler<dim, spacedim>(tria1, mapping));
+
+
+    // Generate the necessary local and global bounding boxes for the generator.
+    // The generation of the global bounding boxes requires an all-to-all
+    // communication
+    auto my_bounding_box = GridTools::compute_mesh_predicate_bounding_box(
+      tria1, IteratorFilters::LocallyOwnedCell());
+    auto global_bounding_boxes =
+      Utilities::MPI::all_gather(MPI_COMM_WORLD, my_bounding_box);
+
+
+    // Finally generate the particles from the support point of the
+    // particle_insert_tria triangulation
+    Particles::Generators::dof_support_points(particles_dof_handler,
+                                              global_bounding_boxes,
+                                              particle_handler);
+  }
+
+  template <int dim, int spacedim>
+  void
+  StokesImmersedProblem<dim, spacedim>::setup_system()
   {
     TimerOutput::Scope t(computing_timer, "setup");
 
@@ -236,7 +357,8 @@ namespace Step70
       DoFTools::make_hanging_node_constraints(dh1, constraints);
       VectorTools::interpolate_boundary_values(dh1,
                                                0,
-                                               ConstantFunction<spacedim>(0),
+                                               ZeroFunction<spacedim>(spacedim +
+                                                                      1),
                                                constraints,
                                                fe1->component_mask(velocities));
       constraints.close();
@@ -297,7 +419,8 @@ namespace Step70
 
 
   template <int dim, int spacedim>
-  void StokesImmersedProblem<dim, spacedim>::assemble_system()
+  void
+  StokesImmersedProblem<dim, spacedim>::assemble_system()
   {
     TimerOutput::Scope t(computing_timer, "assembly");
 
@@ -320,7 +443,7 @@ namespace Step70
     FullMatrix<double> cell_matrix2(dofs_per_cell, dofs_per_cell);
     Vector<double>     cell_rhs(dofs_per_cell);
 
-    const ConstantFunction<spacedim> right_hand_side(spacedim + 1);
+    const ConstantFunction<spacedim> right_hand_side(0., spacedim + 1);
     std::vector<Vector<double>>      rhs_values(n_q_points,
                                                 Vector<double>(spacedim + 1));
 
@@ -393,7 +516,8 @@ namespace Step70
 
 
   template <int dim, int spacedim>
-  void StokesImmersedProblem<dim, spacedim>::solve()
+  void
+  StokesImmersedProblem<dim, spacedim>::solve()
   {
     TimerOutput::Scope t(computing_timer, "solve");
 
@@ -461,7 +585,8 @@ namespace Step70
 
 
   template <int dim, int spacedim>
-  void StokesImmersedProblem<dim, spacedim>::refine_grid()
+  void
+  StokesImmersedProblem<dim, spacedim>::refine_grid()
   {
     TimerOutput::Scope t(computing_timer, "refine");
 
@@ -471,51 +596,10 @@ namespace Step70
 
 
   template <int dim, int spacedim>
-  void StokesImmersedProblem<dim, spacedim>::output_results(
+  void
+  StokesImmersedProblem<dim, spacedim>::output_results(
     const unsigned int cycle) const
   {
-    {
-      const ComponentSelectFunction<spacedim> pressure_mask(spacedim,
-                                                            spacedim + 1);
-      const ComponentSelectFunction<spacedim> velocity_mask(
-        std::make_pair(0, spacedim), spacedim + 1);
-
-      Vector<double>   cellwise_errors(tria1.n_active_cells());
-      QGauss<spacedim> quadrature(par.velocity_degree + 2);
-
-      VectorTools::integrate_difference(
-        dh1,
-        locally_relevant_solution,
-        ConstantFunction<spacedim>(1, spacedim + 1),
-        cellwise_errors,
-        quadrature,
-        VectorTools::L2_norm,
-        &velocity_mask);
-
-      const double error_u_l2 =
-        VectorTools::compute_global_error(tria1,
-                                          cellwise_errors,
-                                          VectorTools::L2_norm);
-
-      VectorTools::integrate_difference(
-        dh1,
-        locally_relevant_solution,
-        ConstantFunction<spacedim>(1.0, spacedim + 1),
-        cellwise_errors,
-        quadrature,
-        VectorTools::L2_norm,
-        &pressure_mask);
-
-      const double error_p_l2 =
-        VectorTools::compute_global_error(tria1,
-                                          cellwise_errors,
-                                          VectorTools::L2_norm);
-
-      pcout << "error: u_0: " << error_u_l2 << " p_0: " << error_p_l2
-            << std::endl;
-    }
-
-
     std::vector<std::string> solution_names(spacedim, "velocity");
     solution_names.emplace_back("pressure");
     std::vector<DataComponentInterpretation::DataComponentInterpretation>
@@ -580,22 +664,54 @@ namespace Step70
   }
 
 
+  template <int dim, int spacedim>
+  void
+  StokesImmersedProblem<dim, spacedim>::output_particles(
+    const unsigned int iter) const
+  {
+    Particles::ParticleOutput<dim, spacedim> particles_out;
+    particles_out.build_patches(particle_handler);
+    const std::string filename =
+      ("particles-" + Utilities::int_to_string(iter, 2) + "." +
+       Utilities::int_to_string(tria1.locally_owned_subdomain(), 4));
+    std::ofstream output((filename + ".vtu"));
+    particles_out.write_vtu(output);
+
+    if (Utilities::MPI::this_mpi_process(mpi_communicator) == 0)
+      {
+        std::vector<std::string> filenames;
+        for (unsigned int i = 0;
+             i < Utilities::MPI::n_mpi_processes(mpi_communicator);
+             ++i)
+          filenames.push_back("particles-" + Utilities::int_to_string(iter, 2) +
+                              "." + Utilities::int_to_string(i, 4) + ".vtu");
+
+        std::ofstream master_output(
+          "particles-" + Utilities::int_to_string(iter, 2) + ".pvtu");
+        particles_out.write_pvtu_record(master_output, filenames);
+      }
+  }
+
 
   template <int dim, int spacedim>
-  void StokesImmersedProblem<dim, spacedim>::run()
+  void
+  StokesImmersedProblem<dim, spacedim>::run()
   {
 #ifdef USE_PETSC_LA
     pcout << "Running using PETSc." << std::endl;
 #else
     pcout << "Running using Trilinos." << std::endl;
 #endif
-    const unsigned int n_cycles = 5;
+    const unsigned int n_cycles = 2;
     for (unsigned int cycle = 0; cycle < n_cycles; ++cycle)
       {
         pcout << "Cycle " << cycle << ':' << std::endl;
 
         if (cycle == 0)
-          make_grid();
+          {
+            make_grid();
+            setup_tracer_particles();
+          }
         else
           refine_grid();
 
@@ -608,6 +724,7 @@ namespace Step70
           {
             TimerOutput::Scope t(computing_timer, "output");
             output_results(cycle);
+            output_particles(cycle);
           }
 
         computing_timer.print_summary();
@@ -620,7 +737,8 @@ namespace Step70
 
 
 
-int main(int argc, char *argv[])
+int
+main(int argc, char *argv[])
 {
   try
     {
@@ -632,7 +750,7 @@ int main(int argc, char *argv[])
       StokesImmersedProblemParameters par;
       par.initialize("parameters.prm", "used_parameters.prm");
 
-      StokesImmersedProblem<2> problem(par);
+      StokesImmersedProblem<3> problem(par);
       problem.run();
     }
   catch (std::exception &exc)
