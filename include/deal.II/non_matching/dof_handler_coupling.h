@@ -331,6 +331,96 @@ namespace NonMatching
       bool                   reuse_internal_data_structures,
       const Quadrature<dim> &quadrature = Quadrature<dim>()) const;
 
+    void
+    set_quadrature_particles_positions(
+      const std::vector<Tensor<1, spacedim>> &positions_vector) const
+    {
+      // There should be a position per per local particles
+      AssertDimension(positions_vector.size(),
+                      quadrature_particle_handler->n_local_particles());
+
+      unsigned int i = 0;
+      for (auto it = quadrature_particle_handler->begin();
+           it != quadrature_particle_handler->end();
+           ++it, ++i)
+        {
+          it->set_location(positions_vector[i]);
+        }
+      quadrature_particle_handler->sort_particles_into_subdomains_and_cells();
+    }
+
+    /**
+     * Displace the particles of the quadrature_particle_handler using a
+     * vector of Tensor<1,spacedim> of size
+     * quadrature_particle_handler.n_local_particles()
+     */
+    void
+    set_particles_positions(
+      const std::vector<Tensor<1, spacedim>> &positions_vector) const
+    {
+      // There should be a position per per local particles
+      AssertDimension(positions_vector.size(),
+                      particle_handler->n_local_particles());
+
+      unsigned int i = 0;
+      for (auto it = particle_handler->begin(); it != particle_handler->end();
+           ++it, ++i)
+        {
+          it->set_location(positions_vector[i]);
+        }
+      particle_handler->sort_particles_into_subdomains_and_cells();
+    }
+
+    /**
+     * Displace the particles of the quadrature particle_handler using a
+     * function
+     */
+    void
+    set_quadrature_particles_positions(const Function<spacedim> &function) const
+    {
+      // The function should have sufficient components to displace the
+      // particles
+      AssertDimension(function.n_components, spacedim);
+
+      Point<spacedim> new_position;
+
+      for (auto it = quadrature_particle_handler->begin();
+           it != quadrature_particle_handler->end();
+           ++it)
+        {
+          const Point<spacedim> part_loc = it->get_location();
+          for (unsigned int i = 0; i < spacedim; ++i)
+            new_position[i] = function.value(part_loc, i);
+          it->set_location(new_position);
+        }
+
+      quadrature_particle_handler->sort_particles_into_subdomains_and_cells();
+    }
+
+    /**
+     * Displace the particles of the particle_handler using a
+     * function
+     */
+    void
+    set_particles_positions(const Function<spacedim> &function) const
+    {
+      // The function should have sufficient components to displace the
+      // particles
+      AssertDimension(function.n_components, spacedim);
+
+      Point<spacedim> new_position;
+
+      for (auto it = particle_handler->begin(); it != particle_handler->end();
+           ++it)
+        {
+          const Point<spacedim> part_loc = it->get_location();
+          for (unsigned int i = 0; i < spacedim; ++i)
+            new_position[i] = function.value(part_loc, i);
+          it->set_location(new_position);
+        }
+
+      particle_handler->sort_particles_into_subdomains_and_cells();
+    }
 
 
   private:
