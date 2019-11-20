@@ -26,7 +26,7 @@
 #include <deal.II/lac/linear_operator.h>
 #include <deal.II/lac/linear_operator_tools.h>
 
-// #define FORCE_USE_OF_TRILINOS
+#define FORCE_USE_OF_TRILINOS
 
 namespace LA
 {
