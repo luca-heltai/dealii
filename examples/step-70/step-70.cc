@@ -101,7 +101,7 @@ namespace Step70
   public:
     StokesImmersedProblemParameters()
       : ParameterAcceptor("Stokes Immersed Problem/")
-      , rhs("Right hand side", spacedim)
+      , rhs("Right hand side", spacedim + 1)
       , angular_velocity("Angular velocity", spacedim)
     {
       add_parameter("Velocity degree",
@@ -126,10 +126,6 @@ namespace Step70
         "Particle insertion refinement",
         particle_insertion_refinement,
         "Refinement of the volumetric mesh used to insert the particles");
-
-      add_parameter("Particle insertion radius",
-                    particle_insertion_radius,
-                    "Radius of the ball used to insert the particles");
 
       add_parameter(
         "Homogeneous Dirichlet boundary ids",
@@ -156,7 +152,7 @@ namespace Step70
       // correct the default dimension for the functions
       rhs.declare_parameters_call_back.connect([&]() {
         Functions::ParsedFunction<spacedim>::declare_parameters(this->prm,
-                                                                spacedim);
+                                                                spacedim + 1);
       });
       angular_velocity.declare_parameters_call_back.connect([&]() {
         Functions::ParsedFunction<spacedim>::declare_parameters(this->prm,
@@ -164,7 +160,8 @@ namespace Step70
       });
     }
 
-    void set_time(const double &time)
+    void
+    set_time(const double &time)
     {
       rhs.set_time(time);
       angular_velocity.set_time(time);
@@ -176,7 +173,6 @@ namespace Step70
     unsigned int                  initial_fluid_refinement      = 3;
     unsigned int                  initial_solid_refinement      = 3;
     unsigned int                  particle_insertion_refinement = 1;
-    double                        particle_insertion_radius     = 0.1;
     std::list<types::boundary_id> homogeneous_dirichlet_ids{0, 1, 2, 3};
     std::string                   name_of_grid1       = "hyper_cube";
     std::string                   arguments_for_grid1 = "-1: 1: true";
@@ -197,12 +193,50 @@ namespace Step70
   class SolidVelocity : public Function<spacedim>
   {
   public:
-    SolidVelocity(const Function<spacedim> &angular_velocity)
+    SolidVelocity(const Functions::ParsedFunction<spacedim> &angular_velocity)
       : angular_velocity(angular_velocity)
     {}
 
-    virtual double value(const Point<spacedim> &p,
-                         const unsigned int     component = 0)
+    virtual double
+    value(const Point<spacedim> &p, unsigned int component = 0) const
+    {
+      Tensor<1, spacedim> velocity;
+      if (spacedim == 3)
+        {
+          Tensor<1, spacedim> omega;
+          for (unsigned int i = 0; i < spacedim; ++i)
+            omega[i] = angular_velocity.value(p, i);
+
+          velocity = cross_product_3d(p, omega);
+        }
+
+      if (spacedim == 2)
+        {
+          double omega = angular_velocity.value(p, 0);
+
+          velocity[0] = -omega * p[1];
+          velocity[1] = omega * p[0];
+        }
+
+      return velocity[component];
+    }
+
+  private:
+    const Functions::ParsedFunction<spacedim> &angular_velocity;
+  };
+
+
+  template <int spacedim>
+  class SolidDisplacement : public Function<spacedim>
+  {
+  public:
+    SolidDisplacement(
+      const Functions::ParsedFunction<spacedim> &angular_velocity)
+      : angular_velocity(angular_velocity)
+    {}
+
+    virtual double
+    value(const Point<spacedim> &p, unsigned int component = 0) const
     {
       Tensor<1, spacedim> velocity;
       if (spacedim == 3)
@@ -218,7 +252,7 @@ namespace Step70
     }
 
   private:
-    const Function<spacedim> &angular_velocity;
+    const Functions::ParsedFunction<spacedim> &angular_velocity;
   };
 
   template <int dim, int spacedim = dim>
@@ -228,16 +262,24 @@ namespace Step70
     StokesImmersedProblem(
       const StokesImmersedProblemParameters<dim, spacedim> &par);
 
-    void run();
+    void
+    run();
 
   private:
-    void make_grid();
-    void setup_tracer_particles();
-    void setup_system();
-    void assemble_system();
-    void solve();
-    void refine_grid();
-    void output_results(const unsigned int cycle) const;
+    void
+    make_grid();
+    void
+    setup_tracer_particles();
+    void
+    setup_system();
+    void
+    assemble_system();
+    void
+    solve();
+    void
+    refine_grid();
+    void
+    output_results(const unsigned int cycle) const;
 
     void
     output_particles(const Particles::ParticleHandler<dim, spacedim> &particles,
@@ -313,7 +355,8 @@ namespace Step70
 
 
   template <int dim, int spacedim>
-  void StokesImmersedProblem<dim, spacedim>::make_grid()
+  void
+  StokesImmersedProblem<dim, spacedim>::make_grid()
   {
     GridGenerator::generate_from_name_and_arguments(tria1,
                                                     par.name_of_grid1,
@@ -327,7 +370,8 @@ namespace Step70
   }
 
   template <int dim, int spacedim>
-  void StokesImmersedProblem<dim, spacedim>::setup_tracer_particles()
+  void
+  StokesImmersedProblem<dim, spacedim>::setup_tracer_particles()
   {
     // Generate a triangulation that will be used to decide the position
     // of the particles to insert. In this case we choose an hyper_ball, a
@@ -369,7 +413,8 @@ namespace Step70
   }
 
   template <int dim, int spacedim>
-  void StokesImmersedProblem<dim, spacedim>::setup_system()
+  void
+  StokesImmersedProblem<dim, spacedim>::setup_system()
   {
     TimerOutput::Scope t(computing_timer, "setup");
 
@@ -477,7 +522,8 @@ namespace Step70
 
 
   template <int dim, int spacedim>
-  void StokesImmersedProblem<dim, spacedim>::assemble_system()
+  void
+  StokesImmersedProblem<dim, spacedim>::assemble_system()
   {
     TimerOutput::Scope t(computing_timer, "assembly");
 
@@ -489,7 +535,7 @@ namespace Step70
 
     SolidVelocity<spacedim> solid_velocity(par.angular_velocity);
     dof_coupling->create_nitsche_restriction(quadrature_formula,
-                                             par.angular_velocity,
+                                             solid_velocity,
                                              system_matrix,
                                              system_rhs,
                                              constraints);
@@ -579,7 +625,8 @@ namespace Step70
 
 
   template <int dim, int spacedim>
-  void StokesImmersedProblem<dim, spacedim>::solve()
+  void
+  StokesImmersedProblem<dim, spacedim>::solve()
   {
     TimerOutput::Scope t(computing_timer, "solve");
 
@@ -647,7 +694,8 @@ namespace Step70
 
 
   template <int dim, int spacedim>
-  void StokesImmersedProblem<dim, spacedim>::refine_grid()
+  void
+  StokesImmersedProblem<dim, spacedim>::refine_grid()
   {
     TimerOutput::Scope t(computing_timer, "refine");
 
@@ -657,7 +705,8 @@ namespace Step70
 
 
   template <int dim, int spacedim>
-  void StokesImmersedProblem<dim, spacedim>::output_results(
+  void
+  StokesImmersedProblem<dim, spacedim>::output_results(
     const unsigned int cycle) const
   {
     std::vector<std::string> solution_names(spacedim, "velocity");
@@ -724,7 +773,8 @@ namespace Step70
   }
 
   template <int dim, int spacedim>
-  void StokesImmersedProblem<dim, spacedim>::output_particles(
+  void
+  StokesImmersedProblem<dim, spacedim>::output_particles(
     const Particles::ParticleHandler<dim, spacedim> &particles,
     std::string                                      fprefix,
     const unsigned int                               iter) const
@@ -732,7 +782,7 @@ namespace Step70
     Particles::ParticleOutput<dim, spacedim> particles_out;
     particles_out.build_patches(particles);
     const std::string filename =
-      ("particles-" + Utilities::int_to_string(iter, 2) + "." +
+      (fprefix + Utilities::int_to_string(iter, 2) + "." +
        Utilities::int_to_string(tria1.locally_owned_subdomain(), 4));
     std::ofstream output((filename + ".vtu"));
     particles_out.write_vtu(output);
@@ -743,18 +793,19 @@ namespace Step70
         for (unsigned int i = 0;
              i < Utilities::MPI::n_mpi_processes(mpi_communicator);
              ++i)
-          filenames.push_back("particles-" + Utilities::int_to_string(iter, 2) +
+          filenames.push_back(fprefix + Utilities::int_to_string(iter, 2) +
                               "." + Utilities::int_to_string(i, 4) + ".vtu");
 
         std::ofstream master_output(
-          "particles-" + Utilities::int_to_string(iter, 2) + ".pvtu");
+          fprefix + Utilities::int_to_string(iter, 2) + ".pvtu");
         particles_out.write_pvtu_record(master_output, filenames);
       }
   }
 
 
   template <int dim, int spacedim>
-  void StokesImmersedProblem<dim, spacedim>::run()
+  void
+  StokesImmersedProblem<dim, spacedim>::run()
   {
 #ifdef USE_PETSC_LA
     pcout << "Running using PETSc." << std::endl;
@@ -803,7 +854,8 @@ namespace Step70
 
 
 
-int main(int argc, char *argv[])
+int
+main(int argc, char *argv[])
 {
   using namespace Step70;
   using namespace dealii;
@@ -812,10 +864,10 @@ int main(int argc, char *argv[])
     {
       Utilities::MPI::MPI_InitFinalize mpi_initialization(argc, argv, 1);
 
-      StokesImmersedProblemParameters<3> par;
+      StokesImmersedProblemParameters<2> par;
       ParameterAcceptor::initialize("parameters.prm", "used_parameters.prm");
 
-      StokesImmersedProblem<3> problem(par);
+      StokesImmersedProblem<2> problem(par);
       problem.run();
     }
   catch (std::exception &exc)
