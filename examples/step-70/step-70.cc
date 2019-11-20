@@ -94,6 +94,7 @@ namespace Step70
 {
   using namespace dealii;
 
+  template <int dim, int spacedim = dim>
   class StokesImmersedProblemParameters : public ParameterAcceptor
   {
   public:
@@ -143,36 +144,33 @@ namespace Step70
     unsigned int                  particle_insertion_refinement = 1;
     double                        particle_insertion_radius     = 0.1;
     std::list<types::boundary_id> homogeneous_dirichlet_ids{0, 1, 2, 3};
+    std::string                   name_of_grid1       = "hyper_cube";
+    std::string                   arguments_for_grid1 = "-1: 1: true";
+    std::string                   name_of_grid2       = "hyper_rectangle";
+    std::string                   arguments_for_grid2 =
+      dim == 2 ? "-.5, -.1: .5, .1: false" : "-.5, -.1, -.1: .5, .1, .1: false";
   };
 
   template <int dim, int spacedim = dim>
   class StokesImmersedProblem
   {
   public:
-    StokesImmersedProblem(const StokesImmersedProblemParameters &par);
+    StokesImmersedProblem(
+      const StokesImmersedProblemParameters<dim, spacedim> &par);
 
-    void
-    run();
+    void run();
 
   private:
-    void
-    make_grid();
-    void
-    setup_tracer_particles();
-    void
-    setup_system();
-    void
-    assemble_system();
-    void
-    solve();
-    void
-    refine_grid();
-    void
-    output_results(const unsigned int cycle) const;
-    void
-    output_particles(const unsigned int iter) const;
+    void make_grid();
+    void setup_tracer_particles();
+    void setup_system();
+    void assemble_system();
+    void solve();
+    void refine_grid();
+    void output_results(const unsigned int cycle) const;
+    void output_particles(const unsigned int iter) const;
 
-    const StokesImmersedProblemParameters &par;
+    const StokesImmersedProblemParameters<dim, spacedim> &par;
 
     MPI_Comm mpi_communicator;
 
@@ -215,7 +213,7 @@ namespace Step70
 
   template <int dim, int spacedim>
   StokesImmersedProblem<dim, spacedim>::StokesImmersedProblem(
-    const StokesImmersedProblemParameters &par)
+    const StokesImmersedProblemParameters<dim, spacedim> &par)
     : par(par)
     , mpi_communicator(MPI_COMM_WORLD)
     , tria1(mpi_communicator,
@@ -238,31 +236,21 @@ namespace Step70
 
 
   template <int dim, int spacedim>
-  void
-  StokesImmersedProblem<dim, spacedim>::make_grid()
+  void StokesImmersedProblem<dim, spacedim>::make_grid()
   {
-    GridGenerator::hyper_cube(tria1, -1, 1);
+    GridGenerator::generate_from_name_and_arguments(tria1,
+                                                    par.name_of_grid1,
+                                                    par.arguments_for_grid1);
     tria1.refine_global(par.initial_fluid_refinement);
 
-    std::vector<Point<spacedim>> pts_rectangle;
-    if (spacedim == 2)
-      {
-        pts_rectangle.emplace_back(Point<spacedim>(-0.1, -0.1));
-        pts_rectangle.emplace_back(Point<spacedim>(0.1, 0.1));
-      }
-    else if (spacedim == 3)
-      {
-        pts_rectangle.emplace_back(Point<spacedim>(-0.1, -0.1, -0.1));
-        pts_rectangle.emplace_back(Point<spacedim>(0.1, 0.1, 0.1));
-      }
-
-    GridGenerator::hyper_rectangle(tria2, pts_rectangle[0], pts_rectangle[1]);
+    GridGenerator::generate_from_name_and_arguments(tria2,
+                                                    par.name_of_grid2,
+                                                    par.arguments_for_grid2);
     tria2.refine_global(par.initial_solid_refinement);
   }
 
   template <int dim, int spacedim>
-  void
-  StokesImmersedProblem<dim, spacedim>::setup_tracer_particles()
+  void StokesImmersedProblem<dim, spacedim>::setup_tracer_particles()
   {
     // Generate a triangulation that will be used to decide the position
     // of the particles to insert. In this case we choose an hyper_ball, a
@@ -311,8 +299,7 @@ namespace Step70
   }
 
   template <int dim, int spacedim>
-  void
-  StokesImmersedProblem<dim, spacedim>::setup_system()
+  void StokesImmersedProblem<dim, spacedim>::setup_system()
   {
     TimerOutput::Scope t(computing_timer, "setup");
 
@@ -419,8 +406,7 @@ namespace Step70
 
 
   template <int dim, int spacedim>
-  void
-  StokesImmersedProblem<dim, spacedim>::assemble_system()
+  void StokesImmersedProblem<dim, spacedim>::assemble_system()
   {
     TimerOutput::Scope t(computing_timer, "assembly");
 
@@ -516,8 +502,7 @@ namespace Step70
 
 
   template <int dim, int spacedim>
-  void
-  StokesImmersedProblem<dim, spacedim>::solve()
+  void StokesImmersedProblem<dim, spacedim>::solve()
   {
     TimerOutput::Scope t(computing_timer, "solve");
 
@@ -585,8 +570,7 @@ namespace Step70
 
 
   template <int dim, int spacedim>
-  void
-  StokesImmersedProblem<dim, spacedim>::refine_grid()
+  void StokesImmersedProblem<dim, spacedim>::refine_grid()
   {
     TimerOutput::Scope t(computing_timer, "refine");
 
@@ -596,8 +580,7 @@ namespace Step70
 
 
   template <int dim, int spacedim>
-  void
-  StokesImmersedProblem<dim, spacedim>::output_results(
+  void StokesImmersedProblem<dim, spacedim>::output_results(
     const unsigned int cycle) const
   {
     std::vector<std::string> solution_names(spacedim, "velocity");
@@ -665,8 +648,7 @@ namespace Step70
 
 
   template <int dim, int spacedim>
-  void
-  StokesImmersedProblem<dim, spacedim>::output_particles(
+  void StokesImmersedProblem<dim, spacedim>::output_particles(
     const unsigned int iter) const
   {
     Particles::ParticleOutput<dim, spacedim> particles_out;
@@ -694,8 +676,7 @@ namespace Step70
 
 
   template <int dim, int spacedim>
-  void
-  StokesImmersedProblem<dim, spacedim>::run()
+  void StokesImmersedProblem<dim, spacedim>::run()
   {
 #ifdef USE_PETSC_LA
     pcout << "Running using PETSc." << std::endl;
@@ -737,8 +718,7 @@ namespace Step70
 
 
 
-int
-main(int argc, char *argv[])
+int main(int argc, char *argv[])
 {
   try
     {
@@ -747,7 +727,7 @@ main(int argc, char *argv[])
 
       Utilities::MPI::MPI_InitFinalize mpi_initialization(argc, argv, 1);
 
-      StokesImmersedProblemParameters par;
+      StokesImmersedProblemParameters<3> par;
       par.initialize("parameters.prm", "used_parameters.prm");
 
       StokesImmersedProblem<3> problem(par);
