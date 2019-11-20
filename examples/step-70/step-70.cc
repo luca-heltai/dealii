@@ -22,8 +22,11 @@
 #include <deal.II/base/timer.h>
 
 #include <deal.II/lac/generic_linear_algebra.h>
+#include <deal.II/lac/linear_operator.h>
+#include <deal.II/lac/block_linear_operator.h>
+#include <deal.II/lac/linear_operator_tools.h>
 
-/* #define FORCE_USE_OF_TRILINOS */
+// #define FORCE_USE_OF_TRILINOS
 
 namespace LA
 {
@@ -114,6 +117,8 @@ namespace Step70
 
       add_parameter("Viscosity", viscosity);
 
+      add_parameter("Nitsche penalty term", penalty_term);
+
       add_parameter("Initial fluid refinement",
                     initial_fluid_refinement,
                     "Initial mesh refinement used for the fluid domain Omega");
@@ -172,9 +177,10 @@ namespace Step70
     unsigned int                  initial_fluid_refinement      = 3;
     unsigned int                  initial_solid_refinement      = 3;
     unsigned int                  particle_insertion_refinement = 1;
+    double                        penalty_term                  = 1e3;
     std::list<types::boundary_id> homogeneous_dirichlet_ids{0, 1, 2, 3};
     std::string                   name_of_grid1       = "hyper_cube";
-    std::string                   arguments_for_grid1 = "-1: 1: true";
+    std::string                   arguments_for_grid1 = "-1: 1: false";
     std::string                   name_of_grid2       = "hyper_rectangle";
     std::string                   arguments_for_grid2 =
       dim == 2 ? "-.5, -.1: .5, .1: false" : "-.5, -.1, -.1: .5, .1, .1: false";
@@ -523,6 +529,7 @@ namespace Step70
     SolidVelocity<spacedim> solid_velocity(par.angular_velocity);
     dof_coupling->create_nitsche_restriction(quadrature_formula,
                                              solid_velocity,
+                                             par.penalty_term,
                                              system_matrix,
                                              system_rhs,
                                              constraints);
@@ -647,6 +654,26 @@ namespace Step70
     //                                                     mp_inverse_t>
     //      preconditioner(prec_A, mp_inverse);
 
+    const auto A = linear_operator<LA::MPI::Vector>(system_matrix.block(0, 0));
+    const auto amgA = linear_operator(A, prec_A);
+
+    const auto S = linear_operator<LA::MPI::Vector>(system_matrix.block(1, 1));
+    const auto amgS = linear_operator(S, prec_S);
+
+    const auto P =
+      block_diagonal_operator<2, LA::MPI::BlockVector>({amgA, amgS});
+
+    //    auto blockMatrix =
+    //    block_operator<LA::MPI::BlockVector>(system_matrix);
+
+    //    blockMatrix.block(0, 0) = amgA;
+    //    blockMatrix.block(1, 1) = amgS;
+
+    //    auto P = block_diagonal_operator<LA::MPI::BlockVector>(blockMatrix);
+
+    // const auto P = block_diagonal_operator<LA::MPI::BlockVector>({amgA,
+    // amgS});
+
     SolverControl solver_control(system_matrix.m(),
                                  1e-10 * system_rhs.l2_norm());
 
@@ -656,11 +683,8 @@ namespace Step70
 
     constraints.set_zero(distributed_solution);
 
-    solver.solve(system_matrix,
-                 distributed_solution,
-                 system_rhs,
-                 PreconditionIdentity());
-    // preconditioner);
+    solver.solve(system_matrix, distributed_solution, system_rhs, P);
+
 
     pcout << "   Solved in " << solver_control.last_step() << " iterations."
           << std::endl;
