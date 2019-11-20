@@ -686,22 +686,19 @@ namespace Step70
     const auto A = linear_operator<LA::MPI::Vector>(system_matrix.block(0, 0));
     const auto amgA = linear_operator(A, prec_A);
 
-    const auto S = linear_operator<LA::MPI::Vector>(system_matrix.block(1, 1));
+    const auto S =
+      linear_operator<LA::MPI::Vector>(preconditioner_matrix.block(1, 1));
     const auto amgS = linear_operator(S, prec_S);
+
+    ReductionControl          inner_solver_control(10,
+                                          1e-8 * system_rhs.l2_norm(),
+                                          1.e-2);
+    SolverCG<LA::MPI::Vector> cg(inner_solver_control);
+
+    const auto invS = inverse_operator(S, cg, amgS);
 
     const auto P =
       block_diagonal_operator<2, LA::MPI::BlockVector>({amgA, amgS});
-
-    //    auto blockMatrix =
-    //    block_operator<LA::MPI::BlockVector>(system_matrix);
-
-    //    blockMatrix.block(0, 0) = amgA;
-    //    blockMatrix.block(1, 1) = amgS;
-
-    //    auto P = block_diagonal_operator<LA::MPI::BlockVector>(blockMatrix);
-
-    // const auto P = block_diagonal_operator<LA::MPI::BlockVector>({amgA,
-    // amgS});
 
     SolverControl solver_control(system_matrix.m(),
                                  1e-10 * system_rhs.l2_norm());
