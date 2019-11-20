@@ -139,7 +139,7 @@ namespace NonMatching
 
 
     using CellsAndQuadratureIterator = typename std::vector<
-      std::pair<typename DoFHandler<spacedim>::iterator,
+      std::pair<typename DoFHandler<spacedim>::cell_iterator,
                 ImmersedSurfaceQuadrature<spacedim>>>::iterator;
 
     /**
@@ -245,13 +245,13 @@ namespace NonMatching
      * @param[in] constraints
      * @param[in] reuse_internal_data_structures
      */
-    template <class Matrix, class Vector, typename number = double>
+    template <class MatrixType, class VectorType, typename number = double>
     void
     create_nitsche_restriction(
       const Quadrature<dim> &          quadrature,
       const Function<spacedim> &       rhs_function,
-      Matrix &                         matrix,
-      Vector &                         rhs,
+      MatrixType &                     matrix,
+      VectorType &                     rhs,
       const AffineConstraints<number> &constraints =
         AffineConstraints<number>(),
       const bool reuse_internal_data_structures = false) const
@@ -263,10 +263,10 @@ namespace NonMatching
 
 
       FullMatrix<double> local_matrix(fe1->dofs_per_cell, fe1->dofs_per_cell);
-      Vector<double>     local_rhs(fe1->dofs_per_cell);
+      dealii::Vector<double> local_rhs(fe1->dofs_per_cell);
 
       auto particle = quadrature_particle_handler->begin();
-      while (particle != particle_handler->end())
+      while (particle != quadrature_particle_handler->end())
         {
           local_matrix     = 0;
           local_rhs        = 0;
@@ -275,13 +275,13 @@ namespace NonMatching
             typename DoFHandler<dim, spacedim>::cell_iterator(*cell, dh1);
           dh_cell->get_dof_indices(dof_indices1);
 
-          const auto pic = particle_handler->particles_in_cell(cell);
+          const auto pic = quadrature_particle_handler->particles_in_cell(cell);
 
           for (const auto &p : pic)
             {
-              const auto  ref_q      = p->get_reference_location();
-              const auto  real_q     = p->get_location();
-              const auto  properties = p->get_properties();
+              const auto  ref_q      = p.get_reference_location();
+              const auto  real_q     = p.get_location();
+              const auto  properties = p.get_properties();
               const auto &JxW        = properties[0];
               for (unsigned int i = 0; i < fe1->dofs_per_cell; ++i)
                 {
@@ -297,13 +297,14 @@ namespace NonMatching
                                                   fe1->shape_value(j, ref_q) *
                                                   JxW;
                         }
-                      local_rhs(i) += rhs_function.value(real_q) *
+                      local_rhs(i) += rhs_function.value(real_q, comp_i) *
                                       fe1->shape_value(i, ref_q) * JxW;
                     }
                 }
             }
           constraints.distribute_local_to_global(
-            local_matrix, local_rhs, dof_indices, matrix, rhs);
+            local_matrix, local_rhs, dof_indices1, matrix, rhs);
+          particle = pic.end();
         }
     }
 
@@ -499,14 +500,15 @@ namespace NonMatching
                 quadrature.size() * tr2->n_locally_owned_active_cells());
 
               std::vector<double> properties(
-                tr2->n_locally_owned_active_cells() * n_properties);
+                quadrature.size() * tr2->n_locally_owned_active_cells() *
+                n_properties);
 
               UpdateFlags flags = update_JxW_values | update_quadrature_points;
               if (spacedim > dim)
                 flags |= update_normal_vectors;
               FEValues<dim, spacedim> fe_v(*mapping2, *fe2, quadrature, flags);
 
-              unsigned int i = 0;
+              unsigned int cell_index = 0;
               for (const auto &cell : dh2->active_cell_iterators())
                 if (cell->is_locally_owned())
                   {
@@ -516,21 +518,24 @@ namespace NonMatching
 
                     for (unsigned int q = 0; q < points.size(); ++q)
                       {
-                        quadrature_points_vec[i * points.size() + q] =
+                        quadrature_points_vec[cell_index * points.size() + q] =
                           points[q];
-                        properties[i * n_properties] = JxW[q];
+                        properties[cell_index * n_properties * points.size() +
+                                   q * n_properties] = JxW[q];
                         if (dim < spacedim)
                           for (unsigned int d = 0; d < spacedim; ++d)
                             {
-                              properties[i * n_properties + 1 + d] =
+                              properties[cell_index * n_properties *
+                                           points.size() +
+                                         q * n_properties + 1 + d] =
                                 fe_v.normal_vector(q)[d];
                             }
                       }
+                    ++cell_index;
                   }
               auto cpu_to_index =
-                particle_handler->insert_global_particles(quadrature_points_vec,
-                                                          global_bounding_boxes,
-                                                          properties);
+                quadrature_particle_handler->insert_global_particles(
+                  quadrature_points_vec, global_bounding_boxes, properties);
             }
         }
     }
@@ -556,7 +561,7 @@ namespace NonMatching
     SmartPointer<const GridTools::Cache<spacedim>>      cache1;
     SmartPointer<const GridTools::Cache<dim, spacedim>> cache2;
 
-    std::vector<std::pair<typename DoFHandler<spacedim>::iterator,
+    std::vector<std::pair<typename DoFHandler<spacedim>::cell_iterator,
                           ImmersedSurfaceQuadrature<spacedim>>>
       cells_and_quadratures;
 
