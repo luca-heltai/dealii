@@ -493,11 +493,11 @@ namespace Step70
     const QGauss<spacedim> quadrature_formula(par.velocity_degree + 1);
 
 
-    //    dof_coupling->create_nitsche_restriction(quadrature_formula,
-    //                                            par.angular_velocity,
-    //                                            system_matrix,
-    //                                            system_rhs,
-    //                                            constraints);
+    dof_coupling->create_nitsche_restriction(quadrature_formula,
+                                             par.angular_velocity,
+                                             system_matrix,
+                                             system_rhs,
+                                             constraints);
 
     FEValues<spacedim> fe_values(*fe1,
                                  quadrature_formula,
@@ -785,9 +785,9 @@ namespace Step70
         else
           refine_grid();
 
-        //        dof_coupling =
-        //          std::make_unique<NonMatching::DoFHandlerCoupling<dim,
-        //          spacedim>>(dh1, dh2);
+        dof_coupling =
+          std::make_unique<NonMatching::DoFHandlerCoupling<dim, spacedim>>(dh1,
+                                                                           dh2);
         setup_system();
 
         //        SolidVelocity<spacedim> solid_velocity(&par.angular_velocity);
