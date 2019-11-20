@@ -42,6 +42,7 @@ namespace LA
 #include <deal.II/base/index_set.h>
 #include <deal.II/base/parameter_acceptor.h>
 #include <deal.II/base/utilities.h>
+#include <deal.II/base/parsed_function.h>
 
 #include <deal.II/distributed/grid_refinement.h>
 #include <deal.II/distributed/tria.h>
@@ -99,7 +100,9 @@ namespace Step70
   {
   public:
     StokesImmersedProblemParameters()
-      : ParameterAcceptor("Stokes Immersed Problem")
+      : ParameterAcceptor("Stokes Immersed Problem/")
+      , rhs("Right hand side", spacedim)
+      , angular_velocity("Angular velocity", spacedim)
     {
       add_parameter("Velocity degree",
                     velocity_degree,
@@ -125,22 +128,38 @@ namespace Step70
                     particle_insertion_radius,
                     "Radius of the ball used to insert the particles");
 
-
-      add_parameter("Angular velocity",
-                    angular_velocity,
-                    "Angular velocity (dtheta#/dt in rad/s");
-
       add_parameter(
         "Homogeneous Dirichlet boundary ids",
         homogeneous_dirichlet_ids,
         "Boundary Ids over which homogeneous Dirichlet boundary conditions are applied");
+
+      enter_my_subsection(this->prm);
+      this->prm.enter_subsection("Grid generation");
+      this->prm.add_parameter("Grid one generator", name_of_grid1);
+      this->prm.add_parameter("Grid one generator arguments",
+                              arguments_for_grid1);
+
+      this->prm.add_parameter("Grid two generator", name_of_grid2);
+      this->prm.add_parameter("Grid two generator arguments",
+                              arguments_for_grid2);
+      this->prm.leave_subsection();
+      leave_my_subsection(this->prm);
+
+      // correct the default dimension for the functions
+      rhs.declare_parameters_call_back.connect([&]() {
+        Functions::ParsedFunction<spacedim>::declare_parameters(this->prm,
+                                                                spacedim);
+      });
+      angular_velocity.declare_parameters_call_back.connect([&]() {
+        Functions::ParsedFunction<spacedim>::declare_parameters(this->prm,
+                                                                spacedim);
+      });
     }
 
     unsigned int                  velocity_degree               = 2;
     double                        viscosity                     = 1.0;
     unsigned int                  initial_fluid_refinement      = 3;
     unsigned int                  initial_solid_refinement      = 3;
-    double                        angular_velocity              = 2. * M_PI;
     unsigned int                  particle_insertion_refinement = 1;
     double                        particle_insertion_radius     = 0.1;
     std::list<types::boundary_id> homogeneous_dirichlet_ids{0, 1, 2, 3};
@@ -149,7 +168,11 @@ namespace Step70
     std::string                   name_of_grid2       = "hyper_rectangle";
     std::string                   arguments_for_grid2 =
       dim == 2 ? "-.5, -.1: .5, .1: false" : "-.5, -.1, -.1: .5, .1, .1: false";
-  };
+
+    ParameterAcceptorProxy<Functions::ParsedFunction<spacedim>> rhs;
+    ParameterAcceptorProxy<Functions::ParsedFunction<spacedim>>
+      angular_velocity;
+  }; // namespace Step70
 
   template <int dim, int spacedim = dim>
   class StokesImmersedProblem
@@ -728,7 +751,7 @@ int main(int argc, char *argv[])
       Utilities::MPI::MPI_InitFinalize mpi_initialization(argc, argv, 1);
 
       StokesImmersedProblemParameters<3> par;
-      par.initialize("parameters.prm", "used_parameters.prm");
+      ParameterAcceptor::initialize("parameters.prm", "used_parameters.prm");
 
       StokesImmersedProblem<3> problem(par);
       problem.run();
