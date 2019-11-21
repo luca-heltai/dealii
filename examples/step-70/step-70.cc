@@ -331,6 +331,7 @@ namespace Step70
     LA::MPI::BlockSparseMatrix coupling_matrix;
 
     LA::MPI::BlockSparseMatrix preconditioner_matrix;
+    LA::MPI::BlockVector       solution;
     LA::MPI::BlockVector       locally_relevant_solution;
     LA::MPI::BlockVector       system_rhs;
 
@@ -342,8 +343,8 @@ namespace Step70
 
     Particles::ParticleHandler<dim, spacedim> tracer_particle_handler;
 
-    ConditionalOStream pcout;
-    TimerOutput        computing_timer;
+    ConditionalOStream  pcout;
+    mutable TimerOutput computing_timer;
   };
 
 
@@ -538,6 +539,7 @@ namespace Step70
 
     locally_relevant_solution.reinit(owned1, relevant1, mpi_communicator);
     system_rhs.reinit(owned1, mpi_communicator);
+    solution.reinit(owned1, mpi_communicator);
   }
 
 
@@ -709,26 +711,24 @@ namespace Step70
 
     SolverMinRes<LA::MPI::BlockVector> solver(solver_control);
 
-    LA::MPI::BlockVector distributed_solution(owned1, mpi_communicator);
+    constraints.set_zero(solution);
 
-    constraints.set_zero(distributed_solution);
-
-    solver.solve(system_matrix, distributed_solution, system_rhs, P);
+    solver.solve(system_matrix, solution, system_rhs, P);
 
 
     pcout << "   Solved in " << solver_control.last_step() << " iterations."
           << std::endl;
 
-    constraints.distribute(distributed_solution);
+    constraints.distribute(solution);
 
-    locally_relevant_solution = distributed_solution;
+    locally_relevant_solution = solution;
     const double mean_pressure =
       VectorTools::compute_mean_value(dh1,
                                       QGauss<spacedim>(par.velocity_degree + 2),
                                       locally_relevant_solution,
                                       spacedim);
-    distributed_solution.block(1).add(-mean_pressure);
-    locally_relevant_solution.block(1) = distributed_solution.block(1);
+    solution.block(1).add(-mean_pressure);
+    locally_relevant_solution.block(1) = solution.block(1);
   }
 
 
@@ -747,6 +747,7 @@ namespace Step70
   void StokesImmersedProblem<dim, spacedim>::output_results(
     const unsigned int cycle) const
   {
+    TimerOutput::Scope       t(computing_timer, "Output fluid");
     std::vector<std::string> solution_names(spacedim, "velocity");
     solution_names.emplace_back("pressure");
     std::vector<DataComponentInterpretation::DataComponentInterpretation>
@@ -874,45 +875,55 @@ namespace Step70
           }
         else
           {
+            TimerOutput::Scope t(computing_timer,
+                                 "Set solid particle position");
+
             SolidDisplacement<spacedim> solid_displacement(par.angular_velocity,
                                                            time_step);
-            dof_coupling->set_quadrature_particles_positions(
-              solid_displacement);
+            dof_coupling->set_quadrature_particles_positions(solid_displacement,
+                                                             false);
           }
+        {
+          TimerOutput::Scope t(computing_timer, "Set tracer particle motion");
+          Particles::Utilities::interpolate_field_on_particles(
+            dh1,
+            tracer_particle_handler,
+            locally_relevant_solution,
+            tracer_particle_velocities,
+            velocity_mask);
 
-        Particles::Utilities::interpolate_field_on_particles(
-          dh1,
-          tracer_particle_handler,
-          locally_relevant_solution,
-          tracer_particle_velocities,
-          velocity_mask);
+          tracer_particle_velocities *= time_step;
 
-        tracer_particle_velocities *= time_step;
+          relevant_tracer_particles =
+            Particles::Utilities::locally_relevant_ids(tracer_particle_handler,
+                                                       spacedim);
 
-        relevant_tracer_particles =
-          Particles::Utilities::locally_relevant_ids(tracer_particle_handler,
-                                                     spacedim);
+          relevant_tracer_particle_displacements.reinit(
+            owned_tracer_particles,
+            relevant_tracer_particles,
+            mpi_communicator);
 
-        relevant_tracer_particle_displacements.reinit(owned_tracer_particles,
-                                                      relevant_tracer_particles,
-                                                      mpi_communicator);
+          relevant_tracer_particle_displacements = tracer_particle_velocities;
 
-        relevant_tracer_particle_displacements = tracer_particle_velocities;
-
-        Particles::Utilities::set_particle_positions(
-          relevant_tracer_particle_displacements, tracer_particle_handler);
-
+          Particles::Utilities::set_particle_positions(
+            relevant_tracer_particle_displacements, tracer_particle_handler);
+        }
         assemble_system(cycle);
         solve();
 
         if (Utilities::MPI::n_mpi_processes(mpi_communicator) <= 32)
           {
-            TimerOutput::Scope t(computing_timer, "output");
             output_results(cycle);
-            output_particles(tracer_particle_handler, "particles", cycle);
-            output_particles(dof_coupling->get_quadrature_particle_handler(),
-                             "solid",
-                             cycle);
+            {
+              TimerOutput::Scope t(computing_timer, "Output tracer particles");
+              output_particles(tracer_particle_handler, "particles", cycle);
+            }
+            {
+              TimerOutput::Scope t(computing_timer, "Output solid particles");
+              output_particles(dof_coupling->get_quadrature_particle_handler(),
+                               "solid",
+                               cycle);
+            }
           }
 
         computing_timer.print_summary();
