@@ -167,7 +167,7 @@ namespace Step70
       });
     }
 
-    void set_time(const double &time)
+    void set_time(const double &time) const
     {
       rhs.set_time(time);
       angular_velocity.set_time(time);
@@ -191,8 +191,8 @@ namespace Step70
     std::string arguments_for_particle_grid =
       dim == 2 ? "0.3, 0.3: 0.1: false" : "0.3, 0.3, 0.3 : 0.1: false";
 
-    ParameterAcceptorProxy<Functions::ParsedFunction<spacedim>> rhs;
-    ParameterAcceptorProxy<Functions::ParsedFunction<spacedim>>
+    mutable ParameterAcceptorProxy<Functions::ParsedFunction<spacedim>> rhs;
+    mutable ParameterAcceptorProxy<Functions::ParsedFunction<spacedim>>
       angular_velocity;
   }; // namespace Step70
 
