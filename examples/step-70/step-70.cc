@@ -859,6 +859,7 @@ namespace Step70
     for (unsigned int cycle = 0; cycle < par.number_of_time_steps;
          ++cycle, time += time_step)
       {
+        par.set_time(time);
         pcout << "Cycle " << cycle << ':' << std::endl
               << "Time : " << time << ", time step: " << time_step << std::endl;
 
