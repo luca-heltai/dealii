@@ -18,6 +18,7 @@
 
 #include <deal.II/base/config.h>
 
+#include <deal.II/base/index_set.h>
 #include <deal.II/base/point.h>
 #include <deal.II/base/quadrature.h>
 
@@ -45,6 +46,40 @@ namespace Particles
    */
   namespace Utilities
   {
+    /**
+     * Extract an IndexSet with global dimensions equal to
+     * `n_comps*particles.get_next_free_particle_index()`, containing for each
+     * particle index, a set of `n_comps*` consecutive indices associated to
+     * the particles that are locally owned.
+     *
+     * The indices associated to a particle with global index `n` will be the
+     * half open range `[n_comps*n`, n_comps*(n+1))`.
+     *
+     * This function can be used to construct distributed vectors and matrices
+     * to manipulate particles using linear algebra operations.
+     *
+     * Notice that it is the user's responsability to guarantee that particle
+     * indices are unique, and no check is performed to verify that this is the
+     * case, nor that the union of all IndexSet objects on each mpi process is
+     * complete.
+     *
+     * @param particles A ParticleHandler object.
+     * @param n_comps Number of components to associate to each particle index.
+     * @return An IndexSet, containing all locally relevant
+     *
+     * @author Luca Heltai, Bruno Blais, 2019.
+     */
+    template <int dim, int spacedim>
+    IndexSet
+    locally_relevant_ids(const ParticleHandler<dim, spacedim> &particles,
+                         const unsigned int                    n_comps = 1)
+    {
+      IndexSet set(particles.get_next_free_particle_index() * n_comps);
+      for (const auto p : particles)
+        set.add_range(p.get_id() * n_comps, p.get_id() * n_comps + n_comps);
+      return set;
+    }
+
     /**
      * Create a interpolation sparsity pattern for particles.
      *
