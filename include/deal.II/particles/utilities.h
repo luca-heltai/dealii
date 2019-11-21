@@ -75,9 +75,103 @@ namespace Particles
                          const unsigned int                    n_comps = 1)
     {
       IndexSet set(particles.get_next_free_particle_index() * n_comps);
-      for (const auto p : particles)
+      for (const auto &p : particles)
         set.add_range(p.get_id() * n_comps, p.get_id() * n_comps + n_comps);
       return set;
+    }
+
+    /**
+     * Set the position of the particles in the @p particle_handler by using
+     * the values contained in the vector @p input_vector.
+     *
+     * The vector @p input_vector should have read access to the indices
+     * extracted with Particles::Utilities::locally_relevant_ids() with second
+     * argument equal to `spacedim`.
+     *
+     * If the argument @p displace_particles is set to false, then the new
+     * position is computed by setting it to the values contained in
+     * @p input_vector. By default, the particles are displaced of the
+     * amount contained in the @p input_vector.
+     *
+     * After setting the new position, this function calls internally the method
+     * ParticleHandler::sort_particles_into_subdomains_and_cells(). You should
+     * make sure you satisfy the requirements of that function.
+     *
+     * @param[in] input_vector A parallel distributed vector containing
+     * the displacement to apply to each particle, or their new absolute
+     * position.
+     *
+     * @param[out] particle_handler A ParticleHandler object.
+     *
+     * @param[in] displace_particles Control if the @p input_vector should
+     * be interpreted as a displacement vector, or a vector of absolute
+     * positions.
+     *
+     * @author Luca Heltai, Bruno Blais, 2019.
+     */
+    template <int dim, int spacedim, class VectorType>
+    void
+    set_particle_positions(const VectorType &              input_vector,
+                           ParticleHandler<dim, spacedim> &particle_handler,
+                           const bool displace_particles = true)
+    {
+      AssertDimension(input_vector.size(),
+                      particle_handler.get_next_free_particle_index() *
+                        spacedim);
+      for (auto &p : particle_handler)
+        {
+          const auto &point     = p.get_location();
+          auto        new_point = point * (displace_particles ? 1.0 : 0.0);
+          const auto  id        = p.get_id();
+          for (unsigned int i = 0; i < spacedim; ++i)
+            new_point[i] += input_vector[id * spacedim + i];
+          p.set_location(new_point);
+        }
+      particle_handler.sort_particles_into_subdomains_and_cells();
+    }
+
+    /**
+     * Read the position of the particles in the @p particle_handler and store
+     * them into the distributed vector @p output_vector. By default the
+     * @p output_vector is overwritten by this operation, but you can add to
+     * its entries by setting @p add_to_output_vector to `true`.
+     *
+     * @param[in] particle_handler A ParticleHandler object.
+     *
+     * @param[out] output_vector A parallel distributed vector containing
+     * the positions of the particles, or updated with the positions of the
+     * particles.
+     *
+     * @param[in] add_to_output_vector Control if the function should set the
+     * entries of the @p output_vector or if should add to them.
+     *
+     * @author Luca Heltai, Bruno Blais, 2019.
+     */
+    template <int dim, int spacedim, class VectorType>
+    void
+    get_particle_positions(
+      const ParticleHandler<dim, spacedim> &particle_handler,
+      VectorType &                          output_vector,
+      const bool                            add_to_output_vector = false)
+    {
+      AssertDimension(output_vector.size(),
+                      particle_handler.get_next_free_particle_index() *
+                        spacedim);
+      for (const auto &p : particle_handler)
+        {
+          auto &     point = p.get_location();
+          const auto id    = p.get_id();
+          if (add_to_output_vector)
+            for (unsigned int i = 0; i < spacedim; ++i)
+              output_vector[id * spacedim + i] += point[i];
+          else
+            for (unsigned int i = 0; i < spacedim; ++i)
+              output_vector[id * spacedim + i] = point[i];
+        }
+      if (add_to_output_vector)
+        output_vector.compress(VectorOperation::add);
+      else
+        output_vector.compress(VectorOperation::insert);
     }
 
     /**
