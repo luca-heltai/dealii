@@ -545,8 +545,6 @@ namespace Step70
   void
   StokesImmersedProblem<dim, spacedim>::assemble_system(unsigned int cycle)
   {
-    TimerOutput::Scope t(computing_timer, "assembly");
-
     system_matrix         = 0;
     preconditioner_matrix = 0;
     system_rhs            = 0;
@@ -554,13 +552,20 @@ namespace Step70
     const QGauss<spacedim> quadrature_formula(par.velocity_degree + 1);
 
     SolidVelocity<spacedim> solid_velocity(par.angular_velocity);
-    dof_coupling->create_nitsche_restriction(quadrature_formula,
-                                             solid_velocity,
-                                             par.penalty_term,
-                                             system_matrix,
-                                             system_rhs,
-                                             constraints,
-                                             cycle > 0);
+    {
+      TimerOutput::Scope t(computing_timer, "Nitsche_assembly");
+
+      dof_coupling->create_nitsche_restriction(quadrature_formula,
+                                               solid_velocity,
+                                               par.penalty_term,
+                                               system_matrix,
+                                               system_rhs,
+                                               constraints,
+                                               cycle > 0);
+    }
+
+    TimerOutput::Scope t(computing_timer, "Stokes_assembly");
+
 
     FEValues<spacedim> fe_values(*fe1,
                                  quadrature_formula,

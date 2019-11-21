@@ -18,6 +18,7 @@
 
 #include <deal.II/base/config.h>
 
+#include <deal.II/base/point.h>
 #include <deal.II/base/quadrature.h>
 
 #include <deal.II/dofs/dof_handler.h>
@@ -292,6 +293,139 @@ namespace Particles
         }
       matrix.compress(VectorOperation::add);
     }
+
+
+
+    /**
+     * Gather the position of the particles within the particle handler in a
+     vector of points.
+     *
+     *
+     * @param [in] particle_handler A particle handler for which the positions of the particle will be gathered
+
+     * @param [in,out] positions A vector preallocated at size (particle_handler.n_locally_owned_articles)
+     *                 and whose points will become the particle_handler locally
+     *                 owned particles
+     *
+     * @param [in] add_to_output_vector When true, the value of the point of the particles
+     *             is added to the positions vector. When false, the value of
+     *             the points in the positions vector are replaced by the
+     *             position of the particles.
+     *
+     * @authors Bruno Blais, Luca Heltai (2019)
+     *
+     */
+    template <int dim, int spacedim>
+    void
+    get_particle_positions(
+      const ParticleHandler<dim, spacedim> &particle_handler,
+      std::vector<Point<spacedim>> &        positions,
+      const bool                            add_to_output_vector = false)
+    {
+      // There should be one point per particle to gather
+      AssertDimension(positions.size(),
+                      particle_handler.n_locally_owned_particles());
+
+      unsigned int i = 0;
+      for (auto it = particle_handler.begin(); it != particle_handler.end();
+           ++it, ++i)
+        {
+          if (add_to_output_vector)
+            positions[i] = positions[i] + it->get_location();
+          else
+            positions[i] = it->get_location();
+        }
+    }
+    /**
+     * Set the position of the particles within the particle handler using a
+     * vector of points. The new set of point defined by the
+     * vector has to be sufficiently close to the original one to ensure that
+     * the sort_particles_into_subdomains_and_cells algorithm manages to find
+     * the new cells in which the particles belong
+     *
+     * @param [in] new_positions A vector of points whose is is particle_handler.n_locally_owned_particles()
+     *
+     * @param [in,out] particle_handler A particle handler whose particles will be modified
+     *
+     * @param [in] displace_particles When true, this add the value of the vector of points to the
+     *             current position of the particle, thus displacing them by the
+     *             amount given by the function. When false, the position of the
+     *             particle is is replaced by the value of the function
+     *
+     * @authors Bruno Blais, Luca Heltai (2019)
+     *
+     */
+    template <int dim, int spacedim>
+    void
+    set_particle_positions(const std::vector<Point<spacedim>> &new_positions,
+                           ParticleHandler<dim, spacedim> &    particle_handler,
+                           const bool displace_particles = true)
+    {
+      // There should be one point per particle to fix the new position
+      AssertDimension(new_positions.size(),
+                      particle_handler.n_locally_owned_particles());
+
+      unsigned int i = 0;
+      for (auto it = particle_handler.begin(); it != particle_handler.end();
+           ++it, ++i)
+        {
+          if (displace_particles)
+            it->set_location(it->get_location() + new_positions[i]);
+          else
+            it->set_location(new_positions[i]);
+        }
+
+      particle_handler.sort_particles_into_subdomains_and_cells();
+    }
+
+    /**
+     * Set the position of the particles within the particle handler using a
+     * function with n_components==spacedim. The new set of point defined by the
+     * fuction has to be sufficiently close to the original one to ensure that
+     * the sort_particles_into_subdomains_and_cells algorithm manages to find
+     * the new cells in which the particles belong
+     *
+     * @param [in] function A function that has n_components==spacedim that describes
+     *  either the displacement or the new position of the particles
+     *
+     * @param [in,out] particle_handler A particle handler whose particles will be modified
+     *
+     * @param [in] displace_particles When true, this add the results of the function to the
+     *             current position of the particle, thus displacing them by the
+     *             amount given by the function. When false, the position of the
+     *             particle is is replaced by the value of the function
+     *
+     * @authors Bruno Blais, Luca Heltai (2019)
+     *
+     */
+
+    template <int dim, int spacedim>
+    void
+    set_particle_positions(const Function<spacedim> &      function,
+                           ParticleHandler<dim, spacedim> &particle_handler,
+                           const bool displace_particles = true)
+    {
+      // The function should have sufficient components to displace the
+      // particles
+      AssertDimension(function.n_components, spacedim);
+
+      Vector<double> new_position(spacedim);
+      for (auto &particle : particle_handler)
+        {
+          Point<spacedim> particle_location = particle.get_location();
+          function.vector_value(particle_location, new_position);
+          if (displace_particles)
+            for (unsigned int d = 0; d < spacedim; ++d)
+              particle_location[d] = particle_location[d] + new_position[d];
+          else
+            for (unsigned int d = 0; d < spacedim; ++d)
+              particle_location[d] = new_position[d];
+          particle.set_location(particle_location);
+        }
+
+      particle_handler.sort_particles_into_subdomains_and_cells();
+    }
+
   } // namespace Utilities
 } // namespace Particles
 DEAL_II_NAMESPACE_CLOSE

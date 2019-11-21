@@ -37,6 +37,7 @@
 
 #include <deal.II/particles/generators.h>
 #include <deal.II/particles/particle_handler.h>
+#include <deal.II/particles/utilities.h>
 
 
 DEAL_II_NAMESPACE_OPEN
@@ -333,20 +334,15 @@ namespace NonMatching
 
     void
     set_quadrature_particles_positions(
-      const std::vector<Tensor<1, spacedim>> &positions_vector) const
+      const std::vector<Tensor<1, spacedim>> &positions_vector,
+      const bool                              displace_particles = true) const
     {
       // There should be a position per per local particles
       AssertDimension(positions_vector.size(),
                       quadrature_particle_handler->n_local_particles());
-
-      unsigned int i = 0;
-      for (auto it = quadrature_particle_handler->begin();
-           it != quadrature_particle_handler->end();
-           ++it, ++i)
-        {
-          it->set_location(positions_vector[i]);
-        }
-      quadrature_particle_handler->sort_particles_into_subdomains_and_cells();
+      Particles::Utilities::set_particle_positions(positions_vector,
+                                                   *quadrature_particle_handler,
+                                                   displace_particles);
     }
 
     /**
@@ -356,19 +352,15 @@ namespace NonMatching
      */
     void
     set_particles_positions(
-      const std::vector<Tensor<1, spacedim>> &positions_vector) const
+      const std::vector<Tensor<1, spacedim>> &positions_vector,
+      const bool                              displace_particles = true) const
     {
       // There should be a position per per local particles
       AssertDimension(positions_vector.size(),
                       particle_handler->n_local_particles());
-
-      unsigned int i = 0;
-      for (auto it = particle_handler->begin(); it != particle_handler->end();
-           ++it, ++i)
-        {
-          it->set_location(positions_vector[i]);
-        }
-      particle_handler->sort_particles_into_subdomains_and_cells();
+      Particles::Utilities::set_particle_positions(positions_vector,
+                                                   *particle_handler,
+                                                   displace_particles);
     }
 
     /**
@@ -376,25 +368,13 @@ namespace NonMatching
      * function
      */
     void
-    set_quadrature_particles_positions(const Function<spacedim> &function) const
+    set_quadrature_particles_positions(
+      const Function<spacedim> &function,
+      const bool                displace_particles = true) const
     {
-      // The function should have sufficient components to displace the
-      // particles
-      AssertDimension(function.n_components, spacedim);
-
-      Point<spacedim> new_position;
-
-      for (auto it = quadrature_particle_handler->begin();
-           it != quadrature_particle_handler->end();
-           ++it)
-        {
-          const Point<spacedim> part_loc = it->get_location();
-          for (unsigned int i = 0; i < spacedim; ++i)
-            new_position[i] = function.value(part_loc, i);
-          it->set_location(new_position);
-        }
-
-      quadrature_particle_handler->sort_particles_into_subdomains_and_cells();
+      Particles::Utilities::set_particle_positions(function,
+                                                   *quadrature_particle_handler,
+                                                   displace_particles);
     }
 
     /**
@@ -402,24 +382,12 @@ namespace NonMatching
      * function
      */
     void
-    set_particles_positions(const Function<spacedim> &function) const
+    set_particles_positions(const Function<spacedim> &function,
+                            const bool displace_particles = true) const
     {
-      // The function should have sufficient components to displace the
-      // particles
-      AssertDimension(function.n_components, spacedim);
-
-      Point<spacedim> new_position;
-
-      for (auto it = particle_handler->begin(); it != particle_handler->end();
-           ++it)
-        {
-          const Point<spacedim> part_loc = it->get_location();
-          for (unsigned int i = 0; i < spacedim; ++i)
-            new_position[i] = function.value(part_loc, i);
-          it->set_location(new_position);
-        }
-
-      particle_handler->sort_particles_into_subdomains_and_cells();
+      Particles::Utilities::set_particle_positions(function,
+                                                   *quadrature_particle_handler,
+                                                   displace_particles);
     }
 
 
