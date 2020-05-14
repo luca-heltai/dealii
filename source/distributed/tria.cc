@@ -1614,14 +1614,8 @@ namespace parallel
       Assert(sizes_fixed_cumulative.size() > 0,
              ExcMessage("No data has been packed!"));
       if (quad_cell_relations.size() > 0)
-        {
-          Assert(dest_data_fixed.size() > 0,
-                 ExcMessage("No data has been received!"));
-
-          if (callback_variable_transfer)
-            Assert(dest_data_variable.size() > 0,
-                   ExcMessage("No data has been received!"));
-        }
+        Assert(dest_data_fixed.size() > 0,
+               ExcMessage("No data has been received!"));
 
       std::vector<char>::const_iterator dest_data_it;
       std::vector<char>::const_iterator dest_sizes_cell_it;
