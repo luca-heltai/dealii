@@ -272,6 +272,91 @@ do_test(const DoFHandler<dim> &          dof,
 }
 
 
+template <int dim,
+          int fe_degree,
+          int n_q_points_1d = fe_degree + 1,
+          typename Number   = double>
+class MatrixFreeTestNoHessians
+  : public MatrixFreeTest<dim, fe_degree, n_q_points_1d, Number>
+{
+public:
+  MatrixFreeTestNoHessians(const MatrixFree<dim, Number> &data_in)
+    : MatrixFreeTest<dim, fe_degree, n_q_points_1d, Number>(data_in){};
+
+  MatrixFreeTestNoHessians(const MatrixFree<dim, Number> &data_in,
+                           const Mapping<dim> &           mapping)
+    : MatrixFreeTest<dim, fe_degree, n_q_points_1d, Number>(data_in, mapping){};
+
+  // make function virtual to allow derived
+  // classes to define a different function
+  virtual void
+  operator()(
+    const MatrixFree<dim, Number> &data,
+    Vector<Number> &,
+    const Vector<Number> &                       src,
+    const std::pair<unsigned int, unsigned int> &cell_range) const override
+  {
+    FEValues<dim> fe_values(this->fe_val.get_mapping(),
+                            this->fe_val.get_fe(),
+                            this->fe_val.get_quadrature(),
+                            update_values | update_gradients);
+
+    FEEvaluation<dim, fe_degree, n_q_points_1d, 1, Number> fe_eval(data);
+
+    std::vector<Number>                  reference_values(fe_eval.n_q_points);
+    std::vector<Tensor<1, dim, Number>>  reference_grads(fe_eval.n_q_points);
+    std::vector<types::global_dof_index> active_or_mg_indices(
+      fe_values.dofs_per_cell);
+
+    for (unsigned int cell = cell_range.first; cell < cell_range.second; ++cell)
+      {
+        fe_eval.reinit(cell);
+        fe_eval.read_dof_values(src);
+        fe_eval.evaluate(EvaluationFlags::values | EvaluationFlags::gradients);
+
+        // compare values with the ones the FEValues
+        // gives us. Those are seen as reference
+        for (unsigned int j = 0; j < data.n_components_filled(cell); ++j)
+          {
+            const auto &cell_it = data.get_cell_iterator(cell, j);
+            if (cell_it->is_active())
+              cell_it->get_dof_indices(active_or_mg_indices);
+            else
+              {
+                typename DoFHandler<dim>::level_cell_iterator level_cell(
+                  cell_it);
+                level_cell->get_active_or_mg_dof_indices(active_or_mg_indices);
+              }
+
+            fe_values.reinit(cell_it);
+            fe_values.get_function_values(src,
+                                          ArrayView<types::global_dof_index>(
+                                            active_or_mg_indices),
+                                          reference_values);
+            fe_values.get_function_gradients(src,
+                                             ArrayView<types::global_dof_index>(
+                                               active_or_mg_indices),
+                                             reference_grads);
+
+            for (int q = 0; q < (int)fe_eval.n_q_points; q++)
+              {
+                this->errors[0] +=
+                  std::fabs(fe_eval.get_value(q)[j] - reference_values[q]);
+                for (unsigned int d = 0; d < dim; ++d)
+                  this->errors[1] += std::fabs(fe_eval.get_gradient(q)[d][j] -
+                                               reference_grads[q][d]);
+
+                this->total[0] += std::fabs(reference_values[q]);
+                for (unsigned int d = 0; d < dim; ++d)
+                  this->total[1] += std::fabs(reference_grads[q][d]);
+              }
+          }
+      }
+  }
+};
+
+
+
 int
 main()
 {
