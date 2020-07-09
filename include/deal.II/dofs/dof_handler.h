@@ -737,6 +737,13 @@ public:
   has_hp_capabilities() const;
 
   /**
+   * Distribute non local degrees of freedom. The local DoFs need to be
+   * distributed using distribute_dofs() before calling this function.
+   */
+  void
+  distribute_non_local_dofs();
+
+  /**
    * This function returns whether this DoFHandler has DoFs distributed on
    * each multigrid level or in other words if distribute_mg_dofs() has been
    * called.

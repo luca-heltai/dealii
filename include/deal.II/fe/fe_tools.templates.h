@@ -86,6 +86,7 @@ namespace FETools
       const bool do_tensor_product)
     {
       AssertDimension(fes.size(), multiplicities.size());
+      // [LH: Check what happens to non-local-dofs]
 
       unsigned int multiplied_n_components = 0;
 
@@ -99,6 +100,8 @@ namespace FETools
             n_components = fes[i]->n_components();
             break;
           }
+
+      // [LH: Check what happens to non-local-dofs]
 
       dealii::internal::GenericDoFsPerObject dpo;
 
@@ -352,7 +355,36 @@ namespace FETools
                     fes[base]->restriction_is_additive(index_in_base);
                 }
         }
+      unsigned int total_index_offset = total_index;
+      // 5. Non_local
+      unsigned int n_fe = 0;
+      for (unsigned int base = 0; base < fes.size(); ++base)
+        {
+          if (fes[base] != NULL && fes[base]->n_non_local_dofs_per_cell() > 0)
+            {
+              ++n_fe;
+            }
+        }
+      for (unsigned int base = 0; base < n_fe; ++base)
+        for (unsigned int m = 0; m < multiplicities[base]; ++m)
+          for (unsigned int local_index = 0;
+               local_index < fes[base]->n_non_local_dofs_per_cell();
+               ++local_index)
+            {
+              total_index = total_index_offset +
+                            local_index * (n_fe * multiplicities[base]) +
+                            base * multiplicities[base] + m;
 
+              const unsigned int index_in_base =
+                (local_index + (fes[base]->n_dofs_per_cell() -
+                                fes[base]->n_non_local_dofs_per_cell()));
+              Assert(index_in_base < fes[base]->n_dofs_per_cell(),
+                     ExcInternalError());
+              retval[total_index] =
+                fes[base]->restriction_is_additive(index_in_base);
+            }
+
+      // TODO[LH]: Make sure this Assert here is correct
       Assert(total_index == n_shape_functions, ExcInternalError());
 
       return retval;
@@ -449,15 +481,15 @@ namespace FETools
                                             std::vector<bool>(n_components,
                                                               false));
 
-      // finally go through all the shape functions of the base elements, and
-      // copy their flags. this somehow copies the code in build_cell_table,
-      // which is not nice as it uses too much implicit knowledge about the
-      // layout of the individual bases in the composed FE, but there seems no
-      // way around...
+      // finally go through all the shape functions of the base elements,
+      // and copy their flags. this somehow copies the code in
+      // build_cell_table, which is not nice as it uses too much implicit
+      // knowledge about the layout of the individual bases in the
+      // composed FE, but there seems no way around...
       //
-      // for each shape function, copy the non-zero flags from the base element
-      // to this one, taking into account multiplicities, multiple components in
-      // base elements, and other complications
+      // for each shape function, copy the non-zero flags from the base
+      // element to this one, taking into account multiplicities, multiple
+      // components in base elements, and other complications
       unsigned int total_index = 0;
       for (const unsigned int vertex_number :
            fes.front()->reference_cell().vertex_indices())
@@ -590,7 +622,54 @@ namespace FETools
                     }
                 }
         }
+      unsigned int total_index_offset = total_index;
+      // 5. non_local
+      unsigned int comp_start = 0;
+      unsigned int n_fe       = 0;
+      for (unsigned int base = 0; base < fes.size(); ++base)
+        {
+          if (fes[base] != NULL && fes[base]->n_non_local_dofs_per_cell() > 0)
+            {
+              ++n_fe;
+            }
+        }
+      for (unsigned int base = 0; base < n_fe; ++base)
+        {
+          for (unsigned int m = 0; m < multiplicities[base];
+               ++m, comp_start += fes[base]->n_components() * do_tensor_product)
+            {
+              for (unsigned int non_local_index = 0;
+                   non_local_index < fes[base]->n_non_local_dofs_per_cell();
+                   ++non_local_index)
+                {
+                  total_index =
+                    total_index_offset +
+                    non_local_index * (n_fe * multiplicities[base]) +
+                    base * multiplicities[base] + m;
 
+                  const unsigned int index_in_base =
+                    (non_local_index +
+                     (fes[base]->n_dofs_per_cell() -
+                      fes[base]->n_non_local_dofs_per_cell()));
+
+                  Assert(comp_start + fes[base]->n_components() <=
+                           retval[total_index].size(),
+                         ExcInternalError());
+
+                  for (unsigned int c = 0; c < fes[base]->n_components(); ++c)
+                    {
+                      Assert(c < fes[base]
+                                   ->get_nonzero_components(index_in_base)
+                                   .size(),
+                             ExcInternalError());
+                      retval[total_index][comp_start + c] =
+                        fes[base]->get_nonzero_components(index_in_base)[c];
+                    }
+                }
+            }
+        }
+
+      // TODO[LH]: Make sure this assert here is correct
       Assert(total_index == n_shape_functions, ExcInternalError());
 
       // now copy the vector<vector<bool> > into a vector<ComponentMask>.
@@ -865,6 +944,57 @@ namespace FETools
                       non_primitive_index;
                 }
         }
+      unsigned int total_index_offset = total_index;
+      // 5. non-local
+      for (unsigned int base = 0; base < fe.n_base_elements(); ++base)
+        {
+          unsigned int comp_start = 0;
+          for (unsigned int m = 0; m < fe.element_multiplicity(base);
+               ++m,
+                            comp_start += fe.base_element(base).n_components() *
+                                          do_tensor_product)
+            {
+              for (unsigned int non_local_index = 0;
+                   non_local_index <
+                   fe.base_element(base).n_non_local_dofs_per_cell();
+                   ++non_local_index)
+                {
+                  total_index =
+                    total_index_offset +
+                    non_local_index *
+                      (fe.n_base_elements() * fe.element_multiplicity(base)) +
+                    base * fe.element_multiplicity(base) + m;
+
+                  const unsigned int index_in_base =
+                    (non_local_index +
+                     (fe.base_element(base).n_dofs_per_cell() -
+                      fe.base_element(base).n_non_local_dofs_per_cell()));
+
+                  system_to_base_table[total_index] =
+                    std::make_pair(std::make_pair(base, m), index_in_base);
+
+                  if (fe.base_element(base).is_primitive(index_in_base))
+                    {
+                      const unsigned int comp_in_base =
+                        fe.base_element(base)
+                          .system_to_component_index(index_in_base)
+                          .first;
+                      const unsigned int comp = comp_start + comp_in_base;
+                      const unsigned int index_in_comp =
+                        fe.base_element(base)
+                          .system_to_component_index(index_in_base)
+                          .second;
+                      system_to_component_table[total_index] =
+                        std::make_pair(comp, index_in_comp);
+                    }
+                  else
+                    {
+                      system_to_component_table[total_index] =
+                        non_primitive_index;
+                    }
+                }
+            }
+        }
     }
 
 
@@ -907,12 +1037,12 @@ namespace FETools
                 {
                   // get (cell) index of this shape function inside the base
                   // element to see whether the shape function is primitive
-                  // (assume that all shape functions on vertices share the same
-                  // primitivity property; assume likewise for all shape
+                  // (assume that all shape functions on vertices share the
+                  // same primitivity property; assume likewise for all shape
                   // functions located on lines, quads, etc. this way, we can
-                  // ask for primitivity of only _one_ shape function, which is
-                  // taken as representative for all others located on the same
-                  // type of object):
+                  // ask for primitivity of only _one_ shape function, which
+                  // is taken as representative for all others located on the
+                  // same type of object):
                   const unsigned int index_in_base =
                     (fe.base_element(base).n_dofs_per_vertex() * vertex_number +
                      local_index);

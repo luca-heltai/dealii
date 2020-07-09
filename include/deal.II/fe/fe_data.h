@@ -360,6 +360,23 @@ public:
   const unsigned int dofs_per_hex;
 
   /**
+   * Number of non-zero degrees of freedom (DoFs) on the cell that,
+   * however, can not be associated with the specific geometric object (such as
+   * face or edge). In these cases, DoFs are typically globally distributed over
+   * (patches of) the Triangulation. Typical examples are:
+   *  - <a
+   * href="https://www.sciencedirect.com/science/article/pii/S0045782504005171">Isogeometric
+   * Analysis</a>
+   *  - <a
+   * href="https://onlinelibrary.wiley.com/doi/abs/10.1002/%28SICI%291097-0207%2819990910%2946%3A1%3C131%3A%3AAID-NME726%3E3.0.CO%3B2-J">Extended
+   * finite element method</a>
+   *  - <a
+   * href="http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.21.4515&rep=rep1&type=pdf">Catmull-Clark's
+   * subdivision surfaces</a>
+   */
+  const unsigned int non_local_dofs_per_cell;
+
+  /**
    * First index of dof on a line.
    */
   const unsigned int first_line_index;
@@ -617,6 +634,24 @@ public:
   n_dofs_per_cell() const;
 
   /**
+   * Return the number of non-zero degrees of freedom (DoFs) on the cell that,
+   * however, can not be associated with the specific geometric object (such as
+   * face or edge). In these cases, DoFs are typically globally distributed over
+   * (patches of) the Triangulation. Typical examples are:
+   *  - <a
+   * href="https://www.sciencedirect.com/science/article/pii/S0045782504005171">Isogeometric
+   * Analysis</a>
+   *  - <a
+   * href="https://onlinelibrary.wiley.com/doi/abs/10.1002/%28SICI%291097-0207%2819990910%2946%3A1%3C131%3A%3AAID-NME726%3E3.0.CO%3B2-J">Extended
+   * finite element method</a>
+   *  - <a
+   * href="http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.21.4515&rep=rep1&type=pdf">Catmull-Clark's
+   * subdivision surfaces</a>
+   */
+  unsigned int
+  n_non_local_dofs_per_cell() const;
+
+  /**
    * Return the number of degrees per structdim-dimensional object. For
    * structdim==0, the function therefore returns dofs_per_vertex, for
    * structdim==1 dofs_per_line, etc. This function is mostly used to allow
@@ -871,6 +906,15 @@ inline unsigned int
 FiniteElementData<dim>::n_dofs_per_cell() const
 {
   return dofs_per_cell;
+}
+
+
+
+template <int dim>
+inline unsigned int
+FiniteElementData<dim>::n_non_local_dofs_per_cell() const
+{
+  return non_local_dofs_per_cell;
 }
 
 
