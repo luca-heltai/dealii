@@ -1002,6 +1002,46 @@ public:
   virtual std::size_t
   memory_consumption() const override;
 
+  /**
+   * @name Non local dofs support
+   * @{
+   */
+  /**
+   * Return the non local dof indices associated to the current cell, for
+   * active cell accessors. The implementation for FESystem combines the answers
+   * from all base elements.
+   */
+  virtual std::vector<types::global_dof_index>
+  get_non_local_dof_indices(
+    const DoFCellAccessor<dim, spacedim, false> &accessor) const override;
+
+  /**
+   * Return the non local dof indices associated to the current cell, for
+   * level cell accessors. The implementation for FESystem combines the answers
+   * from all base elements.
+   */
+  virtual std::vector<types::global_dof_index>
+  get_non_local_dof_indices(
+    const DoFCellAccessor<dim, spacedim, true> &accessor) const override;
+
+  /**
+   * Return the global number of non local dof indices that are required in
+   * addition to the local ones. The implementation for FESystem returns the sum
+   * of the result from each base element.
+   */
+  virtual types::global_dof_index
+  n_global_non_local_dofs() const override;
+
+  /**
+   * Return an identification string that uniquely identifies the non local
+   * behaviour of the finite element space.
+   *
+   * Returns a combination of each base non local id, with their multiplicity.
+   */
+  virtual std::string
+  get_non_local_id() const override;
+  //@}
+
 protected:
   virtual std::unique_ptr<
     typename FiniteElement<dim, spacedim>::InternalDataBase>
