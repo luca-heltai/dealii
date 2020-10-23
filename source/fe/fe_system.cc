@@ -2523,6 +2523,84 @@ FESystem<dim, spacedim>::convert_generalized_support_point_values_to_dof_values(
 
 
 
+namespace
+{
+  template <int dim, int spacedim, class AccessorType>
+  std::vector<types::global_dof_index>
+  get_non_local_dof_indices(const FiniteElement<dim, spacedim> &fe,
+                            const AccessorType &                accessor)
+  {
+    // We always number non local dofs component-wise.
+    Assert(fe == accessor.get_fe(),
+           ExcInternalError(
+             "I was expecting the same FE that is stored in the accessor."));
+    std::vector<types::global_dof_index> non_local_dofs(
+      fe.n_non_local_dofs_per_cell());
+
+    std::vector<types::global_dof_index> non_local_dofs_start(
+      fe.n_non_local_dofs_per_cell());
+
+
+    std::vector<std::vector<types::global_dof_index>> base_non_local_dofs;
+    for (unsigned int i = 0; i < fe.n_base_elements(); ++i)
+      base_non_local_dofs.emplace_back(
+        fe.base_element(i).get_non_local_dof_indices(accessor));
+
+    unsigned int i = fe.n_dofs_per_cell() - fe.n_non_local_dofs_per_cell();
+    for (unsigned int j = 0; j < fe.n_non_local_dofs_per_cell(); ++j, ++i)
+      {
+        // const auto comp_i = fe.system_to_base_index
+        // FIXME[ZL+LH+AmB]
+      }
+    std::cout << "FIXME!" << std::endl;
+  }
+} // namespace
+
+
+template <int dim, int spacedim>
+std::vector<types::global_dof_index>
+FESystem<dim, spacedim>::get_non_local_dof_indices(
+  const DoFCellAccessor<dim, spacedim, false> &accessor) const
+{}
+
+
+
+template <int dim, int spacedim>
+std::vector<types::global_dof_index>
+FESystem<dim, spacedim>::get_non_local_dof_indices(
+  const DoFCellAccessor<dim, spacedim, true> &accessor) const
+{}
+
+
+
+template <int dim, int spacedim>
+types::global_dof_index
+FESystem<dim, spacedim>::n_global_non_local_dofs() const
+{
+  types::global_dof_index global_dofs = 0;
+  for (unsigned int i = 0; i < this->n_base_elements(); ++i)
+    global_dofs += this->element_multiplicity(i) *
+                   this->base_element(i).n_global_non_local_dofs();
+  return global_dofs;
+}
+
+
+
+template <int dim, int spacedim>
+std::string
+FESystem<dim, spacedim>::get_non_local_id() const
+{
+  std::string id = "";
+  for (unsigned int i = 0; i < this->n_base_elements(); ++i)
+    {
+      id += (i == 0 ? "" : ", ") + this->base_element(i).get_non_local_id() +
+            " (" + std::to_string(this->element_multiplicity(i)) + ")";
+    }
+  return id;
+}
+
+
+
 template <int dim, int spacedim>
 std::size_t
 FESystem<dim, spacedim>::memory_consumption() const
