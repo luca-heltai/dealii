@@ -21,10 +21,10 @@ jobs:
       shell: bash
       run: |
         curl -L -o  deal.II.app-with-dependencies.tgz https://github.com/luca-heltai/dealii/releases/download/v9.2.0-bundle/deal.II.app-with-dependencies.tgz
-        ls -lh 
         tar xfz deal.II.app-with-dependencies.tgz
         mv deal.II.app /Applications/
         test -d /Applications/deal.II.app && echo  "Download seems OK"
+        export TERM=xterm-256color
         . /Applications/deal.II.app/Contents/MacOS/dealii.conf
         spack compilers
         spack find
