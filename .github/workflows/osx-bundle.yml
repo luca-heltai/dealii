@@ -4,41 +4,43 @@ on: [push, pull_request]
   # workflow_dispatch:
   #   inputs:
   #       imagename:
-  #         description: 'Image to build (app or dependencies)'
+  #         description: 'Image to build (release, develop, dependencies-release, or dependencies-develop)'
   #         required: true
-  #         default: 'app'
+  #         default: 'develop'
 
 jobs:
-  build-dealii:
-    # build the actual image
-    # if: ${{ github.event.inputs.imagename == 'app' }}
+  build-dependencies:
+    # build the dependencies
+    # if: ${{ github.event.inputs.imagename == 'dependencies-release' }}
 
-    name: Build OSX app
+    name: Build OSX dependencies for release app
     runs-on: [macos-latest]
 
     steps:
     - name: setup
       shell: bash
       run: |
-        curl -L -o  deal.II.app-with-dependencies.tgz https://github.com/luca-heltai/dealii/releases/download/v9.2.0-bundle/deal.II.app-with-dependencies.tgz
-        # curl -L -o  deal.II.app-with-dependencies.tgz https://github.com/luca-heltai/dealii/releases/download/v9.2.0-bundle/deal.II.app-empty.tgz
-        tar xfz deal.II.app-with-dependencies.tgz
+        curl -L -o  deal.II.app-empty.tgz https://github.com/luca-heltai/dealii/releases/download/v9.2.0-bundle/deal.II.app-empty.tgz
+        tar xfz deal.II.app-empty.tgz
         mv deal.II.app /Applications/
         test -d /Applications/deal.II.app && echo  "Download seems OK"
         export TERM=xterm-256color
         . /Applications/deal.II.app/Contents/MacOS/dealii.conf
         spack compilers
         spack find
-    - name: install dealii
+    - name: install dependencies for release
       shell: bash
       run: |
         export TERM=xterm-256color
         . /Applications/deal.II.app/Contents/MacOS/dealii.conf
-        spack install dealii 
-        spack clean -a
+        cd $SPACK_ROOT
+        git checkout develop
+        git pull
+        spack install --fail-fast cmake ninja environment-modules numdiff googletest
+        spack install --fail-fast --only dependencies dealii 
         rm -rf /Applications/deal.II.app/Contents/Resources/Libraries
         mkdir /Applications/deal.II.app/Contents/Resources/Libraries
-        spack view -d yes add -i /Applications/deal.II.app/Contents/Resources/Libraries dealii cmake ninja openmpi numdiff
+        spack view -d yes add -i /Applications/deal.II.app/Contents/Resources/Libraries dealii cmake ninja environment-modules numdiff googletest
     - name: cleanup
       shell: bash
       run: |
@@ -51,6 +53,49 @@ jobs:
       with:
         name: deal.II.app.tgz
         path: /Applications/deal.II.app.tgz
+
+  # build-dealii:
+  #   # build the actual image
+  #   # if: ${{ github.event.inputs.imagename == 'app' }}
+
+  #   name: Build OSX app
+  #   runs-on: [macos-latest]
+
+  #   steps:
+  #   - name: setup
+  #     shell: bash
+  #     run: |
+  #       curl -L -o  deal.II.app-with-dependencies.tgz https://github.com/luca-heltai/dealii/releases/download/v9.2.0-bundle/deal.II.app-with-dependencies.tgz
+  #       # curl -L -o  deal.II.app-with-dependencies.tgz https://github.com/luca-heltai/dealii/releases/download/v9.2.0-bundle/deal.II.app-empty.tgz
+  #       tar xfz deal.II.app-with-dependencies.tgz
+  #       mv deal.II.app /Applications/
+  #       test -d /Applications/deal.II.app && echo  "Download seems OK"
+  #       export TERM=xterm-256color
+  #       . /Applications/deal.II.app/Contents/MacOS/dealii.conf
+  #       spack compilers
+  #       spack find
+  #   - name: install dealii
+  #     shell: bash
+  #     run: |
+  #       export TERM=xterm-256color
+  #       . /Applications/deal.II.app/Contents/MacOS/dealii.conf
+  #       spack install --fail-fast dealii 
+  #       spack clean -a
+  #       rm -rf /Applications/deal.II.app/Contents/Resources/Libraries
+  #       mkdir /Applications/deal.II.app/Contents/Resources/Libraries
+  #       spack view -d yes add -i /Applications/deal.II.app/Contents/Resources/Libraries dealii cmake ninja openmpi numdiff
+  #   - name: cleanup
+  #     shell: bash
+  #     run: |
+  #       rm `find /Applications/deal.II.app/Contents/ -name spack-build-out.txt`
+  #       rm -rf /Applications/deal.II.app/Contents/Resources/spack/.git
+  #       cd /Applications
+  #       tar cfz deal.II.app.tgz deal.II.app
+  #   - name: upload app
+  #     uses: actions/upload-artifact@v1
+  #     with:
+  #       name: deal.II.app.tgz
+  #       path: /Applications/deal.II.app.tgz
 
   # build-dependencies:
   #   # build the dependencies image
