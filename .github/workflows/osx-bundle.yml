@@ -20,6 +20,7 @@ jobs:
     - name: setup
       run: |
         curl -o deal.II.app-with-dependencies.tgz https://github.com/luca-heltai/dealii/releases/download/v9.2.0-bundle/deal.II.app-with-dependencies.tgz
+        ls -lh 
         tar xfz deal.II.app-with-dependencies.tgz
         mv deal.II.app /Applications/
         test -d /Applications/deal.II.app && echo  "OK"
