@@ -1,13 +1,17 @@
 name: OSX-bundle
 
-on:
-  pull_request:
-    types: [ labeled ]
+on: 
+  workflow_dispatch:
+    inputs:
+        imagename:
+          description: 'Image to build (app or dependencies)'
+          required: true
+          default: 'app'
 
 jobs:
   build-dealii:
     # build the actual image
-    if: ${{ github.event.label.name == 'Build OSX app' }}
+    if: ${{ github.event.inputs.imagename == 'app' }}
 
     name: Build OSX app
     runs-on: [macos-latest]
@@ -31,7 +35,7 @@ jobs:
 
   build-dependencies:
     # build the dependencies image
-    if: ${{ github.event.label.name == 'Build OSX dependencies app' }}
+    if: ${{ github.event.inputs.imagename == 'dependencies' }}
 
     name: Build OSX dependencies app
     runs-on: [macos-latest]
