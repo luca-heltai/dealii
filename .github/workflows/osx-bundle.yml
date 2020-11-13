@@ -21,6 +21,7 @@ jobs:
       shell: bash
       run: |
         curl -L -o  deal.II.app-with-dependencies.tgz https://github.com/luca-heltai/dealii/releases/download/v9.2.0-bundle/deal.II.app-with-dependencies.tgz
+        # curl -L -o  deal.II.app-with-dependencies.tgz https://github.com/luca-heltai/dealii/releases/download/v9.2.0-bundle/deal.II.app-empty.tgz
         tar xfz deal.II.app-with-dependencies.tgz
         mv deal.II.app /Applications/
         test -d /Applications/deal.II.app && echo  "Download seems OK"
@@ -28,6 +29,28 @@ jobs:
         . /Applications/deal.II.app/Contents/MacOS/dealii.conf
         spack compilers
         spack find
+    - name: install dealii
+      shell: bash
+      run: |
+        export TERM=xterm-256color
+        . /Applications/deal.II.app/Contents/MacOS/dealii.conf
+        spack install dealii 
+        spack clean -a
+        rm -rf /Applications/deal.II.app/Contents/Resources/Libraries
+        mkdir /Applications/deal.II.app/Contents/Resources/Libraries
+        spack view -d yes add -i /Applications/deal.II.app/Contents/Resources/Libraries dealii cmake ninja openmpi numdiff
+    - name: cleanup
+      shell: bash
+      run: |
+        rm `find /Applications/deal.II.app/Contents/ -name spack-build-out.txt`
+        rm -rf /Applications/deal.II.app/Contents/Resources/spack/.git
+        cd /Applications
+        tar cfz deal.II.app.tgz deal.II.app
+    - name: upload app
+      uses: actions/upload-artifact@v1
+      with:
+        name: deal.II.app.tgz
+        path: /Applications/deal.II.app.tgz
 
   # build-dependencies:
   #   # build the dependencies image
