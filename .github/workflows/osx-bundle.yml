@@ -34,6 +34,7 @@ jobs:
         export TERM=xterm-256color
         . /Applications/deal.II.app/Contents/MacOS/dealii.conf
         cd $SPACK_ROOT
+        git remote set-url origin https://github.com/spack/spack.git
         git checkout develop
         git pull
         spack install --fail-fast cmake ninja environment-modules numdiff googletest
