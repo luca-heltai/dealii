@@ -18,11 +18,10 @@ jobs:
         version: "v9.2.0-bundle"
         file: "deal.II.app-with-dependencies.tgz"
         token: ${{ secrets.GITHUB_TOKEN }}
-      workdir: /Applications/
     - name: setup
-      workdir: /Applications/
       run: |
         tar xfz deal.II.app-with-dependencies.tgz
+        mv deal.II.app /Applications/
         test -d /Applications/deal.II.app && echo  "OK"
         . /Applications/deal.II.app/Contents/MacOS/dealii.conf
         spack compilers
@@ -43,11 +42,10 @@ jobs:
         version: "v9.2.0-bundle"
         file: "deal.II.app-empty.tgz"
         token: ${{ secrets.GITHUB_TOKEN }}
-      workdir: /Applications/
     - name: setup
-      workdir: /Applications/
       run: |
         tar xfz deal.II.app-with-dependencies.tgz
+        mv deal.II.app /Applications/
         test -d /Applications/deal.II.app && echo  "OK"
         . /Applications/deal.II.app/Contents/MacOS/dealii.conf
         spack compilers
