@@ -13,7 +13,7 @@
 //
 // ---------------------------------------------------------------------
 
-
+// Convert a deal.II cell to a cgal Surface_mesh
 
 #include <deal.II/base/config.h>
 
@@ -26,20 +26,19 @@
 
 #include <CGAL/IO/io.h>
 #include <CGAL/Simple_cartesian.h>
-#include <deal.II/cgal/surface_mesh.h>
+// #include <deal.II/cgal/surface_mesh.h>
 
 #include "../tests.h"
 
+#include "/workspace/dealii/dealii-2/source/cgal/surface_mesh.cc"
+
 using namespace CGALWrappers;
 using CGALPoint = CGAL::Point_3<CGAL::Simple_cartesian<double>>;
-
-
 
 template <int dim, int spacedim>
 void
 test()
 {
-  // Convert a deal.II cell to a cgal Surface_mesh
   deallog << "dim= " << dim << ",\t spacedim= " << spacedim << std::endl;
   std::vector<std::vector<unsigned int>> d2t = {{}, {2}, {3, 4}, {4, 5, 6, 8}};
   for (const auto nv : d2t[dim])
@@ -56,9 +55,9 @@ test()
       Assert(mesh.is_valid(), dealii::ExcMessage("The CGAL mesh is not valid"));
 
 
-      deallog << "deal vertices: " << nv << ", cgal vertices"
+      deallog << "deal vertices: " << nv << ", cgal vertices "
               << mesh.num_vertices() << std::endl;
-      deallog << "deal faces: " << cell->n_faces() << ", cgal faces"
+      deallog << "deal faces: " << cell->n_faces() << ", cgal faces "
               << mesh.num_faces() << std::endl;
       deallog << "Valid mesh: " << std::boolalpha << mesh.is_valid()
               << std::endl;
@@ -70,9 +69,6 @@ int
 main()
 {
   initlog();
-  // test<1, 1>();
-  // test<1, 2>();
-  // test<1, 3>();
   test<2, 2>();
   test<2, 3>();
   test<3, 3>();

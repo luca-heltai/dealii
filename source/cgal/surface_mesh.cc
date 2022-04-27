@@ -15,6 +15,8 @@
 
 
 
+#include <deal.II/base/patterns.h>
+
 #include <deal.II/cgal/surface_mesh.h>
 
 #ifdef DEAL_II_WITH_CGAL
@@ -23,13 +25,12 @@ DEAL_II_NAMESPACE_OPEN
 
 namespace
 {
-
   template <typename dealiiFace, typename Container, typename CGAL_Mesh>
   void
   add_facet(const dealiiFace &face,
-            const Container  &deal2cgal,
-            CGAL_Mesh        &mesh,
-            const bool        orientation = true)
+            const Container & deal2cgal,
+            CGAL_Mesh &       mesh,
+            const bool        clockwise_ordering = true)
   {
     const unsigned                                nv = face->n_vertices();
     std::vector<typename CGAL_Mesh::Vertex_index> indices;
@@ -40,8 +41,6 @@ namespace
         case 2:
           mesh.add_edge(deal2cgal.at(face->vertex_index(0)),
                         deal2cgal.at(face->vertex_index(1)));
-          mesh.add_edge(deal2cgal.at(face->vertex_index(1)),
-                        deal2cgal.at(face->vertex_index(0)));
           break;
         case 3:
           indices = {deal2cgal.at(face->vertex_index(0)),
@@ -59,16 +58,17 @@ namespace
           break;
       }
     auto f = mesh.null_face();
-    if (orientation)
+    if (clockwise_ordering)
       f = mesh.add_face(indices);
     else
       {
         std::reverse(indices.begin(), indices.end());
         f = mesh.add_face(indices);
       }
-
-
-    // Assert(f != mesh.null_face(), ExcInternalError("Null face!"));
+    Assert(f != mesh.null_face(),
+           ExcInternalError("While trying to build a CGAL facet, "
+                            "CGAL encountered a orientation problem that it "
+                            "was not able to solve."));
   }
 } // namespace
 
@@ -81,9 +81,10 @@ namespace CGALWrappers
   template <typename CGALPointType, int dim, int spacedim>
   void
   to_cgal_mesh(const typename Triangulation<dim, spacedim>::cell_iterator &cell,
-               const Mapping<dim, spacedim>      &mapping,
+               const Mapping<dim, spacedim> &     mapping,
                CGAL::Surface_mesh<CGALPointType> &mesh)
   {
+    Assert(dim > 1, ExcImpossibleInDim(dim));
     using Mesh           = CGAL::Surface_mesh<CGALPointType>;
     using Vertex_index   = typename Mesh::Vertex_index;
     const auto &vertices = mapping.get_vertices(cell);
@@ -97,14 +98,16 @@ namespace CGALWrappers
 
     // Add faces
     if (dim < 3)
-      // simplices, quads and lines
+      // simplices and quads
       add_facet(cell, deal2cgal, mesh);
     else
-      // faces all all the cells
+      // faces of 3d cells
       for (const auto &f : cell->face_indices())
-        add_facet(cell->face(f), deal2cgal, mesh, cell->face_orientation(f));
+        add_facet(cell->face(f),
+                  deal2cgal,
+                  mesh,
+                  f % 2 == 1 || cell->n_vertices() != 8);
   }
-
   // explicit instantiations
 #    include "surface_mesh.inst"
 
