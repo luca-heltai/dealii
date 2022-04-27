@@ -277,3 +277,7 @@ SYM_RANKS := { 2; 4 }
 OUTPUT_FLAG_TYPES := { DXFlags; UcdFlags; GnuplotFlags; PovrayFlags; EpsFlags;
                        GmvFlags; TecplotFlags; VtkFlags; SvgFlags;
                        Deal_II_IntermediateFlags }
+
+
+// CGAL Kernels
+CGAL_KERNELS := {CGAL::Simple_cartesian<double>}

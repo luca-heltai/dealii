@@ -18,6 +18,10 @@
 
 #include <deal.II/base/config.h>
 
+#include <deal.II/fe/mapping.h>
+
+#include <deal.II/grid/tria.h>
+
 #include <deal.II/cgal/utilities.h>
 
 #ifdef DEAL_II_WITH_CGAL
@@ -28,7 +32,8 @@ DEAL_II_NAMESPACE_OPEN
 namespace CGALWrappers
 {
   /**
-   * Build a CGAL Surface_mesh from a deal.II cell.
+   * Build a CGAL::Surface_mesh from a deal.II cell. [TODO: spiega volume per
+   * intersezioni]
    *
    * @param[in] cell The input deal.II cell iterator
    * @param[in] mapping The mapping used to map the vertices of the cell
@@ -40,14 +45,22 @@ namespace CGALWrappers
     const typename dealii::Triangulation<dim, spacedim>::cell_iterator &cell,
     const dealii::Mapping<dim, spacedim> &                              mapping,
     CGAL::Surface_mesh<CGALPointType> &                                 mesh);
+
+  /**
+   * Build a CGAL::Surface_mesh from a deal.II cell. [TODO: spiega volume per
+   * intersezioni]
+   *
+   * @param[in] cell The input deal.II cell iterator
+   * @param[in] mapping The mapping used to map the vertices of the cell
+   * @param[out] mesh The output CGAL::Surface_mesh
+   */
+  template <typename CGALPointType, int dim, int spacedim>
+  void
+  to_cgal_mesh(const dealii::Triangulation<dim, spacedim> &cell,
+               CGAL::Surface_mesh<CGALPointType>          &mesh);
 } // namespace CGALWrappers
 
 
-#  ifndef DOXYGEN
-// Template implementations
-namespace CGALWrappers
-{} // namespace CGALWrappers
-#  endif
 
 DEAL_II_NAMESPACE_CLOSE
 
