@@ -19,9 +19,9 @@ for (dim : DIMENSIONS; spacedim : SPACE_DIMENSIONS; cgal_kernel : CGAL_KERNELS)
   {
 #if dim <= spacedim
     template void
-    to_cgal_mesh<typename CGAL::Point_3<cgal_kernel>, dim, spacedim>(
+    to_cgal_mesh<typename cgal_kernel::Point_3, dim, spacedim>(
       const typename Triangulation<dim, spacedim>::cell_iterator &cell,
       const Mapping<dim, spacedim> &                              mapping,
-      CGAL::Surface_mesh<CGAL::Point_3<cgal_kernel>> &            mesh);
+      CGAL::Surface_mesh<typename cgal_kernel::Point_3> &            mesh);
 #endif
   }

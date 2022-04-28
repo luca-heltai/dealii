@@ -25,12 +25,10 @@
 #include <deal.II/grid/tria.h>
 
 #include <CGAL/IO/io.h>
-#include <CGAL/Simple_cartesian.h>
-// #include <deal.II/cgal/surface_mesh.h>
+#include <deal.II/cgal/surface_mesh.h>
 
 #include "../tests.h"
 
-#include "/workspace/dealii/dealii-2/source/cgal/surface_mesh.cc"
 
 using namespace CGALWrappers;
 using CGALPoint = CGAL::Point_3<CGAL::Simple_cartesian<double>>;
@@ -52,9 +50,8 @@ test()
 
       const auto cell = tria.begin_active();
       to_cgal_mesh(cell, *mapping, mesh);
+
       Assert(mesh.is_valid(), dealii::ExcMessage("The CGAL mesh is not valid"));
-
-
       deallog << "deal vertices: " << nv << ", cgal vertices "
               << mesh.num_vertices() << std::endl;
       deallog << "deal faces: " << cell->n_faces() << ", cgal faces "
