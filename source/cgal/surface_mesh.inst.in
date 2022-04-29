@@ -23,5 +23,9 @@ for (dim : DIMENSIONS; spacedim : SPACE_DIMENSIONS; cgal_kernel : CGAL_KERNELS)
       const typename Triangulation<dim, spacedim>::cell_iterator &cell,
       const Mapping<dim, spacedim> &                              mapping,
       CGAL::Surface_mesh<typename cgal_kernel::Point_3> &         mesh);
+
+    template void to_cgal_mesh<typename cgal_kernel::Point_3, dim, spacedim>(
+      const Triangulation<dim, spacedim> &               tria,
+      CGAL::Surface_mesh<typename cgal_kernel::Point_3> &mesh);
 #endif
   }

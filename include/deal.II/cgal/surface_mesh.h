@@ -25,7 +25,10 @@
 #include <deal.II/cgal/utilities.h>
 
 #ifdef DEAL_II_WITH_CGAL
+#  include <CGAL/Polygon_mesh_processing/stitch_borders.h>
 #  include <CGAL/Surface_mesh.h>
+
+
 
 DEAL_II_NAMESPACE_OPEN
 
@@ -66,6 +69,25 @@ namespace CGALWrappers
     const typename dealii::Triangulation<dim, spacedim>::cell_iterator &cell,
     const dealii::Mapping<dim, spacedim> &                              mapping,
     CGAL::Surface_mesh<CGALPointType> &                                 mesh);
+
+
+  /**
+   * @brief
+   *
+   * @tparam CGALPointType
+   * @tparam dim
+   * @tparam spacedim
+   * @param cell
+   * @param mapping
+   * @param mesh
+   */
+  template <typename CGALPointType, int dim, int spacedim>
+  void
+  to_cgal_mesh(const dealii::Triangulation<dim, spacedim> &tria,
+               CGAL::Surface_mesh<CGALPointType> &         mesh);
+
+
+
 } // namespace CGALWrappers
 
 

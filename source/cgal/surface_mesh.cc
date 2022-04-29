@@ -69,6 +69,20 @@ namespace
                             "CGAL encountered a orientation problem that it "
                             "was not able to solve."));
   }
+
+  template <typename dealiiFace, typename CGAL_Mesh>
+  void
+  map_vertices(
+    const dealiiFace &                                        cell,
+    std::map<unsigned int, typename CGAL_Mesh::Vertex_index> &deal2cgal,
+    CGAL_Mesh &                                               mesh)
+  {
+    for (const auto i : cell->vertex_indices())
+      {
+        deal2cgal[cell->vertex_index(i)] = mesh.add_vertex(
+          CGALWrappers::to_cgal<typename CGAL_Mesh::Point>(cell->vertex(i)));
+      }
+  }
 } // namespace
 
 
@@ -113,6 +127,48 @@ namespace CGALWrappers
                   (f % 2 == 0 || cell->n_vertices() != 8));
   }
 
+
+
+  template <typename CGALPointType, int dim, int spacedim>
+  void
+  to_cgal_mesh(const dealii::Triangulation<dim, spacedim> &tria,
+               CGAL::Surface_mesh<CGALPointType> &         mesh)
+  {
+    Assert(tria.n_cells() > 0, ExcMessage("Triangulation cannot be empty"));
+    Assert(dim > 1, ExcImpossibleInDim(dim));
+    using Mesh         = CGAL::Surface_mesh<CGALPointType>;
+    using Vertex_index = typename Mesh::Vertex_index;
+
+    std::map<unsigned int, Vertex_index> deal2cgal;
+    if constexpr (dim == 2)
+      {
+        for (const auto &cell : tria.active_cell_iterators())
+          {
+            // to_cgal_mesh(cell, mapping, mesh);
+            map_vertices(cell, deal2cgal, mesh);
+            add_facet(cell, deal2cgal, mesh);
+          }
+      }
+    else if constexpr (dim == 3 && spacedim == 3)
+      {
+        for (const auto &cell : tria.active_cell_iterators())
+          {
+            const auto &face_indices = cell->face_indices();
+            for (const auto f : face_indices)
+              {
+                if (cell->face(f)->at_boundary())
+                  {
+                    map_vertices(cell->face(f), deal2cgal, mesh);
+                    add_facet(cell->face(f),
+                              deal2cgal,
+                              mesh,
+                              (f % 2 == 0 || cell->n_vertices() != 8));
+                  }
+              }
+          }
+      }
+    CGAL::Polygon_mesh_processing::stitch_borders(mesh);
+  }
   // explicit instantiations
 #    include "surface_mesh.inst"
 
