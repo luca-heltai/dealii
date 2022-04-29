@@ -82,7 +82,6 @@ main()
   test<2, 2>();
   test<2, 3>();
   test<3, 3>();
-
   // using Mesh = CGAL::Surface_mesh<CGALPoint>;
   // Mesh                mesh;
   // Triangulation<3, 3> tria;
