@@ -5,6 +5,8 @@ are supported:
   <li>Conversion from dealii cell types to CGAL::Surface_mesh and viceversa</li>
   <li>Conversion from dealii Triangulation to CGAL::Surface_mesh and viceversa</li>
   <li>Insertion of deal.II points in CGAL triangulation types</li>
+  <li>Conversion from CGAL::Triangulation_2 to Triangulation<dim, 2></li>
+  <li>Conversion from CGAL::Triangulation_3 to Triangulation<dim, 3></li>
 </ul>
 <br>
 (Marco Feder, Luca Heltai, 2022/04/26)
