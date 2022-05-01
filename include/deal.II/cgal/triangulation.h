@@ -244,12 +244,6 @@ namespace CGALWrappers
             Assert(false, ExcInternalError());
           }
       }
-    if (cells.size() == 0)
-      {
-        std::cout << cgal_triangulation << std::endl;
-        std::cout << "Number of finite edeges: "
-                  << cgal_triangulation.number_of_finite_edges() << std::endl;
-      }
     dealii_triangulation.create_triangulation(vertices, cells, subcell_data);
   }
 #  endif

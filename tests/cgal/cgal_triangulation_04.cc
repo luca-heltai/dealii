@@ -47,9 +47,6 @@ test()
   deallog << "dim " << dim << ", spacedim " << spacedim << std::endl;
   GridOut go;
   go.write_vtk(tria, deallog.get_file_stream());
-  std::ofstream ofile("grid_" + std::to_string(dim) + "d_" +
-                      std::to_string(spacedim) + ".vtk");
-  go.write_vtk(tria, ofile);
 }
 
 int
