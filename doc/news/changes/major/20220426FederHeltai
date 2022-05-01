@@ -1,3 +1,10 @@
-New: Added support for the CGAL library (www.cgal.org).
+New: Added support for the CGAL library (www.cgal.org). The following features 
+are supported:
+<ul>
+  <li>Conversion from dealii to CGAL point types and viceversa</li>
+  <li>Conversion from dealii cell types to CGAL::Surface_mesh and viceversa</li>
+  <li>Conversion from dealii Triangulation to CGAL::Surface_mesh and viceversa</li>
+  <li>Insertion of deal.II points in CGAL triangulation types</li>
+</ul>
 <br>
 (Marco Feder, Luca Heltai, 2022/04/26)
