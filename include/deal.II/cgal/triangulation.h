@@ -23,6 +23,8 @@
 #include <deal.II/cgal/utilities.h>
 
 #ifdef DEAL_II_WITH_CGAL
+#  include <boost/hana.hpp>
+
 #  include <CGAL/Surface_mesh.h>
 #  include <CGAL/Triangulation_3.h>
 
@@ -61,6 +63,43 @@ namespace CGALWrappers
   add_points_to_cgal_triangulation(const std::vector<Point<spacedim>> &points,
                                    CGALTriangulation &triangulation);
 
+  /**
+   * Convert any compatible CGAL triangulation type to a deal.II triangulation.
+   *
+   * The conversion is done by looping over the finite vertices and finite cells
+   * of the CGAL triangulation, and building with them a deal.II Triangulation
+   * object.
+   *
+   * CGAL considers triangulations to be a partition of the entire
+   * spacedim-dimensional space, where every face (including boundary faces) is
+   * shared between neighboring cells. This is obtained by adding to the list of
+   * vertices a special vertex (the vertex at infinity, representing a point on
+   * the spacedim-dimensional sphere with infinite radius), and adding a
+   * neighboring infinite cell to each boundary face.
+   *
+   * Valid conversions require that the capacity of the deal.II triangulation
+   * matches that of the input CGAL triangulation, i.e., if the input CGAL
+   * triangulation is a CGAL::Triangulation_2, then spacedim must be greater
+   * or equal than two. If the input CGAL triangulation is a
+   * CGAL::Triangulation_3, then spacedim must equal than three.
+   *
+   * Both CGAL::Triangulation_2 and CGAL::Triangulation_3 can store degenerate
+   * two dimensional triangulations (i.e., a one-dimensional triangulation), or
+   * a degenerate three dimensional triangulation (i.e., a two-dimensional
+   * surface triangulation). The dimension of the triangulation, as returned by
+   * `cgal_triangulation.dimension()`, must match the dimension `dim` of the
+   * input Triangulation `dealii_triangulation`. If this is not the case, an
+   * exception is thrown.
+   *
+   * @param cgal_triangulation
+   * @param dealii_triangulation
+   */
+  template <typename CGALTriangulation, int dim, int spacedim>
+  void
+  cgal_triangulation_to_dealii_triangulation(
+    const CGALTriangulation &     cgal_triangulation,
+    Triangulation<dim, spacedim> &dealii_triangulation);
+
 #  ifndef DOXYGEN
   // Template implementation
 
@@ -87,6 +126,131 @@ namespace CGALWrappers
            ExcMessage(
              "The Triangulation is no longer valid after inserting the points. "
              "Bailing out."));
+  }
+
+
+
+  template <typename CGALTriangulation, int dim, int spacedim>
+  void
+  cgal_triangulation_to_dealii_triangulation(
+    const CGALTriangulation &     cgal_triangulation,
+    Triangulation<dim, spacedim> &dealii_triangulation)
+  {
+    AssertThrow(cgal_triangulation.dimension() == dim,
+                ExcMessage("The dimension of the input CGAL triangulation (" +
+                           std::to_string(cgal_triangulation.dimension()) +
+                           ") does not match the dimension of the output "
+                           "deal.II triangulation (" +
+                           std::to_string(dim) + ")."));
+
+    Assert(dealii_triangulation.n_cells() == 0,
+           ExcMessage("The output triangulation object needs to be empty."));
+
+    const auto nv = cgal_triangulation.number_of_vertices();
+
+    // Deal.II storage data structures
+    std::vector<Point<spacedim>> vertices(nv);
+    std::vector<CellData<dim>>   cells;
+    SubCellData                  subcell_data;
+
+    // CGAL storage data structures
+    std::map<typename CGALTriangulation::Vertex_handle, unsigned int>
+      vertex_map;
+    {
+      unsigned int i = 0;
+      for (auto v : cgal_triangulation.finite_vertex_handles())
+        {
+          vertices[i]   = CGALWrappers::to_dealii<spacedim>(v->point());
+          vertex_map[v] = i++;
+        }
+    }
+
+    auto has_faces = boost::hana::is_valid(
+      [](auto &&obj) -> decltype(obj.finite_face_handles()) {});
+
+    auto has_cells = boost::hana::is_valid(
+      [](auto &&obj) -> decltype(obj.finite_cell_handles()) {});
+
+    // Different loops for Triangulation_2 and Triangulation_3 types.
+    if constexpr (has_faces(cgal_triangulation))
+      {
+        // This is a non-degenerate Triangulation_2
+        if (cgal_triangulation.dimension() == 2)
+          for (const auto f : cgal_triangulation.finite_face_handles())
+            {
+              CellData<dim> cell(3);
+              for (unsigned int i = 0; i < 3; ++i)
+                cell.vertices[i] = vertex_map[f->vertex(i)];
+              cells.push_back(cell);
+            }
+        else if (cgal_triangulation.dimension() == 1)
+          // This is a degenerate Triangulation_2, made of edges
+          for (const auto e : cgal_triangulation.finite_edges())
+            {
+              // An edge is idenfied by a face and a vertex index in the face
+              const auto &  f = e.first;
+              const auto &  i = e.second;
+              CellData<dim> cell(2);
+              unsigned int  id = 0;
+              for (unsigned int j = 0; j < 3; ++j)
+                if (j != i)
+                  cell.vertices[id++] = vertex_map[f->vertex(j)];
+              cells.push_back(cell);
+            }
+        else
+          {
+            Assert(false, ExcInternalError());
+          }
+      }
+    else if constexpr (has_cells(cgal_triangulation))
+      {
+        // This is a non-degenerate Triangulation_3
+        if (cgal_triangulation.dimension() == 3)
+          for (const auto c : cgal_triangulation.finite_cell_handles())
+            {
+              CellData<dim> cell(4);
+              for (unsigned int i = 0; i < 4; ++i)
+                cell.vertices[i] = vertex_map[c->vertex(i)];
+              cells.push_back(cell);
+            }
+        else if (cgal_triangulation.dimension() == 2)
+          // This is a degenerate Triangulation_3, made of triangles
+          for (const auto facet : cgal_triangulation.finite_facets())
+            {
+              // A facet is idenfied by a cell and the opposite vertex index in
+              // the face
+              const auto &  c = facet.first;
+              const auto &  i = facet.second;
+              CellData<dim> cell(3);
+              unsigned int  id = 0;
+              for (unsigned int j = 0; j < 4; ++j)
+                if (j != i)
+                  cell.vertices[id++] = vertex_map[c->vertex(j)];
+              cells.push_back(cell);
+            }
+        else if (cgal_triangulation.dimension() == 1)
+          // This is a degenerate Triangulation_3, made of edges
+          for (const auto edge : cgal_triangulation.finite_edges())
+            {
+              // An edge is idenfied by a cell and its two vertices
+              const auto &[c, i, j] = edge;
+              CellData<dim> cell(2);
+              cell.vertices[0] = vertex_map[c->vertex(i)];
+              cell.vertices[1] = vertex_map[c->vertex(j)];
+              cells.push_back(cell);
+            }
+        else
+          {
+            Assert(false, ExcInternalError());
+          }
+      }
+    if (cells.size() == 0)
+      {
+        std::cout << cgal_triangulation << std::endl;
+        std::cout << "Number of finite edeges: "
+                  << cgal_triangulation.number_of_finite_edges() << std::endl;
+      }
+    dealii_triangulation.create_triangulation(vertices, cells, subcell_data);
   }
 #  endif
 } // namespace CGALWrappers
