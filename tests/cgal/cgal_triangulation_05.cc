@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2020 by the deal.II authors
+// Copyright (C) 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -16,7 +16,7 @@
 // Convert a cgal Delaunay_triangulation_3 to a
 // dealii::Triangulation<dim, spacedim>
 // Non trivial case of a sphere. We need Exact predicates, inexact construction
-// kernel here, since Simple_cartesian will throw an execption when trying to
+// kernel here, since Simple_cartesian will throw an exception when trying to
 // add some almost coplanar points.
 
 #include <deal.II/base/config.h>

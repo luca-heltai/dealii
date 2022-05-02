@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2020 by the deal.II authors
+// Copyright (C) 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -100,9 +100,10 @@ namespace CGALWrappers
     const CGALTriangulation &     cgal_triangulation,
     Triangulation<dim, spacedim> &dealii_triangulation);
 
+
+
 #  ifndef DOXYGEN
   // Template implementation
-
   template <int spacedim, typename CGALTriangulation>
   void
   add_points_to_cgal_triangulation(const std::vector<Point<spacedim>> &points,
@@ -114,12 +115,10 @@ namespace CGALWrappers
              "CGAL triangulation."));
     using CGALPoint = typename CGALTriangulation::Point;
     std::vector<CGALPoint> cgal_points(points.size());
-    std::transform(points.begin(),
-                   points.end(),
-                   cgal_points.begin(),
-                   [](const auto &p) {
-                     return CGALWrappers::to_cgal<CGALPoint>(p);
-                   });
+    std::transform(
+      points.begin(), points.end(), cgal_points.begin(), [](const auto &p) {
+        return CGALWrappers::dealii_point_to_cgal_point<CGALPoint>(p);
+      });
 
     triangulation.insert(cgal_points.begin(), cgal_points.end());
     Assert(triangulation.is_valid(),
@@ -160,7 +159,8 @@ namespace CGALWrappers
       unsigned int i = 0;
       for (auto v : cgal_triangulation.finite_vertex_handles())
         {
-          vertices[i]   = CGALWrappers::to_dealii<spacedim>(v->point());
+          vertices[i] =
+            CGALWrappers::cgal_point_to_dealii_point<spacedim>(v->point());
           vertex_map[v] = i++;
         }
     }
