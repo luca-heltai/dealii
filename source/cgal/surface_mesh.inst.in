@@ -24,8 +24,13 @@ for (dim : DIMENSIONS; spacedim : SPACE_DIMENSIONS; cgal_kernel : CGAL_KERNELS)
       const Mapping<dim, spacedim> &                              mapping,
       CGAL::Surface_mesh<typename cgal_kernel::Point_3> &         mesh);
 
-    template void to_cgal_mesh<typename cgal_kernel::Point_3, dim, spacedim>(
+    template void 
+    convert_to_cgal_surface_mesh<typename cgal_kernel::Point_3, dim, spacedim>(
       const Triangulation<dim, spacedim> &               tria,
       CGAL::Surface_mesh<typename cgal_kernel::Point_3> &mesh);
+
+    template void convert_surface_mesh_to_dealii_tria(CGAL::Surface_mesh<typename cgal_kernel::Point_3>& cgal_mesh, Triangulation<dim,spacedim>& tria);
+    template void convert_surface_mesh_to_dealii_tria(CGAL::Polyhedron_3<cgal_kernel,CGAL::Polyhedron_items_with_id_3>& cgal_mesh, Triangulation<dim,spacedim>& tria);
+
 #endif
   }

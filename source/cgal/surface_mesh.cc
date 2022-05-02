@@ -17,9 +17,15 @@
 
 #include <deal.II/base/patterns.h>
 
+#include <deal.II/grid/grid_tools.h>
+
 #include <deal.II/cgal/surface_mesh.h>
 
 #ifdef DEAL_II_WITH_CGAL
+#  include <boost/hana.hpp>
+
+#  include <CGAL/circulator.h>
+
 
 DEAL_II_NAMESPACE_OPEN
 
@@ -131,8 +137,8 @@ namespace CGALWrappers
 
   template <typename CGALPointType, int dim, int spacedim>
   void
-  to_cgal_mesh(const dealii::Triangulation<dim, spacedim> &tria,
-               CGAL::Surface_mesh<CGALPointType> &         mesh)
+  convert_to_cgal_surface_mesh(const dealii::Triangulation<dim, spacedim> &tria,
+                               CGAL::Surface_mesh<CGALPointType>          &mesh)
   {
     Assert(tria.n_cells() > 0, ExcMessage("Triangulation cannot be empty"));
     Assert(dim > 1, ExcImpossibleInDim(dim));
@@ -169,10 +175,130 @@ namespace CGALWrappers
       }
     CGAL::Polygon_mesh_processing::stitch_borders(mesh);
   }
-  // explicit instantiations
+
+
+
+  template <typename CGAL_MeshType, int dim, int spacedim>
+  void
+  convert_surface_mesh_to_dealii_tria(CGAL_MeshType                &cgal_mesh,
+                                      Triangulation<dim, spacedim> &tria)
+  {
+    Assert(tria.n_cells() == 0,
+           ExcMessage(
+             "Triangulation must be empty upon calling this function."));
+    Assert((dim == 2 && spacedim == 2) || (dim == 2 && spacedim == 3),
+           ExcMessage(
+             "This function does work only for dim==2 and spacedim==2 or 3."));
+
+
+    [[maybe_unused]] auto is_surface_mesh =
+      boost::hana::is_valid([](auto &&obj) -> decltype(obj.faces()) {});
+
+    [[maybe_unused]] auto is_polyhedral =
+      boost::hana::is_valid([](auto &&obj) -> decltype(obj.facets_begin()) {});
+
+    // Collect Vertices
+    [[maybe_unused]] std::size_t         n_cgal_vertices;
+    std::vector<dealii::Point<spacedim>> vertices;
+    std::vector<CellData<dim>>           cells;
+    if constexpr (is_surface_mesh(cgal_mesh))
+      {
+        n_cgal_vertices = cgal_mesh.num_vertices();
+        vertices.reserve(n_cgal_vertices);
+        for (const auto &p : cgal_mesh.points())
+          {
+            vertices.emplace_back(CGALWrappers::to_dealii<spacedim>(p));
+          }
+      }
+    else if constexpr (is_polyhedral(cgal_mesh))
+      {
+        n_cgal_vertices = cgal_mesh.size_of_vertices();
+        vertices.reserve(n_cgal_vertices);
+        for (auto it = cgal_mesh.points_begin(); it != cgal_mesh.points_end();
+             ++it)
+          {
+            vertices.emplace_back(CGALWrappers::to_dealii<spacedim>(*it));
+          }
+      }
+
+
+    // Different loops depending for Polyhedron or Surface_mesh types
+    if constexpr (is_surface_mesh(cgal_mesh))
+      {
+        const unsigned int vertices_per_face =
+          CGAL::vertices_around_face(
+            cgal_mesh.halfedge(*(cgal_mesh.faces().begin())), cgal_mesh)
+            .size();
+
+        // Collect CellData
+        for (const auto &face : cgal_mesh.faces())
+          {
+            CellData<dim> c(vertices_per_face);
+            auto          it_vertex = c.vertices.begin();
+            for (const auto v :
+                 CGAL::vertices_around_face(cgal_mesh.halfedge(face),
+                                            cgal_mesh))
+              {
+                *(it_vertex++) = v;
+              }
+
+            if (vertices_per_face == 4)
+              std::swap(c.vertices[3], c.vertices[2]);
+
+            // If vertices_per_face==3, CGAL ordering 0-1-2 is already correct
+            cells.emplace_back(c);
+          }
+
+        SubCellData subcelldata;
+        GridTools::delete_unused_vertices(vertices, cells, subcelldata);
+        GridTools::consistently_order_cells(cells);
+        tria.create_triangulation(vertices, cells, {});
+      }
+    else if constexpr (is_polyhedral(cgal_mesh))
+      {
+        const unsigned int vertices_per_face =
+          cgal_mesh.facets_begin()->facet_degree(); //[TODO: fix this?]
+
+        std::size_t i = 0;
+        for (auto vertex_it = cgal_mesh.vertices_begin();
+             vertex_it != cgal_mesh.vertices_end();
+             ++vertex_it)
+          {
+            vertex_it->id() = i++;
+          }
+        // Loop over faces of Polyhedron, fill CellData
+        for (auto face_it = cgal_mesh.facets_begin();
+             face_it != cgal_mesh.facets_end();
+             ++face_it)
+          {
+            CellData<dim> c(vertices_per_face);
+            auto          it   = c.vertices.begin();
+            auto          circ = face_it->facet_begin();
+            do
+              {
+                *(it++) = circ->vertex()->id();
+              }
+            while (++circ != face_it->facet_begin());
+
+            if (vertices_per_face == 4)
+              std::swap(c.vertices[3], c.vertices[2]);
+
+            cells.emplace_back(c);
+          }
+        SubCellData subcelldata;
+        if (vertices_per_face == 4)
+          {
+            GridTools::delete_unused_vertices(vertices, cells, subcelldata);
+            GridTools::consistently_order_cells(cells);
+            tria.create_triangulation(vertices, cells, {});
+          }
+      }
+    else
+      {
+        Assert(false, ExcInternalError());
+      }
+  }
 #    include "surface_mesh.inst"
-
-
 } // namespace CGALWrappers
 #  endif
 

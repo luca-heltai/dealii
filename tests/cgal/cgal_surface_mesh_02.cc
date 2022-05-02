@@ -68,7 +68,7 @@ test()
                 }
             }
         }
-      to_cgal_mesh(tria, mesh);
+      convert_to_cgal_surface_mesh(tria, mesh);
 
       deallog << mesh << std::endl;
       Assert(mesh.is_valid(), dealii::ExcMessage("The CGAL mesh is not valid"));

@@ -26,6 +26,8 @@
 
 #ifdef DEAL_II_WITH_CGAL
 #  include <CGAL/Polygon_mesh_processing/stitch_borders.h>
+#  include <CGAL/Polyhedron_3.h>
+#  include <CGAL/Polyhedron_items_with_id_3.h>
 #  include <CGAL/Surface_mesh.h>
 
 
@@ -67,8 +69,8 @@ namespace CGALWrappers
   void
   convert_to_cgal_surface_mesh(
     const typename dealii::Triangulation<dim, spacedim>::cell_iterator &cell,
-    const dealii::Mapping<dim, spacedim> &                              mapping,
-    CGAL::Surface_mesh<CGALPointType> &                                 mesh);
+    const Mapping<dim, spacedim>                                       &mapping,
+    CGAL::Surface_mesh<CGALPointType>                                  &mesh);
 
 
   /**
@@ -83,8 +85,24 @@ namespace CGALWrappers
    */
   template <typename CGALPointType, int dim, int spacedim>
   void
-  to_cgal_mesh(const dealii::Triangulation<dim, spacedim> &tria,
-               CGAL::Surface_mesh<CGALPointType> &         mesh);
+  convert_to_cgal_surface_mesh(const dealii::Triangulation<dim, spacedim> &tria,
+                               CGAL::Surface_mesh<CGALPointType> &mesh);
+
+
+
+  /**
+   * @brief Convert a CGAL Mesh to a deal.II triangulation
+   *
+   * @tparam CGAL_MeshType
+   * @tparam dim
+   * @tparam spacedim
+   * @param[in] cgal_mesh CGAL_MeshType representing a mesh
+   * @param[out] tria deal.II triangulation built on top of the CGAL mesh
+   */
+  template <typename CGAL_MeshType, int dim, int spacedim>
+  void
+  convert_surface_mesh_to_dealii_tria(CGAL_MeshType                &cgal_mesh,
+                                      Triangulation<dim, spacedim> &tria);
 
 
 
