@@ -15,6 +15,8 @@
 
 #include <deal.II/base/config.h>
 
+#include <deal.II/fe/mapping_q.h> //[TODO: fix mapping stuff]
+
 #include <deal.II/cgal/surface_mesh.h>
 
 #ifdef DEAL_II_WITH_CGAL
@@ -55,7 +57,7 @@ namespace
           Assert(false, ExcInternalError());
           break;
       }
-    if (clockwise_ordering == false)
+    if (clockwise_ordering == true)
       std::reverse(indices.begin(), indices.end());
 
     [[maybe_unused]] const auto new_face = mesh.add_face(indices);
@@ -114,6 +116,100 @@ namespace CGALWrappers
                     (f % 2 == 0));
   }
 
+
+
+  template <typename CGALPointType, int dim, int spacedim>
+  void
+  corefine_and_compute_boolean_operation_dealii_cells(
+    const typename Triangulation<dim, spacedim>::cell_iterator &cell1,
+    const typename Triangulation<dim, spacedim>::cell_iterator &cell2,
+    CGAL::Surface_mesh<CGALPointType> &                         outsm,
+    const BooleanOperation &boolean_operation)
+  {
+    Assert(dim != 1 || spacedim != 1,
+           ExcMessage(
+             "This function does not work with 1-dimensional objects."));
+    Assert(
+      outsm.is_empty(),
+      ExcMessage(
+        "The output surface mesh needs to be empty upon calling this function."));
+    namespace PMP = CGAL::Polygon_mesh_processing;
+    CGAL::Surface_mesh<CGALPointType> sm1, sm2;
+    dealii_cell_to_cgal_surface_mesh(cell1,
+                                     MappingQ<dim, spacedim>(1),
+                                     sm1); //[TODO: remove Mapping from here...]
+    dealii_cell_to_cgal_surface_mesh(cell2, MappingQ<dim, spacedim>(1), sm2);
+    PMP::triangulate_faces(sm1);
+    PMP::triangulate_faces(sm2);
+
+    [[maybe_unused]] bool res = false;
+    switch (boolean_operation)
+      {
+        case BooleanOperation::union_op:
+          res = PMP::corefine_and_compute_union(sm1, sm2, outsm);
+          break;
+        case BooleanOperation::intersection_op:
+          res = PMP::corefine_and_compute_intersection(sm1, sm2, outsm);
+          break;
+        case BooleanOperation::only_corefinement:
+          PMP::corefine(sm1, sm2);
+          (void)outsm;
+          res = true;
+          break;
+        default:
+          Assert(
+            res,
+            ExcMessage(
+              "The boolean operation you provided doesn't make sense. Please check it."));
+          break;
+      }
+    Assert(res,
+           ExcMessage("The boolean operation was not succesfully computed."));
+  }
+
+
+
+  template <int spacedim, typename CGALPointType, typename CGALTriangulation>
+  Quadrature<spacedim>
+  quadrature_inside_region(const CGAL::Surface_mesh<CGALPointType> &sm,
+                           const unsigned int                       degree,
+                           CGALTriangulation &                      tr)
+  {
+    Assert(spacedim != 1,
+           ExcNotImplemented("1D quadratures are not yet supported."));
+    Assert(
+      (!sm.is_empty() && tr.dimension() == -1),
+      ExcMessage(
+        "The input mesh must be non-empty and the triangulation must be empty. Check the call to this function."));
+
+    CGAL::Surface_mesh<CGALPointType> dummy;
+    CGAL::convex_hull_3(sm.points().begin(), sm.points().end(), dummy);
+    tr.insert(dummy.points().begin(), dummy.points().end());
+
+    QGaussSimplex<spacedim>              quad(degree);
+    std::vector<dealii::Point<spacedim>> pts;
+    std::vector<double>                  wts;
+    for (const auto &f : tr.finite_cell_handles())
+      {
+        std::array<dealii::Point<spacedim>, spacedim + 1> vertices; // tets
+        for (unsigned int i = 0; i < (spacedim + 1); ++i)
+          {
+            vertices[i] =
+              cgal_point_to_dealii_point<spacedim>(f->vertex(i)->point());
+          }
+
+        auto local_quad = quad.compute_affine_transformation(vertices);
+        std::transform(local_quad.get_points().begin(),
+                       local_quad.get_points().end(),
+                       std::back_inserter(pts),
+                       [&pts](const auto &p) { return p; });
+        std::transform(local_quad.get_weights().begin(),
+                       local_quad.get_weights().end(),
+                       std::back_inserter(wts),
+                       [&wts](const double w) { return w; });
+      }
+    return Quadrature<spacedim>(pts, wts);
+  }
   // explicit instantiations
 #    include "surface_mesh.inst"
 

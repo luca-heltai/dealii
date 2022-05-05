@@ -25,12 +25,24 @@
 #include <deal.II/cgal/utilities.h>
 
 #ifdef DEAL_II_WITH_CGAL
+#  include <CGAL/Polygon_mesh_processing/corefinement.h>
+#  include <CGAL/Polygon_mesh_processing/triangulate_faces.h>
 #  include <CGAL/Surface_mesh.h>
+#  include <CGAL/Triangulation_3.h>
+#  include <CGAL/convex_hull_3.h>
+
 
 DEAL_II_NAMESPACE_OPEN
 
 namespace CGALWrappers
 {
+  enum class BooleanOperation
+  {
+    only_corefinement = 1 << 0,
+    union_op          = 1 << 2,
+    intersection_op   = 1 << 3,
+  };
+
   /**
    * Build a CGAL::Surface_mesh from a deal.II cell.
    *
@@ -66,6 +78,50 @@ namespace CGALWrappers
     const typename dealii::Triangulation<dim, spacedim>::cell_iterator &cell,
     const dealii::Mapping<dim, spacedim> &                              mapping,
     CGAL::Surface_mesh<CGALPointType> &                                 mesh);
+
+  /**
+   * Performs corefinement and boolean operations on two deal.II cells and put
+   * the result in a CGAL::Surface_mesh object.
+   *
+   * Extensive examples can be found in the CGAL documentation at
+   * https://doc.cgal.org/latest/Polygon_mesh_processing/index.html#coref_coref_subsec
+   *
+   * @tparam CGALPointType
+   * @tparam dim
+   * @tparam spacedim
+   * @param[in] cell1
+   * @param[in] cell2
+   * @param[out] outsm
+   * @param[in] boolean_operation BooleanOperation::intersection_op and
+   * BooleanOperation::union_op perform intersection and union of cells,
+   * respectively. If not specified, this parameter is defaulted to
+   * BooleanOperation::simple_corefinement, and only a corefinement is performed
+   */
+  template <typename CGALPointType, int dim, int spacedim>
+  void
+  corefine_and_compute_boolean_operation_dealii_cells(
+    const typename Triangulation<dim, spacedim>::cell_iterator &cell1,
+    const typename Triangulation<dim, spacedim>::cell_iterator &cell2,
+    CGAL::Surface_mesh<CGALPointType> &                         outsm,
+    const BooleanOperation &boolean_operation =
+      BooleanOperation::only_corefinement);
+
+  /**
+   * Build a Quadrature<spacedim> formula to integrate over the volumetric
+   * region described by a CGAL::Surface_mesh, by filling the interior with
+   * simplices and collecting points and weights to initegrate over it.
+   *
+   * @tparam spacedim
+   * @tparam CGALPointType
+   * @param sm
+   * @param degree
+   * @return Quadrature<spacedim>
+   */
+  template <int spacedim, typename CGALPointType, typename CGALTriangulation>
+  Quadrature<spacedim>
+  quadrature_inside_region(const CGAL::Surface_mesh<CGALPointType> &sm,
+                           const unsigned int                       degree,
+                           CGALTriangulation &                      tr);
 } // namespace CGALWrappers
 
 
