@@ -65,20 +65,30 @@ namespace CGALWrappers
   cgal_point_to_dealii_point(const CGALPointType &p);
 
 /**
- * crea corse grid a partire da sm, più lasca pox, eventualmente con features
+ * crea coarse grid a partire da sm, più lasca pox, eventualmente con features. Use make_mesh()
  * 
  * @param sm 
  * @param tr 
  */
-  void surface_mesh_to_coarse(const CGALMesh& sm,CGALTriangulation& tr, const bool enforce_feature);
+template <typename CGALPointType, typename CGALTriangulation>
+  void surface_mesh_to_coarse(const CGALMesh<CGALPointType>& sm,CGALTriangulation& tr, const bool enforce_feature);
 
-
+/**
+ * 
+ * 
+ * @tparam CGALTtriangulation 
+ * @param tr 
+ * @return Quadrature<CGALPointType::Ambient_dimension::value> 
+ */
   template <typename CGALTtriangulation >
     Quadrature<CGALPointType::Ambient_dimension::value>
  compute_global_quadratures(const CGALTtriangulation& tr);
 
-template<typename CGALSurfaceMesh>
- void compute_boolean_operation(const CGALSurfaceMesh& sm1, const CGALSurfaceMesh& sm2, const CGALSurfaceMesh& outsm);
+template<typename CGALPointType>
+ void compute_boolean_operation(const CGALSurfaceMesh<CGALPointType>& sm1, const CGALSurfaceMesh<CGALPointType>& sm2, const CGALSurfaceMesh<CGALPointType>& outsm, const BooleanOperation& bool_op){
+
+   //if bool_op == intersection => convex_hull
+ }
 } // namespace CGALWrappers
 
 #  ifndef DOXYGEN
