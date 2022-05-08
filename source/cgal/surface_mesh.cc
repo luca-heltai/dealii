@@ -118,12 +118,13 @@ namespace CGALWrappers
 
 
 
-  template <typename CGALPointType, int dim, int spacedim>
-  void
-  boolean_operation(
-    const typename Triangulation<dim, spacedim>::cell_iterator &cell1,
-    const typename Triangulation<dim, spacedim>::cell_iterator &cell2,
-    CGAL::Surface_mesh<CGALPointType> &                         outsm,
+  template <int dim1, int dim2, int spacedim>
+      Quadrature<spacedim>
+  compute_quadrature_rule_over_boolean_operation(
+    const typename Triangulation<dim1, spacedim>::cell_iterator &cell1,
+    const typename Triangulation<dim2, spacedim>::cell_iterator &cell2,
+    const Mapping<dim1,spacedim>& mapping1,
+    const Mapping<dim2,spacedim>& mapping2,
     const BooleanOperation &boolean_operation)
   {
     Assert(dim != 1 || spacedim != 1,
@@ -134,15 +135,15 @@ namespace CGALWrappers
       ExcMessage(
         "The output surface mesh needs to be empty upon calling this function."));
     namespace PMP = CGAL::Polygon_mesh_processing;
-    CGAL::Surface_mesh<CGALPointType> sm1, sm2;
+    CGAL::Surface_mesh<CGALPointType> sm1, sm2, outsm;
     dealii_cell_to_cgal_surface_mesh(cell1,
-                                     MappingQ<dim, spacedim>(1),
-                                     sm1); //[TODO: remove Mapping from here...]
-    dealii_cell_to_cgal_surface_mesh(cell2, MappingQ<dim, spacedim>(1), sm2);
+mapping1    ,                                 sm1); //[TODO: remove Mapping from here...]
+    dealii_cell_to_cgal_surface_mesh(cell2, mapping2, sm2);
     PMP::triangulate_faces(sm1);
     PMP::triangulate_faces(sm2);
 
     [[maybe_unused]] bool res = false;
+    // wrap into utility
     switch (boolean_operation)
       {
         case BooleanOperation::UNION:
@@ -186,7 +187,7 @@ namespace CGALWrappers
       (!sm.is_empty() && tr.dimension() == -1),
       ExcMessage(
         "The input mesh must be non-empty and the triangulation must be empty. Check the call to this function."));
-
+//sm to coarse
     CGAL::Surface_mesh<CGALPointType> dummy;
     CGAL::convex_hull_3(sm.points().begin(), sm.points().end(), dummy);
     tr.insert(dummy.points().begin(), dummy.points().end());

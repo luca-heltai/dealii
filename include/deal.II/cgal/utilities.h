@@ -63,6 +63,22 @@ namespace CGALWrappers
   template <int dim, typename CGALPointType>
   inline dealii::Point<dim>
   cgal_point_to_dealii_point(const CGALPointType &p);
+
+/**
+ * crea corse grid a partire da sm, più lasca pox, eventualmente con features
+ * 
+ * @param sm 
+ * @param tr 
+ */
+  void surface_mesh_to_coarse(const CGALMesh& sm,CGALTriangulation& tr, const bool enforce_feature);
+
+
+  template <typename CGALTtriangulation >
+    Quadrature<CGALPointType::Ambient_dimension::value>
+ compute_global_quadratures(const CGALTtriangulation& tr);
+
+template<typename CGALSurfaceMesh>
+ void compute_boolean_operation(const CGALSurfaceMesh& sm1, const CGALSurfaceMesh& sm2, const CGALSurfaceMesh& outsm);
 } // namespace CGALWrappers
 
 #  ifndef DOXYGEN
