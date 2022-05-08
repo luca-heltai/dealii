@@ -120,7 +120,7 @@ namespace CGALWrappers
 
   template <typename CGALPointType, int dim, int spacedim>
   void
-  corefine_and_compute_boolean_operation_dealii_cells(
+  boolean_operation(
     const typename Triangulation<dim, spacedim>::cell_iterator &cell1,
     const typename Triangulation<dim, spacedim>::cell_iterator &cell2,
     CGAL::Surface_mesh<CGALPointType> &                         outsm,
@@ -145,13 +145,16 @@ namespace CGALWrappers
     [[maybe_unused]] bool res = false;
     switch (boolean_operation)
       {
-        case BooleanOperation::union_op:
+        case BooleanOperation::UNION:
           res = PMP::corefine_and_compute_union(sm1, sm2, outsm);
           break;
-        case BooleanOperation::intersection_op:
+        case BooleanOperation::INTERSECTION:
           res = PMP::corefine_and_compute_intersection(sm1, sm2, outsm);
           break;
-        case BooleanOperation::only_corefinement:
+        case BooleanOperation::DIFFERENCE:
+          res = PMP::corefine_and_compute_difference(sm1, sm2, outsm);
+          break;
+        case BooleanOperation::NONE:
           PMP::corefine(sm1, sm2);
           (void)outsm;
           res = true;
@@ -169,12 +172,14 @@ namespace CGALWrappers
 
 
 
-  template <int spacedim, typename CGALPointType, typename CGALTriangulation>
-  Quadrature<spacedim>
-  quadrature_inside_region(const CGAL::Surface_mesh<CGALPointType> &sm,
-                           const unsigned int                       degree,
-                           CGALTriangulation &                      tr)
+  template <typename CGALPointType, typename CGALTriangulation>
+  Quadrature<CGALPointType::Ambient_dimension::value>
+  collect_quadratures_inside_surface(
+    const CGAL::Surface_mesh<CGALPointType> &sm,
+    const unsigned int                       degree,
+    CGALTriangulation &                      tr)
   {
+    constexpr unsigned int spacedim = 3;
     Assert(spacedim != 1,
            ExcNotImplemented("1D quadratures are not yet supported."));
     Assert(

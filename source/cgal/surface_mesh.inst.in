@@ -26,10 +26,8 @@ for (dim : DIMENSIONS; spacedim : SPACE_DIMENSIONS; cgal_kernel : CGAL_KERNELS)
       const Mapping<dim, spacedim> &                              mapping,
       CGAL::Surface_mesh<typename cgal_kernel::Point_3> &         mesh);
 
-    template void corefine_and_compute_boolean_operation_dealii_cells<
-      typename cgal_kernel::Point_3,
-      dim,
-      spacedim>(
+    template void
+    boolean_operation<typename cgal_kernel::Point_3, dim, spacedim>(
       const typename Triangulation<dim, spacedim>::cell_iterator &cell1,
       const typename Triangulation<dim, spacedim>::cell_iterator &cell2,
       CGAL::Surface_mesh<typename cgal_kernel::Point_3> &         outsm,
@@ -37,12 +35,12 @@ for (dim : DIMENSIONS; spacedim : SPACE_DIMENSIONS; cgal_kernel : CGAL_KERNELS)
 
 #endif
   }
-for (spacedim : SPACE_DIMENSIONS; cgal_kernel : CGAL_KERNELS)
+for (cgal_kernel : CGAL_KERNELS)
   {
-    template dealii::Quadrature<spacedim>
-    quadrature_inside_region<spacedim,
-                             typename cgal_kernel::Point_3,
-                             typename CGAL::Triangulation_3<cgal_kernel>>(
+    template dealii::Quadrature<cgal_kernel::Point_3::Ambient_dimension::value>
+    collect_quadratures_inside_surface<
+      typename cgal_kernel::Point_3,
+      typename CGAL::Triangulation_3<cgal_kernel>>(
       const CGAL::Surface_mesh<typename cgal_kernel::Point_3> &sm,
       const unsigned int                                       degree,
       CGAL::Triangulation_3<cgal_kernel> &                     tr);

@@ -38,7 +38,7 @@
 
 
 using namespace CGALWrappers;
-using K                 = CGAL::Exact_predicates_exact_constructions_kernel;
+using K                 = CGAL::Exact_predicates_inexact_constructions_kernel;
 using CGALPoint         = CGAL::Point_3<K>;
 using CGALTriangulation = CGAL::Triangulation_3<K>;
 
@@ -49,17 +49,17 @@ test()
   Triangulation<3, 3> tria1;
   GridGenerator::hyper_cube(tria0, 0.5, 1.5);
   GridGenerator::hyper_cube(tria1, 0., 1.);
-  GridTools::rotate(numbers::PI_4, 1, tria1);
-  std::array<BooleanOperation, 2> operations{BooleanOperation::union_op,
-                                             BooleanOperation::intersection_op};
+  // GridTools::rotate(numbers::PI_4, 1, tria1);
+  std::array<BooleanOperation, 3> operations{BooleanOperation::UNION,
+                                             BooleanOperation::DIFFERENCE,
+                                             BooleanOperation::INTERSECTION};
   const auto                      cell0 = tria0.begin_active();
   const auto                      cell1 = tria1.begin_active();
   CGAL::Surface_mesh<CGALPoint>   corefined;
   for (const auto &bool_op : operations)
     {
       corefined.clear();
-      corefine_and_compute_boolean_operation_dealii_cells<CGALPoint, 3, 3>(
-        cell0, cell1, corefined, bool_op);
+      boolean_operation<CGALPoint, 3, 3>(cell0, cell1, corefined, bool_op);
       Assert(corefined.is_valid(),
              ExcMessage("The boolean operation you performed is not valid!"));
       deallog << corefined << std::endl;
@@ -87,7 +87,7 @@ test()
   tr.clear();
   const int  degree = 3;
   const auto quad_over_intersection =
-    quadrature_inside_region<3>(corefined, degree, tr);
+    CGALWrappers::collect_quadratures_inside_surface(corefined, degree, tr);
   deallog << "Area of the surface:"
           << std::accumulate(quad_over_intersection.get_weights().begin(),
                              quad_over_intersection.get_weights().end(),
