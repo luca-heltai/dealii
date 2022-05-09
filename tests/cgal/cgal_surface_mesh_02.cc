@@ -1,0 +1,83 @@
+// ---------------------------------------------------------------------
+//
+// Copyright (C) 2022 by the deal.II authors
+//
+// This file is part of the deal.II library.
+//
+// The deal.II library is free software; you can use it, redistribute
+// it, and/or modify it under the terms of the GNU Lesser General
+// Public License as published by the Free Software Foundation; either
+// version 2.1 of the License, or (at your option) any later version.
+// The full text of the license can be found in the file LICENSE.md at
+// the top level directory of deal.II.
+//
+// ---------------------------------------------------------------------
+
+// Read a Surface_mesh from an .off file, then create a coarse mesh filled with
+// tets
+
+#include <deal.II/base/config.h>
+
+#include <deal.II/grid/grid_generator.h>
+#include <deal.II/grid/tria.h>
+
+#include <CGAL/IO/io.h>
+#include <deal.II/cgal/utilities.h>
+
+#include "../tests.h"
+
+// Create a Surface_mesh from an .off file, then fill it with tets and print
+// vertices
+
+typedef CGAL::Exact_predicates_inexact_constructions_kernel K;
+using CGALPoint = CGAL::Point_3<K>;
+#ifdef CGAL_CONCURRENT_MESH_3
+using Concurrency_tag = CGAL::Parallel_tag Concurrency_tag;
+#else
+using Concurrency_tag = CGAL::Sequential_tag;
+#endif
+using Mesh_domain =
+  CGAL::Polyhedral_mesh_domain_with_features_3<K,
+                                               CGAL::Surface_mesh<CGALPoint>>;
+using Tr            = typename CGAL::Mesh_triangulation_3<Mesh_domain>::type;
+using Mesh_criteria = CGAL::Mesh_criteria_3<Tr>;
+using C3t3          = CGAL::Mesh_complex_3_in_triangulation_3<Tr,
+                                                     Mesh_domain::Corner_index,
+                                                     Mesh_domain::Curve_index>;
+using namespace CGALWrappers;
+
+void
+test()
+{
+  const std::vector<std::string> fnames{"input_grids/cube.off",
+                                        "input_grids/tetrahedron.off"};
+  CGAL::Surface_mesh<CGALPoint>  sm;
+  C3t3                           tria;
+  for (const auto &name : fnames)
+    {
+      std::ifstream input(name);
+      input >> sm;
+      cgal_surface_mesh_to_cgal_coarse_triangulation(sm, tria);
+      std::ofstream off_file_medit("coarse_" + name + ".mesh");
+      tria.output_to_medit(off_file_medit, false);
+      // Loop over tets and print Points
+      deallog << "Vertices of the " + name + " mesh:" << std::endl;
+      for (auto it = tria.cells_in_complex_begin();
+           it != tria.cells_in_complex_end();
+           ++it)
+        {
+          for (unsigned int i = 0; i < 4; ++i)
+            deallog << it->vertex(i)->point() << std::endl;
+        }
+      sm.clear(); // reset surface
+      tria.clear();
+      deallog << '\n' << std::endl;
+    }
+}
+
+int
+main()
+{
+  initlog();
+  test();
+}
