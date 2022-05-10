@@ -21,30 +21,27 @@
 #include <deal.II/grid/grid_generator.h>
 #include <deal.II/grid/tria.h>
 
+#include <CGAL/IO/File_medit.h>
 #include <CGAL/IO/io.h>
 #include <deal.II/cgal/utilities.h>
 
 #include "../tests.h"
 
 // Create a Surface_mesh from an .off file, then fill it with tets and print
-// vertices
+// vertices.
 
 typedef CGAL::Exact_predicates_inexact_constructions_kernel K;
 using CGALPoint = CGAL::Point_3<K>;
-#ifdef CGAL_CONCURRENT_MESH_3
-using Concurrency_tag = CGAL::Parallel_tag Concurrency_tag;
-#else
-using Concurrency_tag = CGAL::Sequential_tag;
-#endif
+using namespace CGALWrappers;
 using Mesh_domain =
   CGAL::Polyhedral_mesh_domain_with_features_3<K,
                                                CGAL::Surface_mesh<CGALPoint>>;
-using Tr            = typename CGAL::Mesh_triangulation_3<Mesh_domain>::type;
+using Tr = typename CGAL::
+  Mesh_triangulation_3<Mesh_domain, CGAL::Default, Concurrency_tag>::type;
 using Mesh_criteria = CGAL::Mesh_criteria_3<Tr>;
 using C3t3          = CGAL::Mesh_complex_3_in_triangulation_3<Tr,
                                                      Mesh_domain::Corner_index,
                                                      Mesh_domain::Curve_index>;
-using namespace CGALWrappers;
 
 void
 test()
@@ -53,12 +50,14 @@ test()
                                         "input_grids/tetrahedron.off"};
   CGAL::Surface_mesh<CGALPoint>  sm;
   C3t3                           tria;
+  unsigned int                   counter = 0;
   for (const auto &name : fnames)
     {
       std::ifstream input(name);
       input >> sm;
       cgal_surface_mesh_to_cgal_coarse_triangulation(sm, tria);
-      std::ofstream off_file_medit("coarse_" + name + ".mesh");
+      std::ofstream off_file_medit("coarse.mesh");
+      ++counter;
       tria.output_to_medit(off_file_medit, false);
       // Loop over tets and print Points
       deallog << "Vertices of the " + name + " mesh:" << std::endl;
