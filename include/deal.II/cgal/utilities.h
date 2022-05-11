@@ -19,6 +19,9 @@
 #include <deal.II/base/config.h>
 
 #ifdef DEAL_II_WITH_CGAL
+
+#  include <deal.II/base/quadrature_lib.h>
+
 #  include <CGAL/Cartesian.h>
 #  include <CGAL/Complex_2_in_triangulation_3.h>
 #  include <CGAL/Exact_predicates_exact_constructions_kernel.h>
@@ -146,6 +149,21 @@ namespace CGALWrappers
                             CGAL::Surface_mesh<CGALPointType> &surf_2,
                             CGAL::Surface_mesh<CGALPointType> &outsurf,
                             const BooleanOperation &           bool_op);
+
+  /**
+   * Given a CGAL Triangulation describing a polygonal region, create
+   * a Quadrature rule to integrate over the polygon by looping trough all the
+   * vertices and exploiting QGaussSimplex.
+   *
+   * @param[in] tria The CGAL triangulation object describing the polyhedral
+   * region.
+   * @param[in] degree Desired degree of the Quadrature rule on each element of
+   * the polyhedral.
+   * @return [out] A global Quadrature rule on the polyhedron.
+   */
+  template <typename Tr>
+  dealii::Quadrature<Tr::Point::Ambient_dimension::value>
+  compute_quadrature(const Tr &tria, const unsigned int degree);
 } // namespace CGALWrappers
 
 #  ifndef DOXYGEN
@@ -263,6 +281,43 @@ namespace CGALWrappers
     Assert(res,
            ExcMessage("The boolean operation was not succesfully computed."));
   }
+
+
+  template <typename Tr>
+  dealii::Quadrature<Tr::Point::Ambient_dimension::value>
+  compute_quadrature(const Tr &tria, const unsigned int degree)
+  {
+    Assert(tria.is_valid(), ExcMessage("The triangulation is not valid."));
+    Assert(Tr::Point::Ambient_dimension::value == 3, ExcNotImplemented());
+    Assert(degree > 0,
+           ExcMessage("The degree of the Quadrature formula is not positive."));
+
+    constexpr int           spacedim = Tr::Point::Ambient_dimension::value;
+    QGaussSimplex<spacedim> quad(degree);
+    std::vector<dealii::Point<spacedim>>              pts;
+    std::vector<double>                               wts;
+    std::array<dealii::Point<spacedim>, spacedim + 1> vertices; // tets
+    for (const auto &f : tria.triangulation().finite_cell_handles())
+      {
+        for (unsigned int i = 0; i < (spacedim + 1); ++i)
+          {
+            vertices[i] =
+              cgal_point_to_dealii_point<spacedim>(f->vertex(i)->point());
+          }
+
+        auto local_quad = quad.compute_affine_transformation(vertices);
+        std::transform(local_quad.get_points().begin(),
+                       local_quad.get_points().end(),
+                       std::back_inserter(pts),
+                       [&pts](const auto &p) { return p; });
+        std::transform(local_quad.get_weights().begin(),
+                       local_quad.get_weights().end(),
+                       std::back_inserter(wts),
+                       [&wts](const double w) { return w; });
+      }
+    return Quadrature<spacedim>(pts, wts);
+  }
+
 } // namespace CGALWrappers
 #  endif
 
