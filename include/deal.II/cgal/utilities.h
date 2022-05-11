@@ -22,6 +22,8 @@
 
 #  include <deal.II/base/quadrature_lib.h>
 
+#  include <deal.II/grid/tria.h>
+
 #  include <CGAL/Cartesian.h>
 #  include <CGAL/Complex_2_in_triangulation_3.h>
 #  include <CGAL/Exact_predicates_exact_constructions_kernel.h>
@@ -38,6 +40,7 @@
 #  include <CGAL/Triangulation_3.h>
 #  include <CGAL/make_mesh_3.h>
 #  include <CGAL/make_surface_mesh.h>
+#  include <deal.II/cgal/surface_mesh.h>
 
 #  include <type_traits>
 
@@ -164,6 +167,32 @@ namespace CGALWrappers
   template <typename Tr>
   dealii::Quadrature<Tr::Point::Ambient_dimension::value>
   compute_quadrature(const Tr &tria, const unsigned int degree);
+
+  /**
+   *
+   *
+   * @param cell0
+   * @param cell1
+   * @param mapping0
+   * @param mapping1
+   * @param degree
+   * @return Quadrature<spacedim>
+   */
+  template <int dim0, int dim1, int spacedim, typename Tr>
+  dealii::Quadrature<spacedim>
+  compute_quadrature_on_boolean_operation(
+    const typename dealii::Triangulation<dim0, spacedim>::cell_iterator &cell0,
+    const typename dealii::Triangulation<dim1, spacedim>::cell_iterator &cell1,
+    const unsigned int                                                   degree,
+    Tr                                                                   tria,
+    const Mapping<dim0, spacedim> &mapping0 =
+      (dealii::ReferenceCells::get_hypercube<dim0>()
+         .template get_default_linear_mapping<dim0, spacedim>()),
+    const Mapping<dim1, spacedim> &mapping1 =
+      (dealii::ReferenceCells::get_hypercube<dim1>()
+         .template get_default_linear_mapping<dim1, spacedim>()));
+
+
 } // namespace CGALWrappers
 
 #  ifndef DOXYGEN
@@ -318,6 +347,41 @@ namespace CGALWrappers
     return Quadrature<spacedim>(pts, wts);
   }
 
+
+
+  template <int dim0, int dim1, int spacedim, typename Tr>
+  dealii::Quadrature<spacedim>
+  compute_quadrature_on_boolean_operation(
+    const typename dealii::Triangulation<dim0, spacedim>::cell_iterator &cell0,
+    const typename dealii::Triangulation<dim1, spacedim>::cell_iterator &cell1,
+    const unsigned int                                                   degree,
+    Tr                                                                   tria,
+    const Mapping<dim0, spacedim> &mapping0,
+    const Mapping<dim1, spacedim> &mapping1)
+  {
+    Assert(dim1 <= dim0,
+           ExcMessage("This function can only work if dim1<=dim0"));
+    CGAL::Surface_mesh<typename Tr::Point::Point> surface_1, surface_2,
+      out_surface;
+    std::cout << "Inizio d2c " << std::endl;
+    dealii_cell_to_cgal_surface_mesh(cell0, mapping0, surface_1);
+    dealii_cell_to_cgal_surface_mesh(cell1, mapping1, surface_2);
+    CGAL::Polygon_mesh_processing::triangulate_faces(surface_1);
+    CGAL::Polygon_mesh_processing::triangulate_faces(surface_2);
+    std::cout << "Fine d2c " << std::endl;
+    Assert(CGAL::is_triangle_mesh(surface_1),
+           ExcMessage("Not a TRIANGLE MESH"));
+    Assert(CGAL::is_triangle_mesh(surface_2),
+           ExcMessage("Not a TRIANGLE MESH"));
+    compute_boolean_operation(
+      surface_1,
+      surface_2,
+      out_surface,
+      BooleanOperation::intersection); //[TODO: not_only_intersection]
+    std::cout << "Qui sì " << std::endl;
+    cgal_surface_mesh_to_cgal_coarse_triangulation(out_surface, tria);
+    return compute_quadrature(tria, degree);
+  }
 } // namespace CGALWrappers
 #  endif
 
