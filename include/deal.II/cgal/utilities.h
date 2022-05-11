@@ -33,6 +33,7 @@
 #  include <CGAL/Mesh_criteria_3.h>
 #  include <CGAL/Mesh_triangulation_3.h>
 #  include <CGAL/Polygon_mesh_processing/corefinement.h>
+#  include <CGAL/Polygon_mesh_processing/measure.h>
 #  include <CGAL/Polygon_mesh_processing/triangulate_faces.h>
 #  include <CGAL/Polyhedral_mesh_domain_with_features_3.h>
 #  include <CGAL/Simple_cartesian.h>
@@ -247,6 +248,7 @@ namespace CGALWrappers
     using CGALPointType = typename C3t3::Point::Point;
     Assert(CGAL::is_closed(surface_mesh),
            ExcMessage("The surface mesh must be closed."));
+    std::cout << "Assert passato!" << std::endl;
 
     using K           = typename CGAL::Kernel_traits<CGALPointType>::Kernel;
     using Mesh_domain = CGAL::Polyhedral_mesh_domain_with_features_3<
@@ -256,15 +258,22 @@ namespace CGALWrappers
       Mesh_triangulation_3<Mesh_domain, CGAL::Default, Concurrency_tag>::type;
     using Mesh_criteria = CGAL::Mesh_criteria_3<Tr>;
 
-    CGAL::Polygon_mesh_processing::triangulate_faces(surface_mesh);
+    if (!CGAL::is_triangle_mesh(surface_mesh))
+      CGAL::Polygon_mesh_processing::triangulate_faces(surface_mesh);
+
     Mesh_domain domain(surface_mesh);
-    domain.detect_features();
-    Mesh_criteria criteria;
+    // domain.detect_features();
+    std::cout << "Qui sì" << std::endl;
+    Mesh_criteria criteria(CGAL::parameters::facet_size             = 0,
+                           CGAL::parameters::facet_distance         = 0,
+                           CGAL::parameters::cell_radius_edge_ratio = 2,
+                           CGAL::parameters::cell_size              = 0);
     // Mesh generation
     triangulation = CGAL::make_mesh_3<C3t3>(domain,
                                             criteria,
                                             CGAL::parameters::no_perturb(),
                                             CGAL::parameters::no_exude());
+    std::cout << "Qui sì(magari...)!" << std::endl;
   }
 
 
@@ -320,18 +329,21 @@ namespace CGALWrappers
     Assert(Tr::Point::Ambient_dimension::value == 3, ExcNotImplemented());
     Assert(degree > 0,
            ExcMessage("The degree of the Quadrature formula is not positive."));
+    std::cout << "Asserts passati!" << std::endl;
 
     constexpr int           spacedim = Tr::Point::Ambient_dimension::value;
     QGaussSimplex<spacedim> quad(degree);
     std::vector<dealii::Point<spacedim>>              pts;
     std::vector<double>                               wts;
     std::array<dealii::Point<spacedim>, spacedim + 1> vertices; // tets
-    for (const auto &f : tria.triangulation().finite_cell_handles())
+    for (auto it = tria.cells_in_complex_begin();
+         it != tria.cells_in_complex_end();
+         ++it)
       {
         for (unsigned int i = 0; i < (spacedim + 1); ++i)
           {
             vertices[i] =
-              cgal_point_to_dealii_point<spacedim>(f->vertex(i)->point());
+              cgal_point_to_dealii_point<spacedim>(it->vertex(i)->point());
           }
 
         auto local_quad = quad.compute_affine_transformation(vertices);
@@ -378,9 +390,16 @@ namespace CGALWrappers
       surface_2,
       out_surface,
       BooleanOperation::intersection); //[TODO: not_only_intersection]
-    std::cout << "Qui sì " << std::endl;
+    std::cout
+      << "Qui sì e volume: "
+      << CGAL::to_double(CGAL::Polygon_mesh_processing::volume(out_surface))
+      << CGAL::to_double(CGAL::Polygon_mesh_processing::volume(surface_1))
+      << CGAL::to_double(CGAL::Polygon_mesh_processing::volume(surface_2))
+      << std::endl;
     cgal_surface_mesh_to_cgal_coarse_triangulation(out_surface, tria);
-    return compute_quadrature(tria, degree);
+    std::cout << "Coarse TRIA computed. " << std::endl;
+    auto result = compute_quadrature(tria, degree);
+    return result;
   }
 } // namespace CGALWrappers
 #  endif
