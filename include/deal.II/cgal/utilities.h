@@ -185,7 +185,7 @@ namespace CGALWrappers
     const typename dealii::Triangulation<dim0, spacedim>::cell_iterator &cell0,
     const typename dealii::Triangulation<dim1, spacedim>::cell_iterator &cell1,
     const unsigned int                                                   degree,
-    Tr                                                                   tria,
+    Tr                                                                  &tria,
     const Mapping<dim0, spacedim> &mapping0 =
       (dealii::ReferenceCells::get_hypercube<dim0>()
          .template get_default_linear_mapping<dim0, spacedim>()),
@@ -262,12 +262,9 @@ namespace CGALWrappers
       CGAL::Polygon_mesh_processing::triangulate_faces(surface_mesh);
 
     Mesh_domain domain(surface_mesh);
-    // domain.detect_features();
+    domain.detect_features();
     std::cout << "Qui sì" << std::endl;
-    Mesh_criteria criteria(CGAL::parameters::facet_size             = 0,
-                           CGAL::parameters::facet_distance         = 0,
-                           CGAL::parameters::cell_radius_edge_ratio = 2,
-                           CGAL::parameters::cell_size              = 0);
+    Mesh_criteria criteria;
     // Mesh generation
     triangulation = CGAL::make_mesh_3<C3t3>(domain,
                                             criteria,
@@ -367,7 +364,7 @@ namespace CGALWrappers
     const typename dealii::Triangulation<dim0, spacedim>::cell_iterator &cell0,
     const typename dealii::Triangulation<dim1, spacedim>::cell_iterator &cell1,
     const unsigned int                                                   degree,
-    Tr                                                                   tria,
+    Tr                                                                  &tria,
     const Mapping<dim0, spacedim> &mapping0,
     const Mapping<dim1, spacedim> &mapping1)
   {
@@ -378,7 +375,8 @@ namespace CGALWrappers
     std::cout << "Inizio d2c " << std::endl;
     dealii_cell_to_cgal_surface_mesh(cell0, mapping0, surface_1);
     dealii_cell_to_cgal_surface_mesh(cell1, mapping1, surface_2);
-    CGAL::Polygon_mesh_processing::triangulate_faces(surface_1);
+    CGAL::Polygon_mesh_processing::triangulate_faces(
+      surface_1); // They have to be triangle meshes
     CGAL::Polygon_mesh_processing::triangulate_faces(surface_2);
     std::cout << "Fine d2c " << std::endl;
     Assert(CGAL::is_triangle_mesh(surface_1),
