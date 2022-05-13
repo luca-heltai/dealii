@@ -24,10 +24,13 @@
 
 #  include <boost/hana.hpp>
 
+#  include <CGAL/Kernel_traits.h>
 #  include <CGAL/Polyhedron_3.h>
 #  include <CGAL/Surface_mesh.h>
 #  include <CGAL/Triangulation_2.h>
 #  include <CGAL/Triangulation_3.h>
+#  include <CGAL/convex_hull_3.h>
+#  include <CGAL/convex_hull_3_to_face_graph.h>
 #  include <deal.II/cgal/utilities.h>
 
 DEAL_II_NAMESPACE_OPEN
@@ -133,6 +136,21 @@ namespace CGALWrappers
                                             Triangulation<2, 3> &triangulation);
 
 
+  /**
+   * Given a vector of Point, compute their convex hull
+   * and store it in a CGAL object which is either a
+   * CGAL::Polyhedron_3 or a CGAL::Surface_mesh.
+   *
+   *
+   * @param points Vector of deal.II Points<3>.
+   * @param tria
+   */
+  template <int spacedim, typename CGALMesh>
+  void
+  compute_convex_hull(const std::vector<Point<spacedim>> &points,
+                      CGALMesh                           &chull_mesh);
+
+
 
 #  ifndef DOXYGEN
   // Template implementation
@@ -167,7 +185,7 @@ namespace CGALWrappers
   template <typename CGALTriangulation, int dim, int spacedim>
   void
   cgal_triangulation_to_dealii_triangulation(
-    const CGALTriangulation &     cgal_triangulation,
+    const CGALTriangulation      &cgal_triangulation,
     Triangulation<dim, spacedim> &dealii_triangulation)
   {
     AssertThrow(cgal_triangulation.dimension() == dim,
@@ -224,8 +242,8 @@ namespace CGALWrappers
           for (const auto &e : cgal_triangulation.finite_edges())
             {
               // An edge is idendified by a face and a vertex index in the face
-              const auto &  f = e.first;
-              const auto &  i = e.second;
+              const auto   &f = e.first;
+              const auto   &i = e.second;
               CellData<dim> cell(ReferenceCells::Line.n_vertices());
               unsigned int  id = 0;
               // Since an edge is identified by a face (a triangle) and the
@@ -264,8 +282,8 @@ namespace CGALWrappers
             {
               // A facet is idenfied by a cell and the opposite vertex index in
               // the face
-              const auto &  c = facet.first;
-              const auto &  i = facet.second;
+              const auto   &c = facet.first;
+              const auto   &i = facet.second;
               CellData<dim> cell(ReferenceCells::Triangle.n_vertices());
               unsigned int  id = 0;
               // Since a face is identified by a cell (a tetrahedron) and the
@@ -413,6 +431,32 @@ namespace CGALWrappers
                       "Unsupported CGAL surface triangulation type."));
       }
     triangulation.create_triangulation(vertices, cells, subcell_data);
+  }
+
+
+
+  template <int spacedim, typename CGALMesh>
+  void
+  compute_convex_hull(const std::vector<Point<spacedim>> &points,
+                      CGALMesh                           &chull_mesh)
+  {
+    Assert(spacedim == 3, ExcMessage("This function works only in 3D."));
+    Assert(CGAL::is_empty(chull_mesh),
+           ExcMessage(
+             "The triangulation must be empty upon calling this function"));
+    Assert(points.size() > 0,
+           ExcMessage("You passed an empty vector of Points"));
+
+    using CGALPoint = typename CGALMesh::Point::Point_3;
+    std::vector<CGALPoint> cgal_points(points.size());
+    std::transform(
+      points.begin(), points.end(), cgal_points.begin(), [](const auto &p) {
+        return CGALWrappers::dealii_point_to_cgal_point<CGALPoint>(p);
+      });
+    CGAL::convex_hull_3(
+      cgal_points.begin(),
+      cgal_points.end(),
+      chull_mesh); // Compute Convex hull of a Delanuay tria with CGAL
   }
 #  endif
 } // namespace CGALWrappers
