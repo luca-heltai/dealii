@@ -8,6 +8,8 @@ are supported:
   <li>Conversion from CGAL::Triangulation_2 to Triangulation<dim, 2></li>
   <li>Conversion from CGAL::Triangulation_3 to Triangulation<dim, 3></li>
   <li>Conversion from CGAL::Surface_mesh or CGAL::Polyhedron_3 to Triangulation<2, 3></li>
+  <li>Compute boolean operations between cells and Triangulation<3></li>
+  <li>Compute Quadrature rules over arbitrary Polyhedra by splitting it into simplices<3></li>
 </ul>
 <br>
 (Marco Feder, Luca Heltai, 2022/04/26)
