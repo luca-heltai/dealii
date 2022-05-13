@@ -19,10 +19,12 @@
 #include <deal.II/base/config.h>
 
 #include <deal.II/grid/grid_generator.h>
+#include <deal.II/grid/grid_out.h>
 #include <deal.II/grid/tria.h>
 
 #include <CGAL/IO/File_medit.h>
 #include <CGAL/IO/io.h>
+#include <deal.II/cgal/triangulation.h>
 #include <deal.II/cgal/utilities.h>
 
 #include "../tests.h"
@@ -30,7 +32,8 @@
 // Create a Surface_mesh from an .off file, then fill it with tets and print
 // vertices.
 
-using K         = CGAL::Exact_predicates_inexact_constructions_kernel;
+using K                 = CGAL::Exact_predicates_inexact_constructions_kernel;
+using CGALTriangulation = CGAL::Triangulation_3<K>;
 using CGALPoint = CGAL::Point_3<K>;
 using namespace CGALWrappers;
 using Mesh_domain =
@@ -47,7 +50,8 @@ void
 test()
 {
   const std::vector<std::string> fnames{"input_grids/cube.off",
-                                        "input_grids/tetrahedron.off"};
+                                        "input_grids/tetrahedron.off",
+                                        "input_grids/tripod.off"};
   CGAL::Surface_mesh<CGALPoint>  sm;
   C3t3                           tria;
   for (const auto &name : fnames)
@@ -55,14 +59,27 @@ test()
       std::ifstream input(name);
       input >> sm;
       cgal_surface_mesh_to_cgal_coarse_triangulation(sm, tria);
-      {
-        std::ofstream off_file_medit("coarse.mesh");
-        tria.output_to_medit(off_file_medit, false);
-      }
-      cat_file("coarse.mesh");
+      std::ofstream off_file_medit("coarse.mesh");
+      tria.output_to_medit(off_file_medit, false);
+      Triangulation<3> dealtria;
+      c3t3_triangulation_to_dealii_triangulation(tria, dealtria);
+
+      GridOut       go;
+      std::ofstream output_name("test_mesh.vtk");
+      go.write_vtk(dealtria, output_name);
+
+      // Loop over tets and print Points
+      // deallog << "Vertices of the " + name + " mesh:" << std::endl;
+      // for (auto it = tria.cells_in_complex_begin();
+      //      it != tria.cells_in_complex_end();
+      //      ++it)
+      //   {
+      //     for (unsigned int i = 0; i < 4; ++i)
+      //       deallog << it->vertex(i)->point() << std::endl;
+      //   }
       sm.clear(); // reset surface
       tria.clear();
-      deallog << std::endl << std::endl;
+      // deallog << '\n' << std::endl;
     }
 }
 
