@@ -264,7 +264,10 @@ namespace CGALWrappers
     Mesh_domain domain(surface_mesh);
     domain.detect_features();
     std::cout << "Qui sì" << std::endl;
-    Mesh_criteria criteria;
+    Mesh_criteria criteria(CGAL::parameters::facet_size             = 0,
+                           CGAL::parameters::facet_distance         = 0,
+                           CGAL::parameters::cell_radius_edge_ratio = 2,
+                           CGAL::parameters::cell_size              = 0);
     // Mesh generation
     triangulation = CGAL::make_mesh_3<C3t3>(domain,
                                             criteria,

@@ -59,29 +59,34 @@ test()
     {
       const auto ref_cell0 = pair.first;
       const auto ref_cell1 = pair.second;
-      // Triangulation<3> tria0;
-      // Triangulation<3> tria1;
-      // GridGenerator::reference_cell(tria0, ref_cell0);
-      // GridGenerator::reference_cell(tria1, ref_cell1);
-      Triangulation<3, 3> tria0;
-      Triangulation<3, 3> tria1;
-      GridGenerator::hyper_cube(tria0, 0.5, 1.5);
-      GridGenerator::hyper_cube(tria1, 0., 1.);
-      // const auto mapping0 = ref_cell0.template get_default_mapping<3>(1);
-      // const auto mapping1 = ref_cell1.template get_default_mapping<3>(1);
-      const auto mapping0 = MappingQ<3>(1);
-      const auto mapping1 = MappingQ<3>(1);
+      Triangulation<3> tria0;
+      Triangulation<3> tria1;
+      GridGenerator::reference_cell(tria0, ref_cell0);
+      GridGenerator::reference_cell(tria1, ref_cell1);
+      // Triangulation<3, 3> tria0;
+      // Triangulation<3, 3> tria1;
+      // // GridGenerator::hyper_cube(tria0, 0.5, 1.5);
+      // // GridGenerator::hyper_cube(tria1, 0., 1.);
+      const auto mapping0 = ref_cell0.template get_default_mapping<3>(1);
+      const auto mapping1 = ref_cell1.template get_default_mapping<3>(1);
+      // // const auto mapping0 = MappingQ<3>(1);
+      // // const auto mapping1 = MappingQ<3>(1);
       const auto cell0    = tria0.begin_active();
       const auto cell1    = tria1.begin_active();
 
-      auto test_quad = compute_quadrature_on_boolean_operation(
-        cell0, cell1, degree, tria, mapping0, mapping1);
-      deallog << "Volume of poly with Quadrature: " << std::setprecision(12)
-              << std::accumulate(test_quad.get_weights().begin(),
-                                 test_quad.get_weights().end(),
-                                 0.)
-              << std::endl;
-      tria.clear();
+      // auto test_quad = compute_quadrature_on_boolean_operation(
+      //   cell0, cell1, degree, tria, *mapping0, *mapping1);
+      // deallog << "Volume of poly with Quadrature: " << std::setprecision(12)
+      //         << std::accumulate(test_quad.get_weights().begin(),
+      //                            test_quad.get_weights().end(),
+      //                            0.)
+      //         << std::endl;
+      // tria.clear();
+      CGAL::Surface_mesh<CGALPoint> surface_1, surface_2;
+      dealii_cell_to_cgal_surface_mesh(cell0, *mapping0, surface_1);
+      dealii_cell_to_cgal_surface_mesh(cell1, *mapping1, surface_2);
+      deallog << surface_1 << std::endl;
+      deallog << surface_2 << std::endl;
     }
 }
 
