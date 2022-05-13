@@ -20,6 +20,7 @@
 
 #ifdef DEAL_II_WITH_CGAL
 
+#  include <deal.II/grid/grid_tools.h>
 #  include <deal.II/grid/tria.h>
 
 #  include <boost/hana.hpp>
@@ -160,6 +161,53 @@ namespace CGALWrappers
            ExcMessage(
              "The Triangulation is no longer valid after inserting the points. "
              "Bailing out."));
+  }
+
+
+
+  template <typename C3t3, int dim, int spacedim>
+  void
+  c3t3_triangulation_to_dealii_triangulation(
+    const C3t3                   &cgal_triangulation,
+    Triangulation<dim, spacedim> &dealii_triangulation)
+  {
+    std::set<typename C3t3::Vertex_handle> pts;
+    for (auto it = cgal_triangulation.cells_in_complex_begin();
+         it != cgal_triangulation.cells_in_complex_end();
+         ++it)
+      {
+        for (unsigned int j = 0; j < 4; ++j)
+          {
+            pts.insert(it->vertex(j));
+          }
+      }
+    std::vector<Point<spacedim>> vertices_c3t3(
+      4 * cgal_triangulation.number_of_cells_in_complex());
+    SubCellData                                          subcell_data;
+    std::vector<CellData<3>>                             cells_c3t3;
+    std::map<typename C3t3::Vertex_handle, unsigned int> vertex_map;
+    unsigned int                                         i = 0;
+
+    for (const auto &p : pts)
+      {
+        vertices_c3t3[i] =
+          CGALWrappers::cgal_point_to_dealii_point<spacedim>(p->point());
+        vertex_map[p] = i++;
+      }
+
+    for (auto it = cgal_triangulation.cells_in_complex_begin();
+         it != cgal_triangulation.cells_in_complex_end();
+         ++it)
+      {
+        CellData<3> cell(4);
+        for (unsigned int i = 0; i < 4; ++i)
+          cell.vertices[i] = vertex_map[it->vertex(i)];
+        cells_c3t3.push_back(cell);
+        std::vector<unsigned int> empty_vec{};
+      }
+    dealii_triangulation.create_triangulation_compatibility(vertices_c3t3,
+                                                            cells_c3t3,
+                                                            subcell_data);
   }
 
 
