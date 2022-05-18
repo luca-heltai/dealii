@@ -8638,7 +8638,6 @@ namespace GridGenerator
         AssertThrow(false, ExcNotImplemented())
       }
   }
-
 } // namespace GridGenerator
 
 // explicit instantiations

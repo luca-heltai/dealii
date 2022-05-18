@@ -13,41 +13,42 @@
 //
 // ---------------------------------------------------------------------
 
-// Create a Triangulation<2,3> from an implicit function
+// Create a Tria<3> out of a Tria<2,3>.
 
 #include <deal.II/base/config.h>
 
-#include <deal.II/base/function_parser.h>
-
 #include <deal.II/grid/grid_generator.h>
 #include <deal.II/grid/grid_out.h>
+#include <deal.II/grid/grid_tools.h>
 #include <deal.II/grid/tria.h>
 
+#include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
+#include <CGAL/IO/io.h>
 #include <deal.II/cgal/triangulation.h>
 
 #include "../tests.h"
 
-using namespace CGAL::parameters;
-
+using namespace CGALWrappers;
 int
 main()
 {
   initlog();
-  // Build a deal.II triangulation
-  Triangulation<2, 3> tria;
-  FunctionParser<3>   implicit_function("(1-sqrt(x^2+y^2))^2+z^2-.25");
-  CGALWrappers::AdditionalData<2> data;
-  data.angular_bound  = 30.;
-  data.radius_bound   = .1;
-  data.distance_bound = .1;
-  CGALWrappers::implicit_function(
-    tria, implicit_function, data, Point<3>(1, 0, 0), 10.);
-  {
-    GridOut       go;
-    std::ofstream of("tria_ancora.vtk");
-    go.write_vtk(tria, of);
-  }
-  remove("tria.vtk");
-  //  If we got here, everything was ok, including writing the grid.
+  Triangulation<2, 3> surface_tria;
+  GridGenerator::hyper_sphere(surface_tria, {0., 1., 0.}, 1.);
+  surface_tria.refine_global(3);
+
+  Triangulation<3>  out_tria;
+  AdditionalData<3> data;
+  data.facet_size             = 0.1;
+  data.facet_distance         = 0.;
+  data.cell_radius_edge_ratio = 2.;
+  data.cell_size              = 0.1;
+  CGALWrappers::surface_mesh_to_volumetric_mesh(surface_tria, out_tria, data);
+
+  GridOut       go;
+  std::ofstream out_tria_name("tria_surface_to_volumetric.vtk");
+  go.write_vtk(out_tria, out_tria_name);
+
+  remove("tria_surface_to_volumetric.vtk");
   deallog << "OK" << std::endl;
 }
