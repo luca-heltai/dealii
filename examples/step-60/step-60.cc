@@ -152,11 +152,27 @@
 #include <deal.II/lac/linear_operator_tools.h>
 
 #include <iostream>
+#include <boost/geometry.hpp>
+
 #include <fstream>
 
 namespace Step60
 {
   using namespace dealii;
+
+
+  /**
+   * Refinement strategy.
+   */
+  enum class RefinementStrategy
+  {
+    //! No refinement
+    none = 1 << 1,
+    //! Force dealii::space grid to be locally smaller than embedded grid
+    refine_space = 1 << 2,
+    //! Force embedded grid to be locally smaller than embedded grid
+    refine_embedded = 1 << 3,
+  };
 
   // @sect3{DistributedLagrangeProblem}
   //
@@ -276,6 +292,17 @@ namespace Step60
 
       // A flag to keep track if we were initialized or not
       bool initialized = false;
+
+      //
+      unsigned int space_pre_refinement = 0;
+
+      unsigned int embedded_post_refinement = 0;
+
+      // A flag to decide whethere apply delta refinements or not.
+      bool apply_delta_refinements = true;
+
+      RefinementStrategy refinement_strategy =
+        RefinementStrategy::refine_embedded;
     };
 
     DistributedLagrangeProblem(const Parameters &parameters);
@@ -291,6 +318,8 @@ namespace Step60
     // the exception that we now need to set up things for two different
     // families of objects, namely the ones related to the *embedding* grids,
     // and the ones related to the *embedded* one.
+
+    void adjust_grid_refinement(const bool apply_delta_refinements);
 
     void setup_grids_and_dofs();
 
@@ -321,9 +350,10 @@ namespace Step60
     // Then the ones related to the embedded grid, with the DoFHandler
     // associated to the Lagrange multiplier `lambda`
 
-    std::unique_ptr<Triangulation<dim, spacedim>> embedded_grid;
-    std::unique_ptr<FiniteElement<dim, spacedim>> embedded_fe;
-    std::unique_ptr<DoFHandler<dim, spacedim>>    embedded_dh;
+    std::unique_ptr<Triangulation<dim, spacedim>>    embedded_grid;
+    std::unique_ptr<GridTools::Cache<dim, spacedim>> embedded_grid_tools_cache;
+    std::unique_ptr<FiniteElement<dim, spacedim>>    embedded_fe;
+    std::unique_ptr<DoFHandler<dim, spacedim>>       embedded_dh;
 
     // And finally, everything that is needed to *deform* the embedded
     // triangulation
@@ -553,6 +583,12 @@ namespace Step60
 
     add_parameter("Verbosity level", verbosity_level);
 
+    add_parameter("Space pre refinement", space_pre_refinement);
+
+    add_parameter("Apply delta refinement", apply_delta_refinements);
+
+    // add_parameter("Refinement strategy", refinement_strategy);
+
     // Once the parameter file has been parsed, then the parameters are good to
     // go. Set the internal variable `initialized` to true.
     parse_parameters_call_back.connect([&]() -> void { initialized = true; });
@@ -609,6 +645,125 @@ namespace Step60
     });
   }
 
+  template <int dim, int spacedim>
+  void DistributedLagrangeProblem<dim, spacedim>::adjust_grid_refinement(
+    const bool apply_delta_refinements)
+  {
+    namespace bgi = boost::geometry::index;
+
+    auto refine = [&]() {
+      bool done = false;
+
+      double min_embedded = 1e10;
+      double max_embedded = 0;
+      double min_space    = 1e10;
+      double max_space    = 0;
+
+      while (done == false)
+        {
+          // Bounding boxes of the space grid
+          const auto &tree = space_grid_tools_cache
+                               ->get_locally_owned_cell_bounding_boxes_rtree();
+
+          // Bounding boxes of the embedded grid
+          const auto &embedded_tree =
+            embedded_grid_tools_cache->get_cell_bounding_boxes_rtree();
+
+          // Let's check all cells whose bounding box contains an embedded
+          // bounding box
+          done = true;
+
+          const bool use_space = ((parameters.refinement_strategy) ==
+                                  RefinementStrategy::refine_space);
+
+          const bool use_embedded = ((parameters.refinement_strategy) ==
+                                     RefinementStrategy::refine_embedded);
+          AssertThrow(!(use_embedded && use_space),
+                      ExcMessage("You can't refine both the embedded and "
+                                 "the space grid at the same time."));
+
+          for (const auto &[embedded_box, embedded_cell] : embedded_tree)
+            {
+              const auto &[p1, p2] = embedded_box.get_boundary_points();
+              const auto diameter  = p1.distance(p2);
+              min_embedded         = std::min(min_embedded, diameter);
+              max_embedded         = std::max(max_embedded, diameter);
+
+              for (const auto &[space_box, space_cell] :
+                   tree | bgi::adaptors::queried(bgi::intersects(embedded_box)))
+                {
+                  const auto &[sp1, sp2]    = space_box.get_boundary_points();
+                  const auto space_diameter = sp1.distance(sp2);
+                  min_space = std::min(min_space, space_diameter);
+                  max_space = std::max(max_space, space_diameter);
+
+                  if (use_embedded && space_diameter < diameter)
+                    {
+                      embedded_cell->set_refine_flag();
+                      done = false;
+                    }
+                  if (use_space && diameter < space_diameter)
+                    {
+                      space_cell->set_refine_flag();
+                      done = false;
+                    }
+                }
+            }
+          if (done == false)
+            {
+              if (use_embedded)
+                {
+                  // Compute again the embedded displacement grid
+                  embedded_grid->execute_coarsening_and_refinement();
+                }
+              if (use_space)
+                {
+                  // Compute again the embedded displacement grid
+                  space_grid->execute_coarsening_and_refinement();
+                }
+            }
+        }
+      return std::make_tuple(min_space, max_space, min_embedded, max_embedded);
+    };
+
+    // Do the refinement loop once, to make sure we satisfy our criterions
+    refine();
+
+    // Pre refine the space grid according to the delta refinement
+    if (apply_delta_refinements && parameters.space_pre_refinement != 0)
+      for (unsigned int i = 0; i < parameters.space_pre_refinement; ++i)
+        {
+          const auto &tree = space_grid_tools_cache
+                               ->get_locally_owned_cell_bounding_boxes_rtree();
+
+          const auto &embedded_tree =
+            embedded_grid_tools_cache->get_cell_bounding_boxes_rtree();
+
+          for (const auto &[embedded_box, embedded_cell] : embedded_tree)
+            for (const auto &[space_box, space_cell] :
+                 tree | bgi::adaptors::queried(bgi::intersects(embedded_box)))
+              space_cell->set_refine_flag();
+          space_grid->execute_coarsening_and_refinement();
+
+          // Make sure again we satisfy our criterion after the space refinement
+          refine();
+        }
+
+    // Post refinement on embedded grid is easy
+    if (apply_delta_refinements && parameters.embedded_post_refinement != 0)
+      {
+        embedded_grid->refine_global(parameters.embedded_post_refinement);
+      }
+
+    // Check once again we satisfy our criterion, and record min/max
+    const auto [sm, sM, em, eM] = refine();
+
+    std::cout << "Space local min/max diameters   : " << sm << "/" << sM
+              << std::endl
+              << "Embedded space min/max diameters: " << em << "/" << eM
+              << std::endl;
+  }
+
   // @sect3{Set up}
   //
   // The function `DistributedLagrangeProblem::setup_grids_and_dofs()` is used
@@ -643,6 +798,8 @@ namespace Step60
     embedded_grid = std::make_unique<Triangulation<dim, spacedim>>();
     GridGenerator::hyper_cube(*embedded_grid);
     embedded_grid->refine_global(parameters.initial_embedded_refinement);
+    embedded_grid_tools_cache =
+      std::make_unique<GridTools::Cache<dim, spacedim>>(*embedded_grid);
 
     embedded_configuration_fe = std::make_unique<FESystem<dim, spacedim>>(
       FE_Q<dim, spacedim>(
@@ -778,21 +935,24 @@ namespace Step60
     // as the amount of local refinement they want around the embedded grid, we
     // make sure that the resulting meshes satisfy our requirements, and if this
     // is not the case, we bail out with an exception.
-    for (unsigned int i = 0; i < parameters.delta_refinement; ++i)
-      {
-        const auto point_locations =
-          GridTools::compute_point_locations(*space_grid_tools_cache,
-                                             support_points);
-        const auto &cells = std::get<0>(point_locations);
-        for (auto &cell : cells)
-          {
-            cell->set_refine_flag();
-            for (const auto face_no : cell->face_indices())
-              if (!cell->at_boundary(face_no))
-                cell->neighbor(face_no)->set_refine_flag();
-          }
-        space_grid->execute_coarsening_and_refinement();
-      }
+
+    adjust_grid_refinement(parameters.apply_delta_refinements);
+
+    // for (unsigned int i = 0; i < parameters.delta_refinement; ++i)
+    //   {
+    //     const auto point_locations =
+    //       GridTools::compute_point_locations(*space_grid_tools_cache,
+    //                                          support_points);
+    //     const auto &cells = std::get<0>(point_locations);
+    //     for (auto &cell : cells)
+    //       {
+    //         cell->set_refine_flag();
+    //         for (const auto face_no : cell->face_indices())
+    //           if (!cell->at_boundary(face_no))
+    //             cell->neighbor(face_no)->set_refine_flag();
+    //       }
+    //     space_grid->execute_coarsening_and_refinement();
+    //   }
 
     // In order to construct a well posed coupling interpolation operator $C$,
     // there are some constraints on the relative dimension of the grids between
