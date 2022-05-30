@@ -41,7 +41,9 @@ test()
   Triangulation<dim, spacedim>      embedded_tria;
 
   GridGenerator::hyper_cube(space_tria, 0., 1.);
-  GridGenerator::hyper_cube(embedded_tria, .5, .75);
+  // GridGenerator::hyper_cube(embedded_tria, .5, .75);
+  GridGenerator::hyper_L(embedded_tria, .5, .75);
+  GridTools::rotate(numbers::PI_4, 2, embedded_tria);
 
   space_tria.refine_global(2);
   embedded_tria.refine_global(2);
@@ -68,7 +70,7 @@ test()
   const auto vec_info = NonMatching::compute_intersection(*space_cache,
                                                           *embedded_cache,
                                                           degree,
-                                                          1e-8);
+                                                          1e-6);
 
   // deallog << "Get here" << std::endl;
   // Print cells ids and points
@@ -86,8 +88,8 @@ test()
               << std::endl;
     }
 
-  remove("space_test.vtk");
-  remove("embedded_test.vtk");
+  // remove("space_test.vtk");
+  // remove("embedded_test.vtk");
 }
 
 int

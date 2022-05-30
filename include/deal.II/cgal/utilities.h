@@ -559,6 +559,7 @@ namespace CGALWrappers
     CGAL::Surface_mesh<CGALPoint> surface_1, surface_2, out_surface;
     dealii_cell_to_cgal_surface_mesh(cell0, mapping0, surface_1);
     dealii_cell_to_cgal_surface_mesh(cell1, mapping1, surface_2);
+    std::cout << "Qui si'" << std::endl;
     // They have to be triangle meshes
     CGAL::Polygon_mesh_processing::triangulate_faces(surface_1);
     CGAL::Polygon_mesh_processing::triangulate_faces(surface_2);
