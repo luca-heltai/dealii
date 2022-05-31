@@ -240,8 +240,8 @@ namespace CGALWrappers
         //                 (f % 2 == 0));
         //     // ++counter_faces;
 
-        CGAL::Polygon_mesh_processing::repair_polygon_soup(
-          points, polygons, CGAL::parameters::geom_traits(Array_traits()));
+        // CGAL::Polygon_mesh_processing::repair_polygon_soup(
+        //   points, polygons, CGAL::parameters::geom_traits(Array_traits()));
         std::cout << "Ha riparato" << std::endl;
         [[maybe_unused]] bool orienta =
           CGAL::Polygon_mesh_processing::orient_polygon_soup(points, polygons);

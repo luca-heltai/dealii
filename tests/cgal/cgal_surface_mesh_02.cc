@@ -23,6 +23,7 @@
 
 #include <CGAL/IO/File_medit.h>
 #include <CGAL/IO/io.h>
+#include <deal.II/cgal/surface_mesh.h>
 #include <deal.II/cgal/utilities.h>
 
 #include "../tests.h"
@@ -47,24 +48,37 @@ using C3t3          = CGAL::Mesh_complex_3_in_triangulation_3<Tr,
 void
 test()
 {
-  const std::vector<std::string> fnames{"input_grids/cube.off",
-                                        "input_grids/tetrahedron.off"};
-  CGAL::Surface_mesh<CGALPoint>  sm;
-  C3t3                           tria;
+  // const std::vector<std::string> fnames{"input_grids/cube.off",
+  //                                       "input_grids/tetrahedron.off"};
+  CGAL::Surface_mesh<CGALPoint> sm;
+  // C3t3                           tria;
 
-  for (const auto &name : fnames)
+  // for (const auto &name : fnames)
+  //   {
+  //     std::ifstream input(name);
+  //     input >> sm;
+  //     cgal_surface_mesh_to_cgal_coarse_triangulation(sm, tria);
+  //     {
+  //       std::ofstream off_file_medit("coarse.mesh");
+  //       tria.output_to_medit(off_file_medit, false);
+  //     }
+  //     cat_file("coarse.mesh");
+  //     sm.clear(); // reset surface
+  //     tria.clear();
+  //     deallog << std::endl << std::endl;
+  //   }
+  Triangulation<3> tria;
+  constexpr double radius = 1.5;
+  // GridGenerator::hyper_ball(tria, {0.1, 0.1, 0.2}, radius);
+  GridGenerator::hyper_cube(tria,-2.,2.5);
+  tria.refine_global(2);
+  const auto mapping =
+    tria.begin_active()->reference_cell().template get_default_mapping<3>(1);
+  unsigned int counter = 0;
+  for (const auto &cell : tria.active_cell_iterators())
     {
-      std::ifstream input(name);
-      input >> sm;
-      cgal_surface_mesh_to_cgal_coarse_triangulation(sm, tria);
-      {
-        std::ofstream off_file_medit("coarse.mesh");
-        tria.output_to_medit(off_file_medit, false);
-      }
-      cat_file("coarse.mesh");
-      sm.clear(); // reset surface
-      tria.clear();
-      deallog << std::endl << std::endl;
+      CGALWrappers::dealii_cell_to_cgal_surface_mesh(cell, *mapping, sm);
+      deallog << ++counter << std::endl;
     }
 }
 
