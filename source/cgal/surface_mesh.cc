@@ -36,10 +36,10 @@ namespace
     CGAL_Mesh &                                                     mesh,
     const bool clockwise_ordering = true)
   {
-    const auto reference_cell_type = face->reference_cell();
+    const auto reference_cell_face_type = face->reference_cell();
     std::vector<typename CGAL_Mesh::Vertex_index> indices;
 
-    switch (reference_cell_type)
+    switch (reference_cell_face_type)
       {
         case ReferenceCells::Line:
           mesh.add_edge(deal2cgal.at(face->vertex_index(0)),
@@ -173,14 +173,22 @@ namespace CGALWrappers
         std::vector<std::vector<unsigned int>> polygons;
         for (const auto &f : cell->face_indices())
           {
-            const auto reference_cell_type = cell->face(f)->reference_cell();
+            const auto reference_cell_face_type =
+              cell->face(f)->reference_cell();
+            const auto reference_cell_type = cell->reference_cell();
             std::vector<unsigned int> indices;
-            switch (reference_cell_type)
+            switch (reference_cell_face_type)
               {
                 case ReferenceCells::Triangle:
-                  indices = {cell->face(f)->vertex_index(0),
-                             cell->face(f)->vertex_index(1),
-                             cell->face(f)->vertex_index(2)};
+                  // indices = {cell->face(f)->vertex_index(0),
+                  //            cell->face(f)->vertex_index(1),
+                  //            cell->face(f)->vertex_index(2)};
+                  indices = {reference_cell_type.face_to_cell_vertices(
+                               f, 0, cell->face_orientation(f)),
+                             reference_cell_type.face_to_cell_vertices(
+                               f, 1, cell->face_orientation(f)),
+                             reference_cell_type.face_to_cell_vertices(
+                               f, 2, cell->face_orientation(f))};
                   // std::transform(indices.begin(),
                   //                indices.end(),
                   //                std::back_inserter(indices),
@@ -189,11 +197,18 @@ namespace CGALWrappers
                   //                });
                   break;
                 case ReferenceCells::Quadrilateral:
-                  indices = {cell->face(f)->vertex_index(0),
-                             cell->face(f)->vertex_index(1),
-                             cell->face(f)->vertex_index(3),
-                             cell->face(f)->vertex_index(2)};
-
+                  // indices = {cell->face(f)->vertex_index(0),
+                  //            cell->face(f)->vertex_index(1),
+                  //            cell->face(f)->vertex_index(3),
+                  //            cell->face(f)->vertex_index(2)};
+                  indices = {reference_cell_type.face_to_cell_vertices(
+                               f, 0, cell->face_orientation(f)),
+                             reference_cell_type.face_to_cell_vertices(
+                               f, 1, cell->face_orientation(f)),
+                             reference_cell_type.face_to_cell_vertices(
+                               f, 3, cell->face_orientation(f)),
+                             reference_cell_type.face_to_cell_vertices(
+                               f, 2, cell->face_orientation(f))};
 
                   // for (unsigned int i = 0; i < indices.size(); ++i)
                   //   {
