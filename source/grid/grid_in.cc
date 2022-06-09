@@ -51,6 +51,9 @@
 #  include <exodusII.h>
 #endif
 
+#ifdef DEAL_II_WITH_CGAL
+#  include <deal.II/cgal/triangulation.h>
+#endif
 
 DEAL_II_NAMESPACE_OPEN
 
@@ -3931,6 +3934,46 @@ GridIn<dim, spacedim>::read_exodusii(
 }
 
 
+
+template <>
+void
+GridIn<3, 3>::read_inr(const std::string &                    filename,
+                       const CGALWrappers::AdditionalData<3> &data)
+{
+#ifdef DEAL_II_WITH_CGAL
+  // AssertThrow(dim == 3 && spacedim == 3,
+  //             ExcMessage(
+  //               "This function can be used for 3D mesh-generation only."));
+  // Domain
+  using K             = CGAL::Exact_predicates_inexact_constructions_kernel;
+  using Mesh_domain   = CGAL::Labeled_mesh_domain_3<K>;
+  using Tr            = CGAL::Mesh_triangulation_3<Mesh_domain>::type;
+  using C3t3          = CGAL::Mesh_complex_3_in_triangulation_3<Tr>;
+  using Mesh_criteria = CGAL::Mesh_criteria_3<Tr>;
+
+  CGAL::Image_3 image;
+  AssertThrow(!image.read(filename.c_str()), ExcMessage("Cannot read file."));
+
+  Mesh_domain domain = Mesh_domain::create_labeled_image_mesh_domain(image);
+  // Mesh criteria
+  Mesh_criteria    criteria(CGAL::parameters::facet_angle    = data.facet_angle,
+                         CGAL::parameters::facet_size     = data.facet_size,
+                         CGAL::parameters::facet_distance = data.facet_distance,
+                         CGAL::parameters::cell_radius_edge_ratio =
+                           data.cell_radius_edge_ratio,
+                         CGAL::parameters::cell_size = data.cell_size);
+  C3t3             c3t3 = CGAL::make_mesh_3<C3t3>(domain, criteria);
+
+  CGALWrappers::cgal_triangulation_to_dealii_triangulation(c3t3, *tria);
+#else
+  (void)filename;
+  (void)data;
+  AssertThrow(false, ExcMessage("This function needs CGAL to be installed."));
+#endif
+}
+
+
+
 template <int dim, int spacedim>
 void
 GridIn<dim, spacedim>::skip_empty_lines(std::istream &in)
@@ -4167,6 +4210,10 @@ GridIn<dim, spacedim>::read(const std::string &filename, Format format)
     {
       read_exodusii(name);
     }
+  else if (format == inr)
+    {
+      read_inr(name);
+    }
   else
     {
       std::ifstream in(name.c_str());
@@ -4220,6 +4267,13 @@ GridIn<dim, spacedim>::read(std::istream &in, Format format)
         read_tecplot(in);
         return;
 
+      case inr:
+        Assert(false,
+               ExcMessage("There is no read_inr(istream &) function. "
+                          "Use the read_inr(string &filename, ...) "
+                          "functions, instead."));
+        return;
+
       case assimp:
         Assert(false,
                ExcMessage("There is no read_assimp(istream &) function. "
@@ -4269,6 +4323,8 @@ GridIn<dim, spacedim>::default_suffix(const Format format)
         return ".xda";
       case tecplot:
         return ".dat";
+      case inr:
+        return ".inr";
       default:
         Assert(false, ExcNotImplemented());
         return ".unknown_format";

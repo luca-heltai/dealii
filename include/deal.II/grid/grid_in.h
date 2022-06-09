@@ -23,6 +23,8 @@
 #include <deal.II/base/point.h>
 #include <deal.II/base/smartpointer.h>
 
+#include <deal.II/cgal/additional_data.h>
+
 #include <iostream>
 #include <string>
 #include <vector>
@@ -341,6 +343,8 @@ public:
     assimp,
     /// Use read_exodusii()
     exodusii,
+    /// Use read_inr()
+    inr,
   };
 
   /**
@@ -743,6 +747,18 @@ public:
   ExodusIIData
   read_exodusii(const std::string &filename,
                 const bool         apply_all_indicators_to_manifolds = false);
+
+  /**
+   * Read a gray-level image, store in a .inr file and generates a
+   * Triangulation<3> out of it.
+   *
+   * @param filename Name of the .inr file.
+   * @param data AdditionalData object that controls mesh-like parameters. [TODO: comment more...]
+   */
+  void
+  read_inr(const std::string &                    filename,
+           const CGALWrappers::AdditionalData<3> &data =
+             CGALWrappers::AdditionalData<3>{});
 
   /**
    * Return the standard suffix for a file in this format.

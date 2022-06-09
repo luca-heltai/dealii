@@ -31,6 +31,7 @@
 
 #  include <CGAL/Complex_2_in_triangulation_3.h>
 #  include <CGAL/IO/facets_in_complex_2_to_triangle_mesh.h>
+#  include <CGAL/Image_3.h>
 #  include <CGAL/Implicit_surface_3.h>
 #  include <CGAL/Labeled_mesh_domain_3.h>
 #  include <CGAL/Mesh_complex_3_in_triangulation_3.h>
