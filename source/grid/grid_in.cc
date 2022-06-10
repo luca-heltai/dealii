@@ -3935,6 +3935,20 @@ GridIn<dim, spacedim>::read_exodusii(
 
 
 
+template <int dim, int spacedim>
+void
+GridIn<dim, spacedim>::read_inr(const std::string                     &filename,
+                                const CGALWrappers::AdditionalData<3> &data)
+{
+  (void)filename;
+  (void)data;
+  AssertThrow(false,
+              ExcMessage(
+                "This function is not meant to work for non 3D geometries."));
+}
+
+
+
 template <>
 void
 GridIn<3, 3>::read_inr(const std::string &                    filename,
@@ -3952,17 +3966,18 @@ GridIn<3, 3>::read_inr(const std::string &                    filename,
   using Mesh_criteria = CGAL::Mesh_criteria_3<Tr>;
 
   CGAL::Image_3 image;
-  AssertThrow(!image.read(filename.c_str()), ExcMessage("Cannot read file."));
+  AssertThrow(image.read(filename.c_str()), ExcMessage("Cannot read file."));
 
-  Mesh_domain domain = Mesh_domain::create_labeled_image_mesh_domain(image);
+  Mesh_domain domain =
+    Mesh_domain::create_labeled_image_mesh_domain(image, 2.9f, 0.f);
   // Mesh criteria
-  Mesh_criteria    criteria(CGAL::parameters::facet_angle    = data.facet_angle,
+  Mesh_criteria criteria(CGAL::parameters::facet_angle    = data.facet_angle,
                          CGAL::parameters::facet_size     = data.facet_size,
                          CGAL::parameters::facet_distance = data.facet_distance,
                          CGAL::parameters::cell_radius_edge_ratio =
                            data.cell_radius_edge_ratio,
                          CGAL::parameters::cell_size = data.cell_size);
-  C3t3             c3t3 = CGAL::make_mesh_3<C3t3>(domain, criteria);
+  C3t3          c3t3 = CGAL::make_mesh_3<C3t3>(domain, criteria);
 
   CGALWrappers::cgal_triangulation_to_dealii_triangulation(c3t3, *tria);
 #else
