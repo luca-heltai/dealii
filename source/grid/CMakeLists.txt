@@ -22,11 +22,11 @@ INCLUDE_DIRECTORIES(BEFORE ${CMAKE_CURRENT_BINARY_DIR})
 # guarding the include by DEAL_II_DISABLE_EXTRA_DIAGNOSTICS is not enough
 # due to a longstanding bug in gcc. Thus, simply wet
 # -Wno-misleading-indentation on the command line for the
-# grid_generator_cgal.cc compilation unit.
+# grid_{in,generator}_cgal.cc compilation unit.
 #
 IF(DEAL_II_WITH_CGAL)
   ENABLE_IF_SUPPORTED(_flag "-Wno-misleading-indentation")
-  SET_PROPERTY(SOURCE "grid_generator_cgal.cc"
+  SET_PROPERTY(SOURCE "grid_generator_cgal.cc, grid_in_cgal.cc"
     APPEND_STRING PROPERTY COMPILE_FLAGS " ${_flag}"
     )
 ENDIF()
@@ -54,6 +54,7 @@ SET(_separate_src
   grid_generator_from_name.cc
   grid_generator_pipe_junction.cc
   grid_in.cc
+  grid_in_cgal.cc
   grid_out.cc
   grid_tools_cache.cc
   grid_tools.cc
