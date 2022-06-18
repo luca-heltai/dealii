@@ -627,11 +627,19 @@ public:
    * that is $J \dealcoloneq |\text{det}(B)|$. If $J$ is zero, an empty
    * quadrature is returned. This may happen, in two dimensions, if the three
    * vertices are aligned, or in three dimensions if the four vertices are on
+<<<<<<< HEAD
    * the same plane. The present function works also in the codimension one and
    * codimension two case. For instance, when `dim=2` and `spacedim=3`, we can
    * map the quadrature points so that they live on the physical triangle
    * embedded in the three dimensional space. In such a case, the matrix $B$ is
    * not square anymore.
+=======
+   * the same plane. The present function works also in the codimension one
+   * case. For instance, when `dim=2` and `spacedim=3`, we can map the
+   * quadrature points so that they live on the physical triangle embedded in
+   * the three dimensional space. In such a case, the matrix $B$ is not square
+   * anymore.
+>>>>>>> 26c746b531 (compute_affine_transformation in codim1 case)
    *
    * @param[in] vertices The vertices of the simplex you wish to integrate on
    * @return A quadrature object that can be used to integrate on the simplex
