@@ -215,7 +215,7 @@ QMilne<1>::QMilne()
 {
   static const double xpts[] = {0.0, .25, .5, .75, 1.0};
   static const double wts[]  = {
-    7. / 90., 32. / 90., 12. / 90., 32. / 90., 7. / 90.};
+     7. / 90., 32. / 90., 12. / 90., 32. / 90., 7. / 90.};
 
   for (unsigned int i = 0; i < this->size(); ++i)
     {
@@ -533,7 +533,7 @@ QGaussLog<1>::get_quadrature_weights(const unsigned int n)
 
 template <>
 QGaussLogR<1>::QGaussLogR(const unsigned int n,
-                          const Point<1> &   origin,
+                          const Point<1>    &origin,
                           const double       alpha,
                           const bool         factor_out_singularity)
   : Quadrature<1>(
@@ -635,7 +635,7 @@ QGaussOneOverR<2>::quad_size(const Point<2> &singularity, const unsigned int n)
 
 template <>
 QGaussOneOverR<2>::QGaussOneOverR(const unsigned int n,
-                                  const Point<2> &   singularity,
+                                  const Point<2>    &singularity,
                                   const bool         factor_out_singularity)
   : Quadrature<2>(quad_size(singularity, n))
 {
@@ -721,7 +721,7 @@ QGaussOneOverR<2>::QGaussOneOverR(const unsigned int n,
   // And we get rid of R to take into account the singularity,
   // unless specified differently in the constructor.
   std::vector<Point<2>> &ps  = this->quadrature_points;
-  std::vector<double> &  ws  = this->weights;
+  std::vector<double>   &ws  = this->weights;
   double                 pi4 = numbers::PI / 4;
 
   for (unsigned int q = 0; q < gauss.size(); ++q)
@@ -862,7 +862,7 @@ QWeddle<dim>::QWeddle()
 
 template <int dim>
 QTelles<dim>::QTelles(const Quadrature<1> &base_quad,
-                      const Point<dim> &   singularity)
+                      const Point<dim>    &singularity)
   : // We need the explicit implementation if dim == 1. If dim > 1 we use the
     // former implementation and apply a tensorial product to obtain the higher
     // dimensions.
@@ -1238,12 +1238,8 @@ QSimplex<dim>::compute_affine_transformation(
   for (unsigned int d = 0; d < dim; ++d)
     Bt[d] = vertices[d + 1] - vertices[0];
 
-  const auto   B = Bt.transpose();
-  const double J = std::abs(B.determinant());
-
-  // if the determinant is zero, we return an empty quadrature
-  if (J < 1e-12)
-    return Quadrature<spacedim>();
+  const auto B = Bt.transpose();
+  return Quadrature<spacedim>();
 
   std::vector<Point<spacedim>> qp(this->size());
   std::vector<double>          w(this->size());
@@ -1256,6 +1252,48 @@ QSimplex<dim>::compute_affine_transformation(
     }
 
   return Quadrature<spacedim>(qp, w);
+}
+
+
+
+template <int dim>
+template <int spacedim>
+Quadrature<spacedim>
+QSimplex<dim>::mapped_quadrature(
+  const std::vector<std::array<Point<spacedim>, dim + 1>> &points) const
+{
+  Assert(dim <= spacedim,
+         ExcMessage("Invalid combination of dim and spacedim ."));
+
+  std::vector<Point<spacedim>> qp;
+  std::vector<double>          ws;
+  for (const auto &simplex : points)
+    {
+      const auto rule = this->compute_affine_transformation(simplex);
+      for (const auto &p : rule.get_points())
+        {
+          qp.push_back(p);
+        }
+      for (const auto w : rule.get_weights())
+        {
+          ws.push_back(w);
+        }
+    }
+  return Quadrature<spacedim>(qp, ws);
+}
+
+
+template <>
+template <>
+Quadrature<1>
+QSimplex<1>::mapped_quadrature(
+  const std::vector<std::array<Point<1>, 1 + 1>> &points) const
+{
+  (void)points;
+  Assert(false,
+         ExcMessage(
+           "This function is not supposed to work in 1D-1D scenario."));
+  return Quadrature<1>();
 }
 
 
@@ -2187,6 +2225,30 @@ template class QGaussLobattoChebyshev<3>;
 template class QSimplex<1>;
 template class QSimplex<2>;
 template class QSimplex<3>;
+
+template Quadrature<2>
+QSimplex<1>::compute_affine_transformation(
+  const std::array<Point<2>, 1 + 1> &vertices) const;
+
+template Quadrature<3>
+QSimplex<2>::compute_affine_transformation(
+  const std::array<Point<3>, 2 + 1> &vertices) const;
+
+template Quadrature<2>
+QSimplex<1>::mapped_quadrature(
+  const std::vector<std::array<Point<2>, 1 + 1>> &points) const;
+
+template Quadrature<2>
+QSimplex<2>::mapped_quadrature(
+  const std::vector<std::array<Point<2>, 2 + 1>> &points) const;
+
+template Quadrature<3>
+QSimplex<2>::mapped_quadrature(
+  const std::vector<std::array<Point<3>, 2 + 1>> &points) const;
+
+template Quadrature<3>
+QSimplex<3>::mapped_quadrature(
+  const std::vector<std::array<Point<3>, 3 + 1>> &points) const;
 
 template class QIteratedSimplex<1>;
 template class QIteratedSimplex<2>;
