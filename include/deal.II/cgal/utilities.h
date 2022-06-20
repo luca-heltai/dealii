@@ -67,9 +67,52 @@ DEAL_II_NAMESPACE_OPEN
  * algorithms like triangulations, Voronoi diagrams, Boolean operations on
  * polygons and polyhedra, point set processing, arrangements of curves, surface
  * and volume mesh generation, geometry processing,  alpha shapes, convex hull
- * algorithms, shape reconstruction, AABB and KD trees...
+ * algorithms, shape reconstruction, AABB, KD trees and many others.
+ *
+ * Among all CGAL classes and packages, the most important ones are
+ * `CGAL::Surface_mesh`, and most of the packages in the Mesh Generation
+ * package.
+ *
+ * Those wrappers allow to go back and forth from deal.II to CGAL types, giving
+ * capabilities spanning from mesh generation to boolean operations of mesh-like
+ * containers (i.e. deal.II cells and Triangulations). See BooleanOperation for
+ * a list of available operations. In particular, you can use these to work with
+ * a BooleanOperation of two cells coming from two different grids and integrate
+ * over them. In essence, this means that you need to store quadrature points on
+ * the physical polygon/polyhedra, and evaluate shape functions there, as it
+ * usually the case with non-matching methods and other techniques like XFEM and
+ * cutFEM. To see as example of non-matching approach, check step-60 and
+ * step-70, while step-85 is an example of cutFEM, where a level set
+ * function is used to describe the physical domain where you want to solve your
+ * PDE and to generate regions where you integrate, according to the
+ * weak form. Notice that no one of this tutorials is using CGAL.
  *
  * You can learn more about the CGAL library at https://www.cgal.org/
+ *
+ * If you really need to use directly CGAL in one of these wrappers, you will
+ * need to explicitly add some `using` directives coming from CGAL. The most
+ * relevant and frequent one is `Kernel`. The concept of a kernel is defined by
+ * a set of requirements on the provision of certain types and access member
+ * functions to create objects of these types. The types are function object
+ * classes to be used within the algorithms and data structures of CGAL. All
+ * other `using` directives are built on the top of a Kernel. As an example, you
+ * can convert a deal.II cell to a `CGAL::Surface_mesh` object by simply giving
+ * a proper Kernel the corresponding CGAL point type.
+ *
+ * @code
+ *
+ * const auto cell = ReferenceCells::Hexahedron;
+ * using K = CGAL::Exact_predicates_inexact_constructions_kernel;
+ * using CGALPoint = CGAL::Point_3<K>;
+ *
+ * CGAL::Surface_mesh<CGALPoint> sm; //initialize empty surface
+ * CGALWrappers::dealii_cell_to_cgal_surface_mesh(cell,MappingQ1<3>(),sm);
+ * //fills sm
+ * @endcode
+ *
+ * All CGAL allowed operations for a CGAL::Surface_mesh can now be used directly
+ * on `sm`.
+ *
  */
 namespace CGALWrappers
 {
@@ -204,7 +247,7 @@ namespace CGALWrappers
    * @return A global Quadrature rule that allows to integrate over the polyhedron.
    */
   template <typename CGALTriangulationType>
-  dealii::Quadrature<CGALTriangulationType::Point::Ambient_dimension::value>
+  Quadrature<CGALTriangulationType::Point::Ambient_dimension::value>
   compute_quadrature(const CGALTriangulationType &tria,
                      const unsigned int           degree);
 
@@ -221,20 +264,20 @@ namespace CGALWrappers
    * @param [in] bool_op The BooleanOperation to be performed.
    * @param [in] mapping0 Mapping object for the first cell.
    * @param [in] mapping1 Mapping object for the first cell.
-   * @return [out] Quadrature<spacedim> The global quadrature rule on the polygon/polyhedron.
+   * @return Quadrature<spacedim> The global quadrature rule on the polygon/polyhedron.
    */
   template <int dim0, int dim1, int spacedim>
-  dealii::Quadrature<spacedim>
+  Quadrature<spacedim>
   compute_quadrature_on_boolean_operation(
-    const typename dealii::Triangulation<dim0, spacedim>::cell_iterator &cell0,
-    const typename dealii::Triangulation<dim1, spacedim>::cell_iterator &cell1,
-    const unsigned int                                                   degree,
-    const BooleanOperation &       bool_op,
-    const Mapping<dim0, spacedim> &mapping0 =
-      (dealii::ReferenceCells::get_hypercube<dim0>()
+    const typename Triangulation<dim0, spacedim>::cell_iterator &cell0,
+    const typename Triangulation<dim1, spacedim>::cell_iterator &cell1,
+    const unsigned int                                           degree,
+    const BooleanOperation &                                     bool_op,
+    const Mapping<dim0, spacedim> &                              mapping0 =
+      (ReferenceCells::get_hypercube<dim0>()
          .template get_default_linear_mapping<dim0, spacedim>()),
     const Mapping<dim1, spacedim> &mapping1 =
-      (dealii::ReferenceCells::get_hypercube<dim1>()
+      (ReferenceCells::get_hypercube<dim1>()
          .template get_default_linear_mapping<dim1, spacedim>()));
 
   /**
@@ -250,16 +293,16 @@ namespace CGALWrappers
    * @param [in] mapping0 Mapping object for the first cell.
    * @param [in] mapping1 Mapping object for the first cell.
    * @param [in] degree The degree of accuracy you wish to get for the global quadrature formula.
-   * @return [out] Quadrature<spacedim> The global quadrature rule on the polygon/polyhedron.
+   * @return Quadrature<spacedim> The global quadrature rule on the polygon/polyhedron.
    */
   template <int dim0, int dim1, int spacedim>
-  dealii::Quadrature<spacedim>
+  Quadrature<spacedim>
   compute_quadrature_on_intersection(
-    const typename dealii::Triangulation<dim0, spacedim>::cell_iterator &cell0,
-    const typename dealii::Triangulation<dim1, spacedim>::cell_iterator &cell1,
-    const unsigned int                                                   degree,
-    const Mapping<dim0, spacedim> &mapping0,
-    const Mapping<dim1, spacedim> &mapping1);
+    const typename Triangulation<dim0, spacedim>::cell_iterator &cell0,
+    const typename Triangulation<dim1, spacedim>::cell_iterator &cell1,
+    const unsigned int                                           degree,
+    const Mapping<dim0, spacedim> &                              mapping0,
+    const Mapping<dim1, spacedim> &                              mapping1);
 
   /**
    * Remesh a CGAL::Surface_mesh.
@@ -285,7 +328,7 @@ namespace CGALWrappers
    *
    * @image html boolean_union_hyper_spheres_remeshed.png
    *
-   * @param surface_mesh The input CGAL::Surface_mesh.
+   * @param [out] surface_mesh A reference to the input CGAL::Surface_mesh. After a call to this function, it will contain the remeshed surface.
    * @param [in] data AdditionalData object to pass to the CGAL::make_mesh_3 function. See the documentation
    * of that struct for a description of those parameters.
    */
@@ -398,7 +441,7 @@ namespace CGALWrappers
 
 
   template <typename CGALTriangulationType>
-  dealii::Quadrature<CGALTriangulationType::Point::Ambient_dimension::value>
+  Quadrature<CGALTriangulationType::Point::Ambient_dimension::value>
   compute_quadrature(const CGALTriangulationType &tria,
                      const unsigned int           degree)
   {
@@ -410,10 +453,10 @@ namespace CGALWrappers
 
     constexpr int spacedim =
       CGALTriangulationType::Point::Ambient_dimension::value;
-    QGaussSimplex<spacedim>                           quad(degree);
-    std::vector<dealii::Point<spacedim>>              pts;
-    std::vector<double>                               wts;
-    std::array<dealii::Point<spacedim>, spacedim + 1> vertices; // tets
+    QGaussSimplex<spacedim>                   quad(degree);
+    std::vector<Point<spacedim>>              pts;
+    std::vector<double>                       wts;
+    std::array<Point<spacedim>, spacedim + 1> vertices; // tets
 
     const auto is_c3t3 = boost::hana::is_valid(
       [](auto &&obj) -> decltype(obj.cells_in_complex_begin()) {});
@@ -475,14 +518,14 @@ namespace CGALWrappers
 
 
   template <int dim0, int dim1, int spacedim>
-  dealii::Quadrature<spacedim>
+  Quadrature<spacedim>
   compute_quadrature_on_boolean_operation(
-    const typename dealii::Triangulation<dim0, spacedim>::cell_iterator &cell0,
-    const typename dealii::Triangulation<dim1, spacedim>::cell_iterator &cell1,
-    const unsigned int                                                   degree,
-    const BooleanOperation &       bool_op,
-    const Mapping<dim0, spacedim> &mapping0,
-    const Mapping<dim1, spacedim> &mapping1)
+    const typename Triangulation<dim0, spacedim>::cell_iterator &cell0,
+    const typename Triangulation<dim1, spacedim>::cell_iterator &cell1,
+    const unsigned int                                           degree,
+    const BooleanOperation &                                     bool_op,
+    const Mapping<dim0, spacedim> &                              mapping0,
+    const Mapping<dim1, spacedim> &                              mapping1)
   {
     Assert(dim0 == 3 && dim1 == 3 && spacedim == 3,
            ExcNotImplemented("2D geometries are not yet supported."));
@@ -533,13 +576,13 @@ namespace CGALWrappers
 
 
   template <int dim0, int dim1, int spacedim>
-  dealii::Quadrature<spacedim>
+  Quadrature<spacedim>
   compute_quadrature_on_intersection(
-    const typename dealii::Triangulation<dim0, spacedim>::cell_iterator &cell0,
-    const typename dealii::Triangulation<dim1, spacedim>::cell_iterator &cell1,
-    const unsigned int                                                   degree,
-    const Mapping<dim0, spacedim> &mapping0,
-    const Mapping<dim1, spacedim> &mapping1)
+    const typename Triangulation<dim0, spacedim>::cell_iterator &cell0,
+    const typename Triangulation<dim1, spacedim>::cell_iterator &cell1,
+    const unsigned int                                           degree,
+    const Mapping<dim0, spacedim> &                              mapping0,
+    const Mapping<dim1, spacedim> &                              mapping1)
   {
     Assert(dim0 == 3 && dim1 == 3 && spacedim == 3,
            ExcNotImplemented("2D geometries are not yet supported."));
