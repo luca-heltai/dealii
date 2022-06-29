@@ -1238,8 +1238,12 @@ QSimplex<dim>::compute_affine_transformation(
   for (unsigned int d = 0; d < dim; ++d)
     Bt[d] = vertices[d + 1] - vertices[0];
 
-  const auto B = Bt.transpose();
-  return Quadrature<spacedim>();
+  const auto   B = Bt.transpose();
+  const double J = std::abs(B.determinant());
+
+  // if the determinant is zero, we return an empty quadrature
+  if (J < 1e-12)
+    return Quadrature<spacedim>();
 
   std::vector<Point<spacedim>> qp(this->size());
   std::vector<double>          w(this->size());
@@ -1280,20 +1284,6 @@ QSimplex<dim>::mapped_quadrature(
         }
     }
   return Quadrature<spacedim>(qp, ws);
-}
-
-
-template <>
-template <>
-Quadrature<1>
-QSimplex<1>::mapped_quadrature(
-  const std::vector<std::array<Point<1>, 1 + 1>> &points) const
-{
-  (void)points;
-  Assert(false,
-         ExcMessage(
-           "This function is not supposed to work in 1D-1D scenario."));
-  return Quadrature<1>();
 }
 
 
@@ -2226,30 +2216,6 @@ template class QSimplex<1>;
 template class QSimplex<2>;
 template class QSimplex<3>;
 
-template Quadrature<2>
-QSimplex<1>::compute_affine_transformation(
-  const std::array<Point<2>, 1 + 1> &vertices) const;
-
-template Quadrature<3>
-QSimplex<2>::compute_affine_transformation(
-  const std::array<Point<3>, 2 + 1> &vertices) const;
-
-template Quadrature<2>
-QSimplex<1>::mapped_quadrature(
-  const std::vector<std::array<Point<2>, 1 + 1>> &points) const;
-
-template Quadrature<2>
-QSimplex<2>::mapped_quadrature(
-  const std::vector<std::array<Point<2>, 2 + 1>> &points) const;
-
-template Quadrature<3>
-QSimplex<2>::mapped_quadrature(
-  const std::vector<std::array<Point<3>, 2 + 1>> &points) const;
-
-template Quadrature<3>
-QSimplex<3>::mapped_quadrature(
-  const std::vector<std::array<Point<3>, 3 + 1>> &points) const;
-
 template class QIteratedSimplex<1>;
 template class QIteratedSimplex<2>;
 template class QIteratedSimplex<3>;
@@ -2284,4 +2250,20 @@ namespace dealii
   template Quadrature<3>
   QSimplex<2>::compute_affine_transformation(
     const std::array<Point<3>, 2 + 1> &vertices) const;
+
+  template Quadrature<2>
+  QSimplex<1>::mapped_quadrature(
+    const std::vector<std::array<Point<2>, 1 + 1>> &points) const;
+
+  template Quadrature<2>
+  QSimplex<2>::mapped_quadrature(
+    const std::vector<std::array<Point<2>, 2 + 1>> &points) const;
+
+  template Quadrature<3>
+  QSimplex<2>::mapped_quadrature(
+    const std::vector<std::array<Point<3>, 2 + 1>> &points) const;
+
+  template Quadrature<3>
+  QSimplex<3>::mapped_quadrature(
+    const std::vector<std::array<Point<3>, 3 + 1>> &points) const;
 } // namespace dealii
