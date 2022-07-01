@@ -25,18 +25,31 @@
 #ifdef DEAL_II_WITH_CGAL
 #  include <deal.II/base/quadrature_lib.h>
 
+#  include <deal.II/fe/mapping.h>
+
 #  include <deal.II/grid/tria.h>
 
+#  include <CGAL/Boolean_set_operations_2.h>
 #  include <CGAL/Cartesian.h>
-#  include <CGAL/Exact_predicates_exact_constructions_kernel.h>
+#  include <CGAL/Circular_kernel_intersections.h>
+#  include <CGAL/Constrained_Delaunay_triangulation_2.h>
+#  include <CGAL/Delaunay_mesh_face_base_2.h>
+#  include <CGAL/Delaunay_mesh_size_criteria_2.h>
+#  include <CGAL/Delaunay_mesher_2.h>
+#  include <CGAL/Exact_predicates_exact_constructions_kernel_with_sqrt.h>
 #  include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
 #  include <CGAL/Kernel_traits.h>
+#  include <CGAL/Polygon_2.h>
+#  include <CGAL/Polygon_with_holes_2.h>
 #  include <CGAL/Segment_3.h>
 #  include <CGAL/Simple_cartesian.h>
 #  include <CGAL/Tetrahedron_3.h>
 #  include <CGAL/Triangle_2.h>
 #  include <CGAL/Triangle_3.h>
+#  include <CGAL/Triangulation_2.h>
 #  include <CGAL/Triangulation_3.h>
+#  include <CGAL/Triangulation_face_base_with_id_2.h>
+#  include <CGAL/Triangulation_face_base_with_info_2.h>
 
 //#  include <CGAL/tetrahedral_remeshing.h> REQUIRES CGAL_VERSION>=5.1.5
 
@@ -47,14 +60,43 @@
 
 DEAL_II_NAMESPACE_OPEN
 
-using K             = CGAL::Exact_predicates_inexact_constructions_kernel;
-using CGALTriangle2 = K::Triangle_2;
-using CGALTriangle3 = K::Triangle_3;
-using CGALPoint2    = K::Point_2;
-using CGALPoint3    = K::Point_3;
-using CGALSegment2  = K::Segment_2;
-using CGALSegment3  = K::Segment_3;
-using CGALTetra     = K::Tetrahedron_3;
+// using K           = CGAL::Exact_predicates_inexact_constructions_kernel;
+using K           = CGAL::Exact_predicates_exact_constructions_kernel_with_sqrt;
+using CGALPolygon = CGAL::Polygon_2<K>;
+using Polygon_with_holes_2 = CGAL::Polygon_with_holes_2<K>;
+using CGALTriangle2        = K::Triangle_2;
+using CGALTriangle3        = K::Triangle_3;
+using CGALPoint2           = K::Point_2;
+using CGALPoint3           = K::Point_3;
+using CGALSegment2         = K::Segment_2;
+using CGALSegment3         = K::Segment_3;
+using CGALTetra            = K::Tetrahedron_3;
+using Triangulation2       = CGAL::Triangulation_2<K>;
+
+
+struct FaceInfo2
+{
+  FaceInfo2()
+  {}
+  int nesting_level;
+  bool
+  in_domain()
+  {
+    return nesting_level % 2 == 1;
+  }
+};
+
+using Vb            = CGAL::Triangulation_vertex_base_2<K>;
+using Fbb           = CGAL::Triangulation_face_base_with_info_2<FaceInfo2, K>;
+using CFb           = CGAL::Constrained_triangulation_face_base_2<K, Fbb>;
+using Fb            = CGAL::Delaunay_mesh_face_base_2<K, CFb>;
+using Tds           = CGAL::Triangulation_data_structure_2<Vb, Fb>;
+using Itag          = CGAL::Exact_predicates_tag;
+using CDT           = CGAL::Constrained_Delaunay_triangulation_2<K, Tds, Itag>;
+using Criteria      = CGAL::Delaunay_mesh_size_criteria_2<CDT>;
+using Vertex_handle = CDT::Vertex_handle;
+using Face_handle   = CDT::Face_handle;
+
 namespace CGALWrappers
 {
   namespace internal
@@ -79,6 +121,10 @@ namespace CGALWrappers
     compute_intersection(const std::array<Point<2>, 2> &first_simplex,
                          const std::array<Point<2>, 3> &second_simplex);
 
+    decltype(auto)
+    compute_intersection(const std::array<Point<2>, 4> &first_simplex,
+                         const std::array<Point<2>, 4> &second_simplex);
+
 #  if defined(CGAL_GEQ_515)
     // line, tetra
     boost::optional<boost::variant<CGALPoint3, CGALSegment3>>
@@ -94,7 +140,89 @@ namespace CGALWrappers
                          const std::array<Point<3>, 4> &second_simplex);
 #  endif
 
+
+
+    void
+    mark_domains(CDT &                 ct,
+                 Face_handle           start,
+                 int                   index,
+                 std::list<CDT::Edge> &border)
+    {
+      if (start->info().nesting_level != -1)
+        {
+          return;
+        }
+      std::list<Face_handle> queue;
+      queue.push_back(start);
+      while (!queue.empty())
+        {
+          Face_handle fh = queue.front();
+          queue.pop_front();
+          if (fh->info().nesting_level == -1)
+            {
+              fh->info().nesting_level = index;
+              for (int i = 0; i < 3; i++)
+                {
+                  CDT::Edge   e(fh, i);
+                  Face_handle n = fh->neighbor(i);
+                  if (n->info().nesting_level == -1)
+                    {
+                      if (ct.is_constrained(e))
+                        border.push_back(e);
+                      else
+                        queue.push_back(n);
+                    }
+                }
+            }
+        }
+    }
+
+
+
+    void
+    mark_domains(CDT &cdt)
+    {
+      for (CDT::Face_handle f : cdt.all_face_handles())
+        {
+          f->info().nesting_level = -1;
+        }
+      std::list<CDT::Edge> border;
+      mark_domains(cdt, cdt.infinite_face(), 0, border);
+      while (!border.empty())
+        {
+          CDT::Edge e = border.front();
+          border.pop_front();
+          Face_handle n = e.first->neighbor(e.second);
+          if (n->info().nesting_level == -1)
+            {
+              mark_domains(cdt, n, e.first->info().nesting_level + 1, border);
+            }
+        }
+    }
+
   } // namespace internal
+
+  /**
+   * Given two deal.II cells, compute the intersection and subtriangulate with
+   * simplices. Return the subsidvision as a vector of simplices, each one
+   * identified by an array of Points.
+   *
+   *
+   * @param cell0 Iterator to the first cell
+   * @param cell1 Iterator to the second cell
+   * @param mapping0 Mapping for the first cell
+   * @param mapping1 Mapping for the second cell
+   * @param tol
+   * @return std::vector<std::array<Point<spacedim>, N>>
+   */
+  template <int dim0, int dim1, int spacedim, int N>
+  std::vector<std::array<Point<spacedim>, N>>
+  compute_intersection_of_cells(
+    const typename Triangulation<dim0, spacedim>::cell_iterator &cell0,
+    const typename Triangulation<dim1, spacedim>::cell_iterator &cell1,
+    const Mapping<dim0, spacedim> &                              mapping0,
+    const Mapping<dim1, spacedim> &                              mapping1,
+    const double                                                 tol = 1e-9);
 
 } // namespace CGALWrappers
 

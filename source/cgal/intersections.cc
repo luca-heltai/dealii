@@ -63,6 +63,33 @@ namespace CGALWrappers
       return CGAL::intersection(segm, triangle);
     }
 
+
+
+    // rectangle-rectangle
+    decltype(auto)
+    compute_intersection(const std::array<Point<2>, 4> &first_simplex,
+                         const std::array<Point<2>, 4> &second_simplex)
+    {
+      std::array<CGALPoint2, 4> pts1;
+      pts1[0] = dealii_point_to_cgal_point<CGALPoint2>(first_simplex[0]);
+      pts1[1] = dealii_point_to_cgal_point<CGALPoint2>(first_simplex[1]);
+      pts1[2] = dealii_point_to_cgal_point<CGALPoint2>(first_simplex[2]);
+      pts1[3] = dealii_point_to_cgal_point<CGALPoint2>(first_simplex[3]);
+      const CGALPolygon first{pts1.begin(), pts1.end()};
+
+      std::array<CGALPoint2, 4> pts2;
+      pts2[0] = dealii_point_to_cgal_point<CGALPoint2>(second_simplex[0]);
+      pts2[1] = dealii_point_to_cgal_point<CGALPoint2>(second_simplex[1]);
+      pts2[2] = dealii_point_to_cgal_point<CGALPoint2>(second_simplex[2]);
+      pts2[3] = dealii_point_to_cgal_point<CGALPoint2>(second_simplex[3]);
+      const CGALPolygon second{pts2.begin(), pts2.end()};
+
+      std::vector<Polygon_with_holes_2> poly_list;
+
+      CGAL::intersection(first, second, std::back_inserter(poly_list));
+      return poly_list;
+    }
+
 #  if defined(CGAL_GEQ_515)
 
 
@@ -108,9 +135,105 @@ namespace CGALWrappers
       return CGAL::intersection(triangle, tetra);
     }
 #  endif
-
-
   } // namespace internal
+
+
+
+  template <int dim0, int dim1, int spacedim, int N>
+  std::vector<std::array<Point<spacedim>, N>>
+  compute_intersection_of_cells(
+    const typename Triangulation<dim0, spacedim>::cell_iterator &cell0,
+    const typename Triangulation<dim1, spacedim>::cell_iterator &cell1,
+    const Mapping<dim0, spacedim> &                              mapping0,
+    const Mapping<dim1, spacedim> &                              mapping1,
+    const double                                                 tol)
+  {
+    (void)cell0;
+    (void)cell1;
+    (void)mapping0;
+    (void)mapping1;
+    Assert(false, ExcNotImplemented());
+  }
+
+
+
+  template <>
+  std::vector<std::array<Point<2>, 3>>
+  compute_intersection_of_cells<2, 2, 2, 3>(
+    const typename Triangulation<2, 2>::cell_iterator &cell0,
+    const typename Triangulation<2, 2>::cell_iterator &cell1,
+    const Mapping<2, 2> &                              mapping0,
+    const Mapping<2, 2> &                              mapping1,
+    const double                                       tol)
+  {
+    const auto              vertices_cell0 = mapping0.get_vertices(cell0);
+    const auto              vertices_cell1 = mapping1.get_vertices(cell1);
+    std::array<Point<2>, 4> vertices0, vertices1;
+    std::copy(vertices_cell0.begin(), vertices_cell0.end(), vertices0.begin());
+    std::copy(vertices_cell1.begin(), vertices_cell1.end(), vertices1.begin());
+
+    std::swap(vertices0[2], vertices0[3]);
+    std::swap(vertices1[2], vertices1[3]);
+    const auto intersection_test =
+      internal::compute_intersection(vertices0, vertices1);
+
+    if (!intersection_test.empty())
+      {
+        const auto &poly = intersection_test[0].outer_boundary();
+
+        const unsigned int size_poly = poly.size();
+        if (size_poly == 3)
+          {
+            // the intersection is a triangle itself, so return directly the
+            // vertices.
+            return {{{cgal_point_to_dealii_point<2>(poly.vertex(0)),
+                      cgal_point_to_dealii_point<2>(poly.vertex(1)),
+                      cgal_point_to_dealii_point<2>(poly.vertex(2))}}};
+          }
+        else if (size_poly >= 4)
+          {
+            // the intersection is a polygon, you need to triangulate it.
+            std::vector<std::array<Point<2>, 3>> collection;
+
+            CDT cdt;
+            cdt.insert_constraint(poly.vertices_begin(),
+                                  poly.vertices_end(),
+                                  true);
+
+            internal::mark_domains(cdt);
+            std::array<Point<2>, 3> vertices;
+
+            for (Face_handle f : cdt.finite_face_handles())
+              {
+                if (f->info().in_domain() &&
+                    CGAL::to_double(cdt.triangle(f).area()) > tol)
+                  {
+                    for (unsigned int i = 0; i < 3; ++i)
+                      {
+                        vertices[i] = cgal_point_to_dealii_point<2>(
+                          cdt.triangle(f).vertex(i));
+                      }
+
+                    collection.push_back(vertices);
+                  }
+              }
+            return collection;
+          }
+        else
+          {
+            std::cout << "We have " << size_poly << " vertices" << std::endl;
+            Assert(false, ExcMessage("The polygon is degenerate."));
+            return {};
+          }
+      }
+    else
+      {
+        Assert(false, ExcMessage("Cells do not intersect."));
+        return {};
+      }
+  }
+
+
 } // namespace CGALWrappers
 
 DEAL_II_NAMESPACE_CLOSE

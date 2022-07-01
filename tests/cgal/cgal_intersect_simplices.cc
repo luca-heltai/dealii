@@ -13,7 +13,8 @@
 //
 // ---------------------------------------------------------------------
 
-// Compute intersection of simplices in 2D and 3D, and check they are correct.
+// Compute intersection of simplices in 2D, and check they are correct. In 3D,
+// this requires an older version of CGAL
 
 #include <deal.II/base/quadrature_lib.h>
 
