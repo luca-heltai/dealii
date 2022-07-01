@@ -13,7 +13,7 @@
 //
 // ---------------------------------------------------------------------
 
-// Compute intersection of simplices in 2D, and return a vector of arrays where
+// Compute intersection of a *segment* embedded in 2D and a deal.II cell in 2D, and return a vector of arrays where
 // you can build Quadrature rules. Then check that the sum of weights give the
 // correct area for each region.
 
@@ -28,23 +28,23 @@
 #include "../tests.h"
 
 using namespace CGALWrappers;
-static QGaussSimplex<2> qgauss(1); // use a degree 1 QGaussSimplex<2>
+static QGaussSimplex<1> qgauss(1); // use a degree 1 QGaussSimplex<2>
 
 void
-test_inside_intersection(Triangulation<2> &tria0, Triangulation<2> &tria1)
+test_inside_intersection(Triangulation<2> &tria0, Triangulation<1, 2> &tria1)
 {
   GridGenerator::hyper_cube(tria0, -1., 1.);
   GridGenerator::hyper_cube(tria1, -0.45, 0.45);
-  GridTools::rotate(numbers::PI_4, tria1);
-  const double expected_area = 0.81;
+  const double expected_area = 0.9;
   const auto   cell0         = tria0.begin_active();
   const auto   cell1         = tria1.begin_active();
+  cell1->vertex(1)+=Point<2>(1.0,1.);
 
   const auto vec_of_arrays =
-    CGALWrappers::compute_intersection_of_cells<2, 2, 2, 3>(cell0,
+    CGALWrappers::compute_intersection_of_cells<2, 1, 2, 2>(cell0,
                                                             cell1,
                                                             MappingQ1<2>(),
-                                                            MappingQ1<2>());
+                                                            MappingQ1<1, 2>());
 
   double sum = 0.;
   for (const auto &v : vec_of_arrays)
@@ -65,7 +65,7 @@ test_inside_intersection(Triangulation<2> &tria0, Triangulation<2> &tria1)
 
 
 void
-test_intersection(Triangulation<2> &tria0, Triangulation<2> &tria1)
+test_intersection(Triangulation<2> &tria0, Triangulation<1, 2> &tria1)
 {
   GridGenerator::hyper_cube(tria0, -1., 1.);
   GridGenerator::hyper_cube(tria1, .5, 1.45);
@@ -75,23 +75,26 @@ test_intersection(Triangulation<2> &tria0, Triangulation<2> &tria1)
   const auto cell1 = tria1.begin_active();
 
   const auto vec_of_arrays =
-    CGALWrappers::compute_intersection_of_cells<2, 2, 2, 3>(cell0,
+    CGALWrappers::compute_intersection_of_cells<2, 1, 2, 2>(cell0,
                                                             cell1,
                                                             MappingQ1<2>(),
-                                                            MappingQ1<2>());
+                                                            MappingQ1<1, 2>());
 
   double sum = 0.;
   for (const auto &v : vec_of_arrays)
     {
       deallog << "Simplex: " << std::endl;
-      const auto quad = qgauss.compute_affine_transformation(v);
+      const auto quad = qgauss.compute_affine_transformation(  v);
       sum += std::accumulate(quad.get_weights().begin(),
                              quad.get_weights().end(),
                              0.);
       for (const auto &pts : v)
         deallog << "pts: " << pts << std::endl;
     }
-  assert(std::abs(expected_area - sum) < 1e-15);
+
+
+  deallog << sum << std::endl;
+  // assert(std::abs(expected_area - sum) < 1e-15);
   deallog << "OK" << std::endl;
 }
 
@@ -101,8 +104,8 @@ int
 main()
 {
   initlog();
-  Triangulation<2> tria0;
-  Triangulation<2> tria1;
+  Triangulation<2>    tria0; // ambient space
+  Triangulation<1, 2> tria1; // immersed grid
 
   test_inside_intersection(tria0, tria1);
 

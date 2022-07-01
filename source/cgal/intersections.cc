@@ -234,6 +234,56 @@ namespace CGALWrappers
   }
 
 
+
+  template <>
+  std::vector<std::array<Point<2>, 2>>
+  compute_intersection_of_cells<2, 1, 2, 2>(
+    const typename Triangulation<2, 2>::cell_iterator &cell0,
+    const typename Triangulation<1, 2>::cell_iterator &cell1,
+    const Mapping<2, 2> &                              mapping0,
+    const Mapping<1, 2> &                              mapping1,
+    const double                                       tol)
+  {
+    const auto              vertices_cell0 = mapping0.get_vertices(cell0);
+    const auto              vertices_cell1 = mapping1.get_vertices(cell1);
+    std::array<Point<2>, 4> vertices0;
+    std::array<Point<2>, 2> vertices1;
+    std::copy(vertices_cell0.begin(), vertices_cell0.end(), vertices0.begin());
+    std::copy(vertices_cell1.begin(), vertices_cell1.end(), vertices1.begin());
+
+    std::swap(vertices0[2], vertices0[3]);
+
+    std::array<CGALPoint2, 4> pts;
+    pts[0] = dealii_point_to_cgal_point<CGALPoint2>(vertices0[0]);
+    pts[1] = dealii_point_to_cgal_point<CGALPoint2>(vertices0[1]);
+    pts[2] = dealii_point_to_cgal_point<CGALPoint2>(vertices0[2]);
+    pts[3] = dealii_point_to_cgal_point<CGALPoint2>(vertices0[3]);
+
+    CGALPolygon poly(pts.begin(), pts.end());
+
+    CGALSegment2 segm(dealii_point_to_cgal_point<CGALPoint2>(vertices1[0]),
+                      dealii_point_to_cgal_point<CGALPoint2>(vertices1[1]));
+    CDT          cdt;
+    cdt.insert_constraint(poly.vertices_begin(), poly.vertices_end(), true);
+    std::vector<std::array<Point<2>, 2>> vertices;
+    internal::mark_domains(cdt);
+
+    for (Face_handle f : cdt.finite_face_handles())
+      {
+        if (f->info().in_domain() &&
+            CGAL::to_double(cdt.triangle(f).area()) > tol)
+          {
+            const auto intersection = CGAL::intersection(segm, cdt.triangle(f));
+            if (const CGALSegment2 *s =
+                  boost::get<CGALSegment2>(&*intersection))
+              vertices.push_back({{cgal_point_to_dealii_point<2>((*s)[0]),
+                                   cgal_point_to_dealii_point<2>((*s)[1])}});
+          }
+      }
+    return vertices;
+  }
+
+
 } // namespace CGALWrappers
 
 DEAL_II_NAMESPACE_CLOSE

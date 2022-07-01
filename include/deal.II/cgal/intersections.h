@@ -125,6 +125,10 @@ namespace CGALWrappers
     compute_intersection(const std::array<Point<2>, 4> &first_simplex,
                          const std::array<Point<2>, 4> &second_simplex);
 
+    decltype(auto)
+    compute_intersection(const std::array<Point<2>, 4> &first_simplex,
+                         const std::array<Point<2>, 2> &second_simplex);
+
 #  if defined(CGAL_GEQ_515)
     // line, tetra
     boost::optional<boost::variant<CGALPoint3, CGALSegment3>>
