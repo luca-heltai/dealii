@@ -123,7 +123,6 @@ namespace CGALWrappers
 
 #  if defined(CGAL_GEQ_515)
 
-
     // line, tetra
     boost::optional<boost::variant<CGALPoint3, CGALSegment3>>
     compute_intersection(const std::array<Point<3>, 2> &first_simplex,
@@ -190,8 +189,8 @@ namespace CGALWrappers
   compute_intersection_of_cells(
     const typename Triangulation<dim0, spacedim>::cell_iterator &cell0,
     const typename Triangulation<dim1, spacedim>::cell_iterator &cell1,
-    const Mapping<dim0, spacedim>                               &mapping0,
-    const Mapping<dim1, spacedim>                               &mapping1,
+    const Mapping<dim0, spacedim> &                              mapping0,
+    const Mapping<dim1, spacedim> &                              mapping1,
     const double                                                 tol)
   {
     Assert((dim1 <= dim0) && (dim0 <= spacedim),
@@ -210,8 +209,8 @@ namespace CGALWrappers
   compute_intersection_of_cells<2, 2, 2>(
     const typename Triangulation<2, 2>::cell_iterator &cell0,
     const typename Triangulation<2, 2>::cell_iterator &cell1,
-    const Mapping<2, 2>                               &mapping0,
-    const Mapping<2, 2>                               &mapping1,
+    const Mapping<2, 2> &                              mapping0,
+    const Mapping<2, 2> &                              mapping1,
     const double                                       tol)
   {
     std::array<Point<2>, 4> vertices0, vertices1;
@@ -225,7 +224,7 @@ namespace CGALWrappers
 
     if (!intersection_test.empty())
       {
-        const auto        &poly      = intersection_test[0].outer_boundary();
+        const auto &       poly      = intersection_test[0].outer_boundary();
         const unsigned int size_poly = poly.size();
         if (size_poly == 3)
           {
@@ -285,8 +284,8 @@ namespace CGALWrappers
   compute_intersection_of_cells<2, 1, 2>(
     const typename Triangulation<2, 2>::cell_iterator &cell0,
     const typename Triangulation<1, 2>::cell_iterator &cell1,
-    const Mapping<2, 2>                               &mapping0,
-    const Mapping<1, 2>                               &mapping1,
+    const Mapping<2, 2> &                              mapping0,
+    const Mapping<1, 2> &                              mapping1,
     const double                                       tol)
   {
     std::array<Point<2>, 4> vertices0;
@@ -333,14 +332,14 @@ namespace CGALWrappers
 
 
 #  if defined(CGAL_GEQ_515)
-  // specialization for hex \cap line case
+  // specialization for hex \cap line
   template <>
   std::vector<std::array<Point<3>, 2>>
   compute_intersection_of_cells<3, 1, 3>(
     const typename Triangulation<3, 3>::cell_iterator &cell0,
     const typename Triangulation<1, 3>::cell_iterator &cell1,
-    const Mapping<3, 3>                               &mapping0,
-    const Mapping<1, 3>                               &mapping1,
+    const Mapping<3, 3> &                              mapping0,
+    const Mapping<1, 3> &                              mapping1,
     const double                                       tol)
   {
     std::array<Point<3>, 8> vertices0; // 8 vertices of the hex
@@ -355,7 +354,6 @@ namespace CGALWrappers
                    [&](const Point<3> &p) {
                      return dealii_point_to_cgal_point<CGALPoint3>(p);
                    });
-
 
     std::transform(vertices0.begin(),
                    vertices0.end(),
@@ -391,8 +389,8 @@ namespace CGALWrappers
   compute_intersection_of_cells<3, 2, 3>(
     const typename Triangulation<3, 3>::cell_iterator &cell0,
     const typename Triangulation<2, 3>::cell_iterator &cell1,
-    const Mapping<3, 3>                               &mapping0,
-    const Mapping<2, 3>                               &mapping1,
+    const Mapping<3, 3> &                              mapping0,
+    const Mapping<2, 3> &                              mapping1,
     const double                                       tol)
   {
     (void)cell0;
@@ -411,8 +409,8 @@ namespace CGALWrappers
   compute_intersection_of_cells<3, 1, 3>(
     const typename Triangulation<3, 3>::cell_iterator &cell0,
     const typename Triangulation<1, 3>::cell_iterator &cell1,
-    const Mapping<3, 3>                               &mapping0,
-    const Mapping<1, 3>                               &mapping1,
+    const Mapping<3, 3> &                              mapping0,
+    const Mapping<1, 3> &                              mapping1,
     const double                                       tol)
   {
     (void)cell0;
@@ -433,8 +431,8 @@ namespace CGALWrappers
   compute_intersection_of_cells<3, 2, 3>(
     const typename Triangulation<3, 3>::cell_iterator &cell0,
     const typename Triangulation<2, 3>::cell_iterator &cell1,
-    const Mapping<3, 3>                               &mapping0,
-    const Mapping<2, 3>                               &mapping1,
+    const Mapping<3, 3> &                              mapping0,
+    const Mapping<2, 3> &                              mapping1,
     const double                                       tol)
   {
     (void)cell0;
