@@ -41,10 +41,10 @@ test_inside_intersection(Triangulation<2> &tria0, Triangulation<2> &tria1)
   const auto   cell1         = tria1.begin_active();
 
   const auto vec_of_arrays =
-    CGALWrappers::compute_intersection_of_cells<2, 2, 2, 3>(cell0,
-                                                            cell1,
-                                                            MappingQ1<2>(),
-                                                            MappingQ1<2>());
+    CGALWrappers::compute_intersection_of_cells<2, 2, 2>(cell0,
+                                                         cell1,
+                                                         MappingQ1<2>(),
+                                                         MappingQ1<2>());
 
   double sum = 0.;
   for (const auto &v : vec_of_arrays)
@@ -75,10 +75,10 @@ test_intersection(Triangulation<2> &tria0, Triangulation<2> &tria1)
   const auto cell1 = tria1.begin_active();
 
   const auto vec_of_arrays =
-    CGALWrappers::compute_intersection_of_cells<2, 2, 2, 3>(cell0,
-                                                            cell1,
-                                                            MappingQ1<2>(),
-                                                            MappingQ1<2>());
+    CGALWrappers::compute_intersection_of_cells<2, 2, 2>(cell0,
+                                                         cell1,
+                                                         MappingQ1<2>(),
+                                                         MappingQ1<2>());
 
   double sum = 0.;
   for (const auto &v : vec_of_arrays)

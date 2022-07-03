@@ -1,0 +1,14 @@
+
+DEAL::Inside: 
+DEAL::Simplex: 
+DEAL::pts: 0.00000 0.00000
+DEAL::pts: 0.450000 0.00000
+DEAL::Simplex: 
+DEAL::pts: -0.450000 0.00000
+DEAL::pts: 0.00000 0.00000
+DEAL::OK
+DEAL::Intersecting: 
+DEAL::Simplex: 
+DEAL::pts: 0.500000 0.00000
+DEAL::pts: 1.00000 0.00000
+DEAL::OK

@@ -57,9 +57,6 @@
 #  include <type_traits>
 
 
-
-DEAL_II_NAMESPACE_OPEN
-
 // using K           = CGAL::Exact_predicates_inexact_constructions_kernel;
 using K           = CGAL::Exact_predicates_exact_constructions_kernel_with_sqrt;
 using CGALPolygon = CGAL::Polygon_2<K>;
@@ -72,6 +69,7 @@ using CGALSegment2         = K::Segment_2;
 using CGALSegment3         = K::Segment_3;
 using CGALTetra            = K::Tetrahedron_3;
 using Triangulation2       = CGAL::Triangulation_2<K>;
+using Triangulation3       = CGAL::Triangulation_3<K>;
 
 
 struct FaceInfo2
@@ -97,6 +95,8 @@ using Criteria      = CGAL::Delaunay_mesh_size_criteria_2<CDT>;
 using Vertex_handle = CDT::Vertex_handle;
 using Face_handle   = CDT::Face_handle;
 
+DEAL_II_NAMESPACE_OPEN
+
 namespace CGALWrappers
 {
   namespace internal
@@ -105,8 +105,10 @@ namespace CGALWrappers
     // identified by array of points. The return type is the one of
     // CGAL::intersection(), i.e. a boost::optional<boost::variant<>>.
     // Intersection between 2D and 3D objects and 1D/3D objects are available
-    // only with versions greater or equal than 5.1.5, hence the corresponding
-    // functions are guarded by #ifdef directives.
+    // only with CGAL versions greater or equal than 5.1.5, hence the
+    // corresponding functions are guarded by #ifdef directives. All the
+    // signatures follow the convection that the first entity has an intrinsic
+    // dimension higher than the second one.
 
     // triangle,triangle
     boost::optional<boost::variant<CGALPoint2,
@@ -118,30 +120,31 @@ namespace CGALWrappers
 
     // line,triangle
     boost::optional<boost::variant<CGALPoint2, CGALSegment2>>
-    compute_intersection(const std::array<Point<2>, 2> &first_simplex,
-                         const std::array<Point<2>, 3> &second_simplex);
+    compute_intersection(const std::array<Point<2>, 3> &first_simplex,
+                         const std::array<Point<2>, 2> &second_simplex);
 
+    // quad,quad
     decltype(auto)
     compute_intersection(const std::array<Point<2>, 4> &first_simplex,
                          const std::array<Point<2>, 4> &second_simplex);
-
+    // quad, line
     decltype(auto)
     compute_intersection(const std::array<Point<2>, 4> &first_simplex,
                          const std::array<Point<2>, 2> &second_simplex);
 
 #  if defined(CGAL_GEQ_515)
-    // line, tetra
+    // tetra, line
     boost::optional<boost::variant<CGALPoint3, CGALSegment3>>
-    compute_intersection(const std::array<Point<3>, 2> &first_simplex,
-                         const std::array<Point<3>, 4> &second_simplex);
+    compute_intersection(const std::array<Point<3>, 4> &first_simplex,
+                         const std::array<Point<3>, 2> &second_simplex);
 
-    // triangle, tetra
+    // tetra, triangle
     boost::optional<boost::variant<CGALPoint3,
                                    CGALSegment3,
                                    CGALTriangle3,
                                    std::vector<CGALPoint3>>>
-    compute_intersection(const std::array<Point<3>, 3> &first_simplex,
-                         const std::array<Point<3>, 4> &second_simplex);
+    compute_intersection(const std::array<Point<3>, 4> &first_simplex,
+                         const std::array<Point<3>, 3> &second_simplex);
 #  endif
 
 
@@ -207,9 +210,11 @@ namespace CGALWrappers
   } // namespace internal
 
   /**
-   * Given two deal.II cells, compute the intersection and subtriangulate with
-   * simplices. Return the subsidvision as a vector of simplices, each one
-   * identified by an array of Points.
+   * Given two deal.II cells, compute the intersection and return a vector of
+   * simplices, each one identified by an array of deal.II Points. Each array
+   * identify a simplex, and all the simplices together are a subdivision of the
+   * intersection. If cells are non-affine, a geometrical error will be
+   * necessarily introduced.
    *
    *
    * @param cell0 Iterator to the first cell
@@ -219,8 +224,8 @@ namespace CGALWrappers
    * @param tol
    * @return std::vector<std::array<Point<spacedim>, N>>
    */
-  template <int dim0, int dim1, int spacedim, int N>
-  std::vector<std::array<Point<spacedim>, N>>
+  template <int dim0, int dim1, int spacedim>
+  std::vector<std::array<Point<spacedim>, dim1 + 1>>
   compute_intersection_of_cells(
     const typename Triangulation<dim0, spacedim>::cell_iterator &cell0,
     const typename Triangulation<dim1, spacedim>::cell_iterator &cell1,
@@ -232,8 +237,6 @@ namespace CGALWrappers
 
 
 DEAL_II_NAMESPACE_CLOSE
-
-
 
 #endif
 #endif

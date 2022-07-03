@@ -42,7 +42,7 @@ main()
   std::array<Point<2>, 2> segm{{Point<2>{-.1, 0.1}, Point<2>{1.4, 1.2}}};
 
   deallog << "Segment-Triangle" << std::endl;
-  auto test_segment = CGALWrappers::internal::compute_intersection(segm, t1);
+  auto test_segment = CGALWrappers::internal::compute_intersection(t1, segm);
   if (const CGALSegment2 *s = boost::get<CGALSegment2>(&*test_segment))
     deallog << *s << std::endl;
 
