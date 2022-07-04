@@ -355,11 +355,6 @@ namespace CGALWrappers
                      return dealii_point_to_cgal_point<CGALPoint3>(p);
                    });
 
-    std::transform(vertices0.begin(),
-                   vertices0.end(),
-                   pts.begin(),
-                   dealii_point_to_cgal_point);
-
     CGALSegment3 segm(dealii_point_to_cgal_point<CGALPoint3>(vertices1[0]),
                       dealii_point_to_cgal_point<CGALPoint3>(vertices1[1]));
 
@@ -393,13 +388,57 @@ namespace CGALWrappers
     const Mapping<2, 3> &                              mapping1,
     const double                                       tol)
   {
-    (void)cell0;
-    (void)cell1;
-    (void)mapping0;
-    (void)mapping1;
-    (void)tol;
-    return {};
-    Assert(false, ExcNotImplemented("2D/3D interesection not yet implemented"));
+    std::array<Point<3>, 8> vertices0; // 8 vertices of the hex
+    std::array<Point<3>, 4> vertices1; // 4 vertices of the quad
+    std::copy_n(mapping0.get_vertices(cell0).begin(), 8, vertices0.begin());
+    std::copy_n(mapping1.get_vertices(cell1).begin(), 4, vertices1.begin());
+
+    std::array<CGALPoint3, 8> pts_hex;
+    std::array<CGALPoint3, 4> pts_quad;
+    std::transform(vertices0.begin(),
+                   vertices0.end(),
+                   pts_hex.begin(),
+                   [&](const Point<3> &p) {
+                     return dealii_point_to_cgal_point<CGALPoint3>(p);
+                   });
+
+    std::transform(vertices1.begin(),
+                   vertices1.end(),
+                   pts_quad.begin(),
+                   [&](const Point<3> &p) {
+                     return dealii_point_to_cgal_point<CGALPoint3>(p);
+                   });
+
+
+    // Subdivide hex into tetrahedrons
+    std::vector<std::array<Point<3>, 3>> vertices;
+    Triangulation3                       tria;
+    tria.insert(pts_hex.begin(), pts_hex.end());
+
+    // Subdivide quad into triangles
+    CGALPolygon poly(pts_quad.begin(), pts_quad.end());
+    CDT         cdt;
+    cdt.insert_constraint(poly.vertices_begin(), poly.vertices_end(), true);
+    internal::mark_domains(cdt);
+
+    for (const auto &c : tria.finite_cell_handles())
+      {
+        const auto &tet = tria.tetrahedron(c);
+        // Check for intersection with each triangle dividing the quad:
+        for (Face_handle f : cdt.finite_face_handles())
+          {
+            if (f->info().in_domain() &&
+                CGAL::to_double(cdt.triangle(f).area()) > tol)
+              {
+                const auto intersection =
+                  CGAL::intersection(cdt.triangle(f), tet);
+                if (const CGALTriangle3 *t =
+                      boost::get<CGALTriangle3>(&*intersection))
+                  vertices.push_back({{(*t)[0], (*t)[1], (*t)[2]}});
+              }
+          }
+      }
+    return vertices;
   }
 
 #  else
@@ -413,15 +452,15 @@ namespace CGALWrappers
     const Mapping<1, 3> &                              mapping1,
     const double                                       tol)
   {
+    Assert(false,
+           ExcMessage(
+             "This requires a version of CGAL greater or equal to 5.1.5."));
     (void)cell0;
     (void)cell1;
     (void)mapping0;
     (void)mapping1;
     (void)tol;
     return {};
-    Assert(false,
-           ExcMessage(
-             "This requires a version of CGAL greater or equal to 5.1.5."));
   }
 
 
@@ -435,15 +474,15 @@ namespace CGALWrappers
     const Mapping<2, 3> &                              mapping1,
     const double                                       tol)
   {
+    Assert(false,
+           ExcMessage(
+             "This requires a version of CGAL greater or equal to 5.1.5."));
     (void)cell0;
     (void)cell1;
     (void)mapping0;
     (void)mapping1;
     (void)tol;
     return {};
-    Assert(false,
-           ExcMessage(
-             "This requires a version of CGAL greater or equal to 5.1.5."));
   }
 #  endif
 
