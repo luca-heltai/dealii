@@ -1260,6 +1260,48 @@ QSimplex<dim>::compute_affine_transformation(
 
 
 
+template <int dim>
+template <int spacedim>
+Quadrature<spacedim>
+QSimplex<dim>::mapped_quadrature(
+  const std::vector<std::array<Point<spacedim>, dim + 1>> &points) const
+{
+  Assert(dim <= spacedim,
+         ExcMessage("Invalid combination of dim and spacedim ."));
+
+  std::vector<Point<spacedim>> qp;
+  std::vector<double>          ws;
+  for (const auto &simplex : points)
+    {
+      const auto rule = this->compute_affine_transformation(simplex);
+      for (const auto &p : rule.get_points())
+        {
+          qp.push_back(p);
+        }
+      for (const auto w : rule.get_weights())
+        {
+          ws.push_back(w);
+        }
+    }
+  return Quadrature<spacedim>(qp, ws);
+}
+
+
+
+template <>
+template <>
+Quadrature<1>
+QSimplex<1>::mapped_quadrature(
+  const std::vector<std::array<Point<1>, 1 + 1>> &points) const
+{
+  (void)points;
+  Assert(false,
+         ExcMessage("This function is not supposed to work in 1D-1D case."));
+  return Quadrature<1>();
+}
+
+
+
 QTrianglePolar::QTrianglePolar(const Quadrature<1> &radial_quadrature,
                                const Quadrature<1> &angular_quadrature)
   : QSimplex<2>(Quadrature<2>())
@@ -2226,4 +2268,16 @@ namespace dealii
   template Quadrature<3>
   QSimplex<2>::compute_affine_transformation(
     const std::array<Point<3>, 2 + 1> &vertices) const;
+
+  template Quadrature<2>
+  QSimplex<1>::mapped_quadrature(
+    const std::vector<std::array<Point<2>, 1 + 1>> &points) const;
+
+  template Quadrature<3>
+  QSimplex<2>::mapped_quadrature(
+    const std::vector<std::array<Point<3>, 2 + 1>> &points) const;
+
+  template Quadrature<3>
+  QSimplex<1>::mapped_quadrature(
+    const std::vector<std::array<Point<3>, 1 + 1>> &points) const;
 } // namespace dealii

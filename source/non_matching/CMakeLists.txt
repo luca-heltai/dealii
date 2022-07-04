@@ -22,6 +22,7 @@ SET(_src
   quadrature_generator.cc
   coupling.cc
   immersed_surface_quadrature.cc
+  quadrature_overlapped.cc
   )
 
   SET(_inst

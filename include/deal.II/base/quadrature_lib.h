@@ -648,6 +648,11 @@ public:
   Quadrature<spacedim>
   compute_affine_transformation(
     const std::array<Point<spacedim>, dim + 1> &vertices) const;
+
+  template <int spacedim = dim>
+  Quadrature<spacedim>
+  mapped_quadrature(
+    const std::vector<std::array<Point<spacedim>, dim + 1>> &points) const;
 };
 
 /**
