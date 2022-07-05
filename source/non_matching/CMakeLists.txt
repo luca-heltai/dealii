@@ -25,13 +25,14 @@ SET(_src
   quadrature_overlapped.cc
   )
 
-  SET(_inst
+SET(_inst
   fe_immersed_values.inst.in
   fe_values.inst.in
   mesh_classifier.inst.in
   quadrature_generator.inst.in
   coupling.inst.in
-  )
+  quadrature_overlapped.inst.in
+)
 
 FILE(GLOB _header
   ${CMAKE_SOURCE_DIR}/include/deal.II/non_matching/*.h

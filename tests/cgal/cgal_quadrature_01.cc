@@ -33,17 +33,6 @@
 using K         = CGAL::Exact_predicates_inexact_constructions_kernel;
 using CGALPoint = CGAL::Point_3<K>;
 using namespace CGALWrappers;
-using Mesh_domain =
-  CGAL::Polyhedral_mesh_domain_with_features_3<K,
-                                               CGAL::Surface_mesh<CGALPoint>>;
-using Tr = typename CGAL::
-  Mesh_triangulation_3<Mesh_domain, CGAL::Default, ConcurrencyTag>::type;
-
-using Mesh_criteria = CGAL::Mesh_criteria_3<Tr>;
-using C3t3          = CGAL::Mesh_complex_3_in_triangulation_3<Tr,
-                                                     Mesh_domain::Corner_index,
-                                                     Mesh_domain::Curve_index>;
-
 
 void
 test()
@@ -55,14 +44,14 @@ test()
                                         SOURCE_DIR
                                         "/input_grids/octahedron.off"};
   CGAL::Surface_mesh<CGALPoint>  sm;
-  C3t3                           tria;
+  CGAL::Triangulation_3<K>       tria;
   constexpr int                  degree = 3;
   for (const auto &name : fnames)
     {
       std::ifstream input(name);
       input >> sm;
-      cgal_surface_mesh_to_cgal_triangulation(sm, tria);
-      auto b = compute_quadrature(tria, degree);
+      tria.insert(sm.points().begin(), sm.points().end());
+      auto b = compute_quadrature_on_tria(tria, degree);
       deallog << "Volume of poly with Quadrature: " << std::setprecision(12)
               << std::accumulate(b.get_weights().begin(),
                                  b.get_weights().end(),

@@ -71,7 +71,6 @@ using CGALTetra            = K::Tetrahedron_3;
 using Triangulation2       = CGAL::Triangulation_2<K>;
 using Triangulation3       = CGAL::Triangulation_3<K>;
 
-
 struct FaceInfo2
 {
   FaceInfo2()
@@ -146,67 +145,6 @@ namespace CGALWrappers
     compute_intersection(const std::array<Point<3>, 4> &first_simplex,
                          const std::array<Point<3>, 3> &second_simplex);
 #  endif
-
-
-
-    void
-    mark_domains(CDT                  &ct,
-                 Face_handle           start,
-                 int                   index,
-                 std::list<CDT::Edge> &border)
-    {
-      if (start->info().nesting_level != -1)
-        {
-          return;
-        }
-      std::list<Face_handle> queue;
-      queue.push_back(start);
-      while (!queue.empty())
-        {
-          Face_handle fh = queue.front();
-          queue.pop_front();
-          if (fh->info().nesting_level == -1)
-            {
-              fh->info().nesting_level = index;
-              for (int i = 0; i < 3; i++)
-                {
-                  CDT::Edge   e(fh, i);
-                  Face_handle n = fh->neighbor(i);
-                  if (n->info().nesting_level == -1)
-                    {
-                      if (ct.is_constrained(e))
-                        border.push_back(e);
-                      else
-                        queue.push_back(n);
-                    }
-                }
-            }
-        }
-    }
-
-
-
-    void
-    mark_domains(CDT &cdt)
-    {
-      for (CDT::Face_handle f : cdt.all_face_handles())
-        {
-          f->info().nesting_level = -1;
-        }
-      std::list<CDT::Edge> border;
-      mark_domains(cdt, cdt.infinite_face(), 0, border);
-      while (!border.empty())
-        {
-          CDT::Edge e = border.front();
-          border.pop_front();
-          Face_handle n = e.first->neighbor(e.second);
-          if (n->info().nesting_level == -1)
-            {
-              mark_domains(cdt, n, e.first->info().nesting_level + 1, border);
-            }
-        }
-    }
-
   } // namespace internal
 
   /**

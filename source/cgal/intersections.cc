@@ -28,16 +28,63 @@ namespace CGALWrappers
 {
   namespace internal
   {
-    static std::map<unsigned int, unsigned int> deal_to_cgal_hex{
-      {0, 0},
-      {1, 1},
-      {2, 3},
-      {3, 2},
-      {4, 6},
-      {5, 4},
-      {6, 5},
-      {7, 7},
-    };
+    void
+    mark_domains(CDT &                 ct,
+                 Face_handle           start,
+                 int                   index,
+                 std::list<CDT::Edge> &border)
+    {
+      if (start->info().nesting_level != -1)
+        {
+          return;
+        }
+      std::list<Face_handle> queue;
+      queue.push_back(start);
+      while (!queue.empty())
+        {
+          Face_handle fh = queue.front();
+          queue.pop_front();
+          if (fh->info().nesting_level == -1)
+            {
+              fh->info().nesting_level = index;
+              for (int i = 0; i < 3; i++)
+                {
+                  CDT::Edge   e(fh, i);
+                  Face_handle n = fh->neighbor(i);
+                  if (n->info().nesting_level == -1)
+                    {
+                      if (ct.is_constrained(e))
+                        border.push_back(e);
+                      else
+                        queue.push_back(n);
+                    }
+                }
+            }
+        }
+    }
+
+
+
+    void
+    mark_domains(CDT &cdt)
+    {
+      for (CDT::Face_handle f : cdt.all_face_handles())
+        {
+          f->info().nesting_level = -1;
+        }
+      std::list<CDT::Edge> border;
+      mark_domains(cdt, cdt.infinite_face(), 0, border);
+      while (!border.empty())
+        {
+          CDT::Edge e = border.front();
+          border.pop_front();
+          Face_handle n = e.first->neighbor(e.second);
+          if (n->info().nesting_level == -1)
+            {
+              mark_domains(cdt, n, e.first->info().nesting_level + 1, border);
+            }
+        }
+    }
 
     boost::optional<boost::variant<CGALPoint2,
                                    CGALSegment2,
@@ -331,7 +378,6 @@ namespace CGALWrappers
 
 
 
-#  if defined(CGAL_GEQ_515)
   // specialization for hex \cap line
   template <>
   std::vector<std::array<Point<3>, 2>>
@@ -342,6 +388,7 @@ namespace CGALWrappers
     const Mapping<1, 3> &                              mapping1,
     const double                                       tol)
   {
+#  if defined(CGAL_GEQ_515)
     std::array<Point<3>, 8> vertices0; // 8 vertices of the hex
     std::array<Point<3>, 2> vertices1; // 2 endpoints of a segment
     std::copy_n(mapping0.get_vertices(cell0).begin(), 8, vertices0.begin());
@@ -375,6 +422,18 @@ namespace CGALWrappers
       }
 
     return vertices;
+#  else
+    Assert(false,
+           ExcMessage(
+             "This requires a version of CGAL greater or equal to 5.1.5."));
+    (void)cell0;
+    (void)cell1;
+    (void)mapping0;
+    (void)mapping1;
+    (void)tol;
+    return {};
+
+#  endif
   }
 
 
@@ -388,6 +447,8 @@ namespace CGALWrappers
     const Mapping<2, 3> &                              mapping1,
     const double                                       tol)
   {
+#  if defined(CGAL_GEQ_515)
+
     std::array<Point<3>, 8> vertices0; // 8 vertices of the hex
     std::array<Point<3>, 4> vertices1; // 4 vertices of the quad
     std::copy_n(mapping0.get_vertices(cell0).begin(), 8, vertices0.begin());
@@ -439,19 +500,9 @@ namespace CGALWrappers
           }
       }
     return vertices;
-  }
 
 #  else
 
-  template <>
-  std::vector<std::array<Point<3>, 2>>
-  compute_intersection_of_cells<3, 1, 3>(
-    const typename Triangulation<3, 3>::cell_iterator &cell0,
-    const typename Triangulation<1, 3>::cell_iterator &cell1,
-    const Mapping<3, 3> &                              mapping0,
-    const Mapping<1, 3> &                              mapping1,
-    const double                                       tol)
-  {
     Assert(false,
            ExcMessage(
              "This requires a version of CGAL greater or equal to 5.1.5."));
@@ -461,30 +512,8 @@ namespace CGALWrappers
     (void)mapping1;
     (void)tol;
     return {};
-  }
-
-
-
-  template <>
-  std::vector<std::array<Point<3>, 3>>
-  compute_intersection_of_cells<3, 2, 3>(
-    const typename Triangulation<3, 3>::cell_iterator &cell0,
-    const typename Triangulation<2, 3>::cell_iterator &cell1,
-    const Mapping<3, 3> &                              mapping0,
-    const Mapping<2, 3> &                              mapping1,
-    const double                                       tol)
-  {
-    Assert(false,
-           ExcMessage(
-             "This requires a version of CGAL greater or equal to 5.1.5."));
-    (void)cell0;
-    (void)cell1;
-    (void)mapping0;
-    (void)mapping1;
-    (void)tol;
-    return {};
-  }
 #  endif
+  }
 
 
 } // namespace CGALWrappers

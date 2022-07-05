@@ -2274,10 +2274,18 @@ namespace dealii
     const std::vector<std::array<Point<2>, 1 + 1>> &points) const;
 
   template Quadrature<3>
+  QSimplex<1>::mapped_quadrature(
+    const std::vector<std::array<Point<3>, 1 + 1>> &points) const;
+
+  template Quadrature<2>
+  QSimplex<2>::mapped_quadrature(
+    const std::vector<std::array<Point<2>, 2 + 1>> &points) const;
+
+  template Quadrature<3>
   QSimplex<2>::mapped_quadrature(
     const std::vector<std::array<Point<3>, 2 + 1>> &points) const;
 
   template Quadrature<3>
-  QSimplex<1>::mapped_quadrature(
-    const std::vector<std::array<Point<3>, 1 + 1>> &points) const;
+  QSimplex<3>::mapped_quadrature(
+    const std::vector<std::array<Point<3>, 3 + 1>> &points) const;
 } // namespace dealii

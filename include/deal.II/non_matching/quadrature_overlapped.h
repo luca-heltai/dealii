@@ -13,8 +13,8 @@
 //
 // ---------------------------------------------------------------------
 
-#ifndef quadrature_overlapped_h
-#define quadrature_overlapped_h
+#ifndef dealii_non_matching_quadrature_overlapped_h
+#define dealii_non_matching_quadrature_overlapped_h
 
 #include <deal.II/base/config.h>
 
