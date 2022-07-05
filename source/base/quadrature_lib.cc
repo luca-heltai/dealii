@@ -1242,7 +1242,7 @@ QSimplex<dim>::compute_affine_transformation(
   const double J = std::abs(B.determinant());
 
   // if the determinant is zero, we return an empty quadrature
-  if (J < 1e-12)
+  if (J < 1e-14)
     return Quadrature<spacedim>();
 
   std::vector<Point<spacedim>> qp(this->size());
@@ -1276,14 +1276,17 @@ QSimplex<dim>::mapped_quadrature(
   for (const auto &simplex : simplices)
     {
       const auto rule = this->compute_affine_transformation(simplex);
-      std::transform(rule.get_points().begin(),
-                     rule.get_points().end(),
-                     std::back_inserter(qp),
-                     [&](const Point<spacedim> &p) { return p; });
-      std::transform(rule.get_weights().begin(),
-                     rule.get_weights().end(),
-                     std::back_inserter(ws),
-                     [&](const double w) { return w; });
+      if (rule.size() > 0)
+        {
+          std::transform(rule.get_points().begin(),
+                         rule.get_points().end(),
+                         std::back_inserter(qp),
+                         [&](const Point<spacedim> &p) { return p; });
+          std::transform(rule.get_weights().begin(),
+                         rule.get_weights().end(),
+                         std::back_inserter(ws),
+                         [&](const double w) { return w; });
+        }
     }
   return Quadrature<spacedim>(qp, ws);
 }

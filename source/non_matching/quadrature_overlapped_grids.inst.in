@@ -1,0 +1,32 @@
+// ---------------------------------------------------------------------
+//
+// Copyright (C) 2018 - 2022 by the deal.II authors
+//
+// This file is part of the deal.II library.
+//
+// The deal.II library is free software; you can use it, redistribute
+// it, and/or modify it under the terms of the GNU Lesser General
+// Public License as published by the Free Software Foundation; either
+// version 2.1 of the License, or (at your option) any later version.
+// The full text of the license can be found in the file LICENSE.md at
+// the top level directory of deal.II.
+//
+// ---------------------------------------------------------------------
+
+
+for (dim0 : DIMENSIONS; dim1 : DIMENSIONS; spacedim : SPACE_DIMENSIONS)
+  {
+#if dim1 <= dim0 && dim0 <= spacedim && dim1 <= spacedim
+#  ifdef DEAL_II_WITH_CGAL
+    template std::vector<
+      std::tuple<typename Triangulation<dim0, spacedim>::cell_iterator,
+                 typename Triangulation<dim1, spacedim>::cell_iterator,
+                 Quadrature<spacedim>>>
+    collect_quadratures_on_overlapped_grids(
+      const GridTools::Cache<dim0, spacedim> &space_cache,
+      const GridTools::Cache<dim1, spacedim> &immersed_cache,
+      const unsigned int                      degree,
+      const double                            tol);
+#  endif
+#endif
+  }

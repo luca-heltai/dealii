@@ -22,15 +22,17 @@ SET(_src
   quadrature_generator.cc
   coupling.cc
   immersed_surface_quadrature.cc
-  )
+  quadrature_overlapped_grids.cc
+)
 
-  SET(_inst
+SET(_inst
   fe_immersed_values.inst.in
   fe_values.inst.in
   mesh_classifier.inst.in
   quadrature_generator.inst.in
   coupling.inst.in
-  )
+  quadrature_overlapped_grids.inst.in
+)
 
 FILE(GLOB _header
   ${CMAKE_SOURCE_DIR}/include/deal.II/non_matching/*.h

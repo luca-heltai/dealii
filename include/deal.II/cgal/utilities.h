@@ -205,8 +205,8 @@ namespace CGALWrappers
    */
   template <typename CGALTriangulationType>
   dealii::Quadrature<CGALTriangulationType::Point::Ambient_dimension::value>
-  compute_quadrature(const CGALTriangulationType &tria,
-                     const unsigned int           degree);
+  compute_quadrature_on_tria(const CGALTriangulationType &tria,
+                             const unsigned int           degree);
 
   /**
    * Compute a Quadrature formula over the polygonal/polyhedral region described
@@ -399,8 +399,8 @@ namespace CGALWrappers
 
   template <typename CGALTriangulationType>
   dealii::Quadrature<CGALTriangulationType::Point::Ambient_dimension::value>
-  compute_quadrature(const CGALTriangulationType &tria,
-                     const unsigned int           degree)
+  compute_quadrature_on_tria(const CGALTriangulationType &tria,
+                             const unsigned int           degree)
   {
     Assert(tria.is_valid(), ExcMessage("The triangulation is not valid."));
     Assert(CGALTriangulationType::Point::Ambient_dimension::value == 3,
@@ -476,7 +476,7 @@ namespace CGALWrappers
 
         CGALTriangulation tria;
         tria.insert(out_surface.points().begin(), out_surface.points().end());
-        return compute_quadrature(tria, degree);
+        return compute_quadrature_on_tria(tria, degree);
       }
   }
 
@@ -514,7 +514,7 @@ namespace CGALWrappers
                         out_surface.points().end(),
                         dummy);
     tr.insert(dummy.points().begin(), dummy.points().end());
-    return compute_quadrature(tr, degree);
+    return compute_quadrature_on_tria(tr, degree);
   }
 
 

@@ -1,0 +1,13 @@
+
+DEAL::Done collecting
+DEAL::h = 0.707107
+Result with Nitsche matrix: 3.141513801
+DEAL::Expected : 3.141592654
+DEAL::Done collecting
+DEAL::h = 0.1767766953
+Result with Nitsche matrix: 0.5476000000
+DEAL::Expected : 0.5476000000
+DEAL::Done collecting
+DEAL::h = 0.8660254038
+Result with Nitsche matrix: 0.4052240000
+DEAL::Expected : 0.4052240000

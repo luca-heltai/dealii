@@ -1,0 +1,10 @@
+
+DEAL::dim: 1	spacedim: 2
+DEAL::Result with coupling matrix: 0.8200000000
+DEAL::Expected : 0.4100000000
+DEAL::dim: 2	spacedim: 2
+DEAL::Result with coupling matrix: 0.1681000000
+DEAL::Expected : 0.1681000000
+DEAL::dim: 3	spacedim: 3
+DEAL::Result with coupling matrix: 0.06892100000
+DEAL::Expected : 0.06892100000

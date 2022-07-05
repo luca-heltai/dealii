@@ -32,6 +32,7 @@
 
 #include <deal.II/lac/affine_constraints.h>
 
+
 DEAL_II_NAMESPACE_OPEN
 
 /**
@@ -349,6 +350,142 @@ namespace NonMatching
       AffineConstraints<typename Matrix::value_type>(),
     const ComponentMask &comps0 = ComponentMask(),
     const ComponentMask &comps1 = ComponentMask());
+
+  /**
+   * Create a coupling sparsity pattern for non-matching, overlapping
+   * grids in an "exact" way. Here exact refers to that fact, differently
+   * with respect to what is done in create_coupling_sparsity_pattern(), the
+   * sparsity pattern is filled by looking at the intersection of the cells, as
+   * it means that DoFs there are coupled.
+   *
+   * Those intersections are encoded inside @p intersection_info, which needs
+   * to be computed right before calling this function.
+   *
+   * @param [in] intersections_info A vector of tuples where the i-th entry
+   * contains two `active_cell_iterator`s to the intersected cells.
+   * @param [in] space_dh `DoFHandler` object for the space grid.
+   * @param [in] immersed_dh `DoFHandler` object for the embedded grid.
+   * @param [out] sparsity The sparsity pattern to be filled.
+   * @param [in] constraints `AffineConstraints` for the space grid.
+   * @param [in] space_comps Mask for the space components of the finite
+   * element.
+   * @param [in] immersed_comps Mask for the embedded components of the finite
+   * element.
+   * @param [in] immersed_constraints `AffineConstraints` for the embedded grid.
+   */
+  template <int dim0,
+            int dim1,
+            int spacedim,
+            typename Sparsity,
+            typename number = double>
+  void
+  create_coupling_sparsity_pattern_with_exact_intersections(
+    const std::vector<
+      std::tuple<typename Triangulation<dim0, spacedim>::cell_iterator,
+                 typename Triangulation<dim1, spacedim>::cell_iterator,
+                 Quadrature<spacedim>>> &intersections_info,
+    const DoFHandler<dim0, spacedim> &   space_dh,
+    const DoFHandler<dim1, spacedim> &   immersed_dh,
+    Sparsity &                           sparsity,
+    const AffineConstraints<number> &    constraints,
+    const ComponentMask &                space_comps,
+    const ComponentMask &                immersed_comps,
+    const AffineConstraints<number> &    immersed_constraints);
+
+  /**
+   * Create the coupling mass matrix for non-matching, overlapping grids
+   * in an "exact" way, i.e. by computing the local contributions
+   *  \f[
+   *  M_{ij} \dealcoloneq \int_{B} v_i(x) w_j(x) dx,
+   *                      \quad i \in [0,n), j \in [0,m),
+   *  \f]
+   *   as products of cellwise smooth
+   *  functions on the intersection of cells between the two grids. This
+   *   information
+   *  is encoded in @p intersections_info, a vector whose each element is a tuple containing the
+   *  two intersected cells and a Quadrature formula on their intersection.
+   *
+   * @param [in] space_dh `DoFHandler` object for the space grid.
+   * @param [in] immersed_dh `DoFHandler` object for the embedded grid.
+   * @param [in] intersections_info std::vector<std::tuple> with Quadratures and cell_iterators to the intersected cells.
+   * @param [in] matrix A reference to the mass matrix that must be filled.
+   * @param [in] constraints `AffineConstraints` for the space grid.
+   * @param [in] space_comps Mask for the space components of the finite element.
+   * @param [in] immersed_comps Mask for the embedded components of the finite element.
+   * @param [in] mapping0 Mapping object describing the space grid.
+   * @param [in] mapping1 Mapping object describing the embedded grid.
+   * @param [in] immersed_constraints `AffineConstraints` for the embedded grid.
+   */
+  template <int dim0, int dim1, int spacedim, typename Matrix>
+  void
+  create_coupling_mass_matrix_with_exact_intersections(
+    const DoFHandler<dim0, spacedim> &space_dh,
+    const DoFHandler<dim1, spacedim> &immersed_dh,
+    const std::vector<
+      std::tuple<typename Triangulation<dim0, spacedim>::cell_iterator,
+                 typename Triangulation<dim1, spacedim>::cell_iterator,
+                 Quadrature<spacedim>>> &                 intersections_info,
+    Matrix &                                              matrix,
+    const AffineConstraints<typename Matrix::value_type> &constraints,
+    const ComponentMask &                                 space_comps,
+    const ComponentMask &                                 immersed_comps,
+    const Mapping<dim0, spacedim> &                       mapping0,
+    const Mapping<dim1, spacedim> &                       mapping1,
+    const AffineConstraints<typename Matrix::value_type> &immersed_constraints);
+
+  /**
+   *
+   * [TODO: Add documentation]
+   *
+   *
+   *
+   *
+   * @param space_dh
+   * @param cells_and_quads
+   * @param matrix
+   * @param space_constraints
+   * @param space_comps
+   * @param space_mapping
+   * @param nitsche_coefficient
+   * @param penalty
+   */
+  template <int dim0, int dim1, int spacedim, typename Matrix>
+  void
+  assemble_nitsche_with_exact_intersections(
+    const DoFHandler<dim0, spacedim> &space_dh,
+    const std::vector<
+      std::tuple<typename Triangulation<dim0, spacedim>::cell_iterator,
+                 typename Triangulation<dim1, spacedim>::cell_iterator,
+                 Quadrature<spacedim>>> &                  cells_and_quads,
+    Matrix &                                               matrix,
+    const AffineConstraints<typename Matrix::value_type> & space_constraints,
+    const ComponentMask &                                  space_comps,
+    const Mapping<dim0, spacedim> &                        space_mapping,
+    const Function<spacedim, typename Matrix::value_type> &nitsche_coefficient =
+      Functions::ConstantFunction<spacedim>(1.0),
+    const double penalty = 1.);
+
+  /**
+   *  Create a nitsche rhs with exact intersections object
+   *
+   * @param vector
+   * @param penalty
+   */
+  template <int dim0, int dim1, int spacedim>
+  void
+  create_nitsche_rhs_with_exact_intersections(
+    const DoFHandler<dim0, spacedim> &space_dh,
+    const std::vector<
+      std::tuple<typename Triangulation<dim0, spacedim>::cell_iterator,
+                 typename Triangulation<dim1, spacedim>::cell_iterator,
+                 Quadrature<spacedim>>> &cells_and_quads,
+    Vector<double> &                     rhs_vector,
+    const AffineConstraints<double> &,
+    const Mapping<dim0, spacedim> &   space_mapping,
+    const Function<spacedim, double> &rhs_function,
+    const Function<spacedim, double> &coefficient =
+      Functions::ConstantFunction<spacedim>(1.0),
+    const double penalty = 1.);
 } // namespace NonMatching
 DEAL_II_NAMESPACE_CLOSE
 
