@@ -13,7 +13,11 @@
 //
 // ---------------------------------------------------------------------
 
+<<<<<<< HEAD
 // Compute intersection of a segment embedded in 2D and a deal.II cell in 2D,
+=======
+// Compute intersection of a *segment* embedded in 2D and a deal.II cell in 2D,
+>>>>>>> adaca3193f (Provide dimension-independent intersection between deal.II cells)
 // and return a vector of arrays where you can build Quadrature rules. Then
 // check that the sum of weights give the correct area for each region.
 

@@ -13,7 +13,13 @@
 //
 // ---------------------------------------------------------------------
 
+<<<<<<< HEAD
 // Compute intersection of two 3D cells, and return a Quadrature rule over it.
+=======
+// Compute intersection of simplices in 2D, and return a vector of arrays where
+// you can build Quadrature rules. Then check that the sum of weights give the
+// correct area for each region.
+>>>>>>> adaca3193f (Provide dimension-independent intersection between deal.II cells)
 
 #include <deal.II/base/quadrature_lib.h>
 
