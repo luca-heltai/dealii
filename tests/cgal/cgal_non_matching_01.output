@@ -1,4 +1,67 @@
 
+DEAL::dim: 1	spacedim: 2
+DEAL::Idx Cell0: 4
+DEAL::Idx Cell1: 0
+DEAL::intersection between : 4 and 0 has measure: 0.0625000
+DEAL::Idx Cell0: 4
+DEAL::Idx Cell1: 1
+DEAL::intersection between : 4 and 1 has measure: 0.0625000
+DEAL::Idx Cell0: 4
+DEAL::Idx Cell1: 2
+DEAL::intersection between : 4 and 2 has measure: 0.0625000
+DEAL::Idx Cell0: 4
+DEAL::Idx Cell1: 3
+DEAL::intersection between : 4 and 3 has measure: 0.0625000
+DEAL::dim: 2	spacedim: 2
+DEAL::Idx Cell0: 12
+DEAL::Idx Cell1: 0
+DEAL::intersection between : 12 and 0 has measure: 0.00390625
+DEAL::Idx Cell0: 12
+DEAL::Idx Cell1: 1
+DEAL::intersection between : 12 and 1 has measure: 0.00390625
+DEAL::Idx Cell0: 12
+DEAL::Idx Cell1: 2
+DEAL::intersection between : 12 and 2 has measure: 0.00390625
+DEAL::Idx Cell0: 12
+DEAL::Idx Cell1: 3
+DEAL::intersection between : 12 and 3 has measure: 0.00390625
+DEAL::Idx Cell0: 12
+DEAL::Idx Cell1: 4
+DEAL::intersection between : 12 and 4 has measure: 0.00390625
+DEAL::Idx Cell0: 12
+DEAL::Idx Cell1: 5
+DEAL::intersection between : 12 and 5 has measure: 0.00390625
+DEAL::Idx Cell0: 12
+DEAL::Idx Cell1: 6
+DEAL::intersection between : 12 and 6 has measure: 0.00390625
+DEAL::Idx Cell0: 12
+DEAL::Idx Cell1: 7
+DEAL::intersection between : 12 and 7 has measure: 0.00390625
+DEAL::Idx Cell0: 12
+DEAL::Idx Cell1: 8
+DEAL::intersection between : 12 and 8 has measure: 0.00390625
+DEAL::Idx Cell0: 12
+DEAL::Idx Cell1: 9
+DEAL::intersection between : 12 and 9 has measure: 0.00390625
+DEAL::Idx Cell0: 12
+DEAL::Idx Cell1: 10
+DEAL::intersection between : 12 and 10 has measure: 0.00390625
+DEAL::Idx Cell0: 12
+DEAL::Idx Cell1: 11
+DEAL::intersection between : 12 and 11 has measure: 0.00390625
+DEAL::Idx Cell0: 12
+DEAL::Idx Cell1: 12
+DEAL::intersection between : 12 and 12 has measure: 0.00390625
+DEAL::Idx Cell0: 12
+DEAL::Idx Cell1: 13
+DEAL::intersection between : 12 and 13 has measure: 0.00390625
+DEAL::Idx Cell0: 12
+DEAL::Idx Cell1: 14
+DEAL::intersection between : 12 and 14 has measure: 0.00390625
+DEAL::Idx Cell0: 12
+DEAL::Idx Cell1: 15
+DEAL::intersection between : 12 and 15 has measure: 0.00390625
+DEAL::dim: 3	spacedim: 3
 DEAL::Idx Cell0: 56
 DEAL::Idx Cell1: 3
 DEAL::intersection between : 56 and 3 has measure: 0.000244141

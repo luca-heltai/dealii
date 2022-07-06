@@ -322,7 +322,12 @@ namespace CGALWrappers
       }
     else
       {
-        Assert(false, ExcMessage("Cells do not intersect."));
+        // Cells do not intersect
+        // std::cout << "Idx first failed cell: " << cell0->active_cell_index()
+        //          << std::endl;
+        // std::cout << "Idx second failed cell: " << cell1->active_cell_index()
+        //          << std::endl;
+        // Assert(false, ExcMessage("Cells do not intersect."));
         return {};
       }
   }

@@ -31,6 +31,7 @@ SET(_inst
   mesh_classifier.inst.in
   quadrature_generator.inst.in
   coupling.inst.in
+  quadrature_overlapped_grids.inst.in
 )
 
 FILE(GLOB _header

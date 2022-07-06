@@ -29,6 +29,7 @@
 #include <deal.II/lac/sparsity_pattern.h>
 
 #include <deal.II/non_matching/coupling.h>
+#include <deal.II/non_matching/quadrature_overlapped_grids.h>
 
 #include "../tests.h"
 using namespace dealii;
@@ -38,6 +39,8 @@ template <int dim, int spacedim>
 void
 test()
 {
+  deallog << "dim: " << dim << "\t"
+          << "spacedim: " << spacedim << std::endl;
   constexpr int                     degree = 3;
   Triangulation<spacedim, spacedim> space_tria;
   Triangulation<dim, spacedim>      embedded_tria;
@@ -46,7 +49,10 @@ test()
   GridGenerator::hyper_cube(embedded_tria, -.35, .25);
   space_tria.refine_global(1);
   embedded_tria.refine_global(1);
-  GridTools::rotate(numbers::PI_4, 0, embedded_tria);
+  if constexpr (dim == 3 && spacedim == 3)
+    {
+      GridTools::rotate(numbers::PI_4, 0, embedded_tria);
+    }
 
   DoFHandler<spacedim>      space_dh(space_tria);
   DoFHandler<dim, spacedim> embedded_dh(embedded_tria);
@@ -64,9 +70,12 @@ test()
     embedded_tria); // Q1 mapping
 
   // Compute Quadrature formulas on the intersections of the two
-  const double tol             = 1e-10;
-  const auto   cells_and_quads = NonMatching::compute_intersection(
-    *space_cache, *embedded_cache, degree, tol);
+  const double tol = 1e-10;
+  const auto   cells_and_quads =
+    NonMatching::collect_quadratures_on_overlapped_grids(*space_cache,
+                                                         *embedded_cache,
+                                                         degree,
+                                                         tol);
 
 
   std::ofstream output_test_space("space_test.vtk");
@@ -75,7 +84,7 @@ test()
   GridOut().write_vtk(embedded_tria, output_test_embedded);
   remove("space_test.vtk");
   remove("embedded_test.vtk");
-  // Print cells ids and points are the printed
+  // Print cells ids and points
 
   AffineConstraints<double> constraints;
   AffineConstraints<double> embedded_constraints;
@@ -97,5 +106,7 @@ int
 main()
 {
   initlog();
+  test<1, 2>();
+  test<2, 2>();
   test<3, 3>();
 }

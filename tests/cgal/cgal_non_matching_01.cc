@@ -26,7 +26,7 @@
 #include <deal.II/grid/grid_tools_cache.h>
 #include <deal.II/grid/tria_accessor.h>
 
-#include <deal.II/non_matching/coupling.h>
+#include <deal.II/non_matching/quadrature_overlapped_grids.h>
 
 #include <memory>
 
@@ -36,9 +36,11 @@ template <int dim, int spacedim>
 void
 test()
 {
-  constexpr int                     degree = 3;
-  Triangulation<spacedim, spacedim> space_tria;
-  Triangulation<dim, spacedim>      embedded_tria;
+  deallog << "dim: " << dim << "\t"
+          << "spacedim: " << spacedim << std::endl;
+  constexpr int                degree = 3;
+  Triangulation<spacedim>      space_tria;
+  Triangulation<dim, spacedim> embedded_tria;
 
   GridGenerator::hyper_cube(space_tria, 0., 1.);
   GridGenerator::hyper_cube(embedded_tria, .5, .75);
@@ -55,20 +57,21 @@ test()
   space_dh.distribute_dofs(fe_space);
   embedded_dh.distribute_dofs(fe_embedded);
 
-  std::ofstream output_test_space("space_test.vtk");
-  std::ofstream output_test_embedded("embedded_test.vtk");
-  GridOut().write_vtk(space_tria, output_test_space);
-  GridOut().write_vtk(embedded_tria, output_test_embedded);
+  if (dim == 2 && spacedim == 2)
+    {
+      std::ofstream output_test_space("space_test_coupling.vtk");
+      std::ofstream output_test_embedded("embedded_test_coupling.vtk");
+      GridOut().write_vtk(space_tria, output_test_space);
+      GridOut().write_vtk(embedded_tria, output_test_embedded);
+    }
   auto space_cache =
     std::make_unique<GridTools::Cache<spacedim>>(space_tria); // Q1 mapping
   auto embedded_cache = std::make_unique<GridTools::Cache<dim, spacedim>>(
     embedded_tria); // Q1 mapping
 
   // Compute Quadrature formulas on the intersections of the two
-  const auto vec_info = NonMatching::compute_intersection(*space_cache,
-                                                          *embedded_cache,
-                                                          degree,
-                                                          1e-8);
+  const auto vec_info = NonMatching::collect_quadratures_on_overlapped_grids(
+    *space_cache, *embedded_cache, degree, 1e-6);
 
   // deallog << "Get here" << std::endl;
   // Print cells ids and points
@@ -86,13 +89,15 @@ test()
               << std::endl;
     }
 
-  remove("space_test.vtk");
-  remove("embedded_test.vtk");
+  //  remove("space_test.vtk");
+  //  remove("embedded_test.vtk");
 }
 
 int
 main()
 {
   initlog();
+  test<1, 2>();
+  test<2, 2>();
   test<3, 3>();
 }

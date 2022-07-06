@@ -356,37 +356,6 @@ namespace NonMatching
 
 #ifdef DEAL_II_WITH_CGAL
   /**
-   * Given two cached, arbitrarily overlapped grids, the following function
-   * computes Quadrature rules on the intersection of the embedding grid with
-   * the embedded one, of degree `degree`. The return type is a vector of tuples
-   * `v`, where `v[i][0]` is an iterator to a cell of the embedding grid,
-   * `v[i][1]` is an iterator to a cell of the embedded grid,
-   * `v[i][2]` is a Quadrature formula to integrate over the intersection of the
-   * two.
-   *
-   * The last parameter `tol` defaults to 1e-6, and can be used to discard small
-   * intersections.
-   *
-   * @note This function calls compute_quadrature_on_intersection().
-   *
-   * @param [in] space_cache First cached triangulation.
-   * @param [in] immersed_cache Second cached triangulation.
-   * @param [in] degree The degree of accuracy of each quadrature formula.
-   * @param [in] tol Tolerance used to discard small intersections.
-   * @return std::vector<std::tuple<typename Triangulation<dim0, spacedim>::cell_iterator,
-   * typename Triangulation<dim1, spacedim>::cell_iterator,
-   * Quadrature<spacedim>>>.
-   */
-  template <int dim0, int dim1, int spacedim>
-  std::vector<std::tuple<typename Triangulation<dim0, spacedim>::cell_iterator,
-                         typename Triangulation<dim1, spacedim>::cell_iterator,
-                         Quadrature<spacedim>>>
-  compute_intersection(const GridTools::Cache<dim0, spacedim> &space_cache,
-                       const GridTools::Cache<dim1, spacedim> &immersed_cache,
-                       const unsigned int                      degree,
-                       const double                            tol = 1e-6);
-
-  /**
    * Create a coupling sparsity pattern for non-matching, overlapping
    * grids in an "exact" way. Here exact refers to that fact, differently
    * with respect to what is done in create_coupling_sparsity_pattern(), the
