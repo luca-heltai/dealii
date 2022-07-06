@@ -54,11 +54,8 @@ test()
       std::ifstream input(name);
       input >> sm;
       tria.insert(sm.points().begin(), sm.points().end());
-<<<<<<< HEAD
-      auto b = compute_quadrature(tria, degree);
-=======
+
       auto b = compute_quadrature_on_tria(tria, degree);
->>>>>>> 6b890a9e1a (Clean cgal utilities)
       deallog << "Volume of poly with Quadrature: " << std::setprecision(12)
               << std::accumulate(b.get_weights().begin(),
                                  b.get_weights().end(),

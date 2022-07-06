@@ -476,12 +476,8 @@ namespace CGALWrappers
 
         CGALTriangulation tria;
         tria.insert(out_surface.points().begin(), out_surface.points().end());
-<<<<<<< HEAD
-        return compute_quadrature(tria, degree);
-=======
 
         return compute_quadrature_on_tria(tria, degree);
->>>>>>> 6b890a9e1a (Clean cgal utilities)
       }
   }
 
