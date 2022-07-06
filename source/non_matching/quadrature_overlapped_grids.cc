@@ -28,8 +28,8 @@ namespace NonMatching
     const typename Triangulation<1, 1>::cell_iterator &cell0,
     const typename Triangulation<1, 1>::cell_iterator &cell1,
     const unsigned int                                 degree,
-    const Mapping<1, 1>                               &mapping0,
-    const Mapping<1, 1>                               &mapping1)
+    const Mapping<1, 1> &                              mapping0,
+    const Mapping<1, 1> &                              mapping1)
   {
     Assert(false, ExcNotImplemented());
     (void)cell0;
@@ -48,8 +48,8 @@ namespace NonMatching
     const typename Triangulation<2, 2>::cell_iterator &cell0,
     const typename Triangulation<1, 2>::cell_iterator &cell1,
     const unsigned int                                 degree,
-    const Mapping<2, 2>                               &mapping0,
-    const Mapping<1, 2>                               &mapping1)
+    const Mapping<2, 2> &                              mapping0,
+    const Mapping<1, 2> &                              mapping1)
   {
     const std::vector<std::array<Point<2>, 2>> &vec_of_simplices =
       CGALWrappers::compute_intersection_of_cells(cell0,
@@ -69,8 +69,8 @@ namespace NonMatching
     const typename Triangulation<2, 2>::cell_iterator &cell0,
     const typename Triangulation<2, 2>::cell_iterator &cell1,
     const unsigned int                                 degree,
-    const Mapping<2, 2>                               &mapping0,
-    const Mapping<2, 2>                               &mapping1)
+    const Mapping<2, 2> &                              mapping0,
+    const Mapping<2, 2> &                              mapping1)
   {
     const std::vector<std::array<Point<2>, 3>> &vec_of_simplices =
       CGALWrappers::compute_intersection_of_cells(cell0,
@@ -88,8 +88,8 @@ namespace NonMatching
     const typename Triangulation<3, 3>::cell_iterator &cell0,
     const typename Triangulation<1, 3>::cell_iterator &cell1,
     const unsigned int                                 degree,
-    const Mapping<3, 3>                               &mapping0,
-    const Mapping<1, 3>                               &mapping1)
+    const Mapping<3, 3> &                              mapping0,
+    const Mapping<1, 3> &                              mapping1)
   {
 #  if defined(CGAL_GEQ_515)
     const std::vector<std::array<Point<3>, 2>> &vec_of_simplices =
@@ -120,8 +120,8 @@ namespace NonMatching
     const typename Triangulation<3, 3>::cell_iterator &cell0,
     const typename Triangulation<2, 3>::cell_iterator &cell1,
     const unsigned int                                 degree,
-    const Mapping<3, 3>                               &mapping0,
-    const Mapping<2, 3>                               &mapping1)
+    const Mapping<3, 3> &                              mapping0,
+    const Mapping<2, 3> &                              mapping1)
   {
 #  if defined(CGAL_GEQ_515)
     const std::vector<std::array<Point<3>, 4>> &vec_of_simplices =
@@ -152,8 +152,8 @@ namespace NonMatching
     const typename Triangulation<3, 3>::cell_iterator &cell0,
     const typename Triangulation<3, 3>::cell_iterator &cell1,
     const unsigned int                                 degree,
-    const Mapping<3, 3>                               &mapping0,
-    const Mapping<3, 3>                               &mapping1)
+    const Mapping<3, 3> &                              mapping0,
+    const Mapping<3, 3> &                              mapping1)
   {
     return CGALWrappers::compute_quadrature_on_intersection(
       cell0, cell1, degree, mapping0, mapping1);

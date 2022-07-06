@@ -50,8 +50,8 @@ namespace NonMatching
     const typename Triangulation<dim0, spacedim>::cell_iterator &cell0,
     const typename Triangulation<dim1, spacedim>::cell_iterator &cell1,
     const unsigned int                                           degree,
-    const Mapping<dim0, spacedim>                               &mapping0,
-    const Mapping<dim1, spacedim>                               &mapping1);
+    const Mapping<dim0, spacedim> &                              mapping0,
+    const Mapping<dim1, spacedim> &                              mapping1);
 
 
 } // namespace NonMatching
