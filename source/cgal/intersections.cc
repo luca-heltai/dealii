@@ -145,7 +145,7 @@ namespace CGALWrappers
 
 
     // rectangle-rectangle
-    decltype(auto)
+    std::vector<Polygon_with_holes_2>
     compute_intersection(const std::array<Point<2>, 4> &first_simplex,
                          const std::array<Point<2>, 4> &second_simplex)
     {

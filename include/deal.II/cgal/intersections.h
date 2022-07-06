@@ -126,13 +126,13 @@ namespace CGALWrappers
                          const std::array<Point<2>, 2> &second_simplex);
 
     // quad,quad
-    decltype(auto)
+    std::vector<Polygon_with_holes_2>
     compute_intersection(const std::array<Point<2>, 4> &first_simplex,
                          const std::array<Point<2>, 4> &second_simplex);
     // quad, line
-    decltype(auto)
-    compute_intersection(const std::array<Point<2>, 4> &first_simplex,
-                         const std::array<Point<2>, 2> &second_simplex);
+    // decltype(auto)
+    // compute_intersection(const std::array<Point<2>, 4> &first_simplex,
+    //                      const std::array<Point<2>, 2> &second_simplex);
 
     // tetra, line
     boost::optional<boost::variant<CGALPoint3, CGALSegment3>>
