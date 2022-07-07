@@ -1221,6 +1221,12 @@ namespace NonMatching
     for (const auto &infos : cells_and_quads)
       {
         const auto &[first_cell, second_cell, quad_formula] = infos;
+        std::cout << "Space cell: " << first_cell->active_cell_index()
+                  << std::endl;
+        std::cout << "Immersed cell: " << second_cell->active_cell_index()
+                  << "on the boundary? " << second_cell->at_boundary()
+                  << std::endl;
+
 
         local_cell_matrix = typename Matrix::value_type();
 
@@ -1232,10 +1238,32 @@ namespace NonMatching
         space_mapping.transform_points_real_to_unit_cell(first_cell,
                                                          real_qpts,
                                                          ref_pts_space);
-        immersed_mapping.transform_points_real_to_unit_cell(second_cell,
-                                                            real_qpts,
-                                                            ref_pts_immersed);
+        std::cout << "Space indietro fatto" << std::endl;
+        // if (!(dynamic_cast<const MappingQ<dim1, spacedim> *>(
+        //         &immersed_mapping) == nullptr))
+        //   {
+        //     std::cout << "dynamic cast passato" << std::endl;
+        //     immersed_mapping.transform_points_real_to_unit_cell(
+        //       second_cell, real_qpts, ref_pts_immersed);
+        //   }
+        // else
+        //   {
+        // std::cout << "dynamic cast NON passato" << std::endl;
+        for (unsigned int q = 0; q < n_quad_pts; ++q)
+          {
+            ref_pts_immersed[q] =
+              immersed_mapping.transform_real_to_unit_cell(second_cell,
+                                                           real_qpts[q]);
+          }
+        // }
+
+        std::cout << "Show unit points embedded" << std::endl;
+        for (const auto &p : ref_pts_immersed)
+          std::cout << p << std::endl;
+
+        std::cout << "Immersed indietro fatto" << std::endl;
         const auto &JxW = quad_formula.get_weights();
+        std::cout << "Jacobiani presi con size:" << JxW.size() << std::endl;
         for (unsigned int q = 0; q < n_quad_pts; ++q)
           {
             for (unsigned int i = 0; i < n_dofs_per_space_cell; ++i)
@@ -1261,18 +1289,25 @@ namespace NonMatching
                   }
               }
           }
+        std::cout << "Assemblato" << std::endl;
         typename DoFHandler<dim0, spacedim>::cell_iterator space_cell_dh(
           *first_cell, &space_dh);
+        std::cout << "DoFHandler space fatto" << std::endl;
         typename DoFHandler<dim1, spacedim>::cell_iterator immersed_cell_dh(
           *second_cell, &immersed_dh);
+        std::cout << "DoFHandler immerso fatto" << std::endl;
+
+
         space_cell_dh->get_dof_indices(local_space_dof_indices);
         immersed_cell_dh->get_dof_indices(local_immersed_dof_indices);
 
+        std::cout << "DoFIndices fatti" << std::endl;
         space_constraints.distribute_local_to_global(local_cell_matrix,
                                                      local_space_dof_indices,
                                                      immersed_constraints,
                                                      local_immersed_dof_indices,
                                                      matrix);
+        std::cout << "Distribuiti" << std::endl;
       }
     matrix.compress(VectorOperation::add);
   }

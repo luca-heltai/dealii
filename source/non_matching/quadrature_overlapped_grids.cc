@@ -158,8 +158,15 @@ namespace NonMatching
     const Mapping<3, 3> &                              mapping0,
     const Mapping<3, 3> &                              mapping1)
   {
-    return CGALWrappers::compute_quadrature_on_intersection(
-      cell0, cell1, degree, mapping0, mapping1);
+    // return CGALWrappers::compute_quadrature_on_intersection(
+    //   cell0, cell1, degree, mapping0, mapping1);
+
+    const std::vector<std::array<Point<3>, 4>> &vec_of_simplices =
+      CGALWrappers::compute_intersection_of_cells(cell0,
+                                                  cell1,
+                                                  mapping0,
+                                                  mapping1);
+    return QGaussSimplex<3>(degree).mapped_quadrature(vec_of_simplices);
   }
 
 

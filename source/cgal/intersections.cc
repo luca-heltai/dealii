@@ -560,11 +560,6 @@ namespace CGALWrappers
           }
         return vertices;
       }
-    else
-      {
-        return {};
-      }
-  }
 
 } // namespace CGALWrappers
 
