@@ -543,7 +543,7 @@ namespace CGALWrappers
     CGAL::Polygon_mesh_processing::triangulate_faces(surf1);
     CGALWrappers::compute_boolean_operation(
       surf0, surf1, CGALWrappers::BooleanOperation::compute_intersection, sm);
-    if (CGAL::Polygon_mesh_processing::volume(sm) > tol)
+    if (std::abs(CGAL::Polygon_mesh_processing::volume(sm)) > tol)
       {
         // Collect tetrahedrons
         std::vector<std::array<Point<3>, 4>> vertices;
@@ -560,6 +560,11 @@ namespace CGALWrappers
           }
         return vertices;
       }
+    else
+      {
+        return {};
+      }
+  }
 
 } // namespace CGALWrappers
 

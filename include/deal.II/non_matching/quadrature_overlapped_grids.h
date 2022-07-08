@@ -86,7 +86,7 @@ namespace NonMatching
     const GridTools::Cache<dim0, spacedim> &space_cache,
     const GridTools::Cache<dim1, spacedim> &immersed_cache,
     const unsigned int                      degree,
-    const double                            tol = 1e-12);
+    const double                            tol = 1e-14);
 
 
 } // namespace NonMatching
