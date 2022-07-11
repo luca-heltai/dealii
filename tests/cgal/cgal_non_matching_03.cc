@@ -25,6 +25,7 @@
 #include <deal.II/grid/grid_out.h>
 #include <deal.II/grid/grid_tools.h>
 #include <deal.II/grid/grid_tools_cache.h>
+#include <deal.II/grid/manifold_lib.h>
 #include <deal.II/grid/tria_accessor.h>
 
 #include <deal.II/lac/sparse_matrix.h>
@@ -33,6 +34,7 @@
 #include <deal.II/non_matching/quadrature_overlapped_grids.h>
 
 #include <CGAL/Polygon_mesh_processing/measure.h>
+#include <CGAL/Surface_mesh/IO.h>
 #include <deal.II/cgal/intersections.h>
 #include <deal.II/cgal/triangulation.h>
 
@@ -63,6 +65,21 @@ test()
     }
   space_tria.refine_global(1);
   embedded_tria.refine_global(1);
+  if constexpr (dim == 3 && spacedim == 3)
+    {
+      for (const auto &cell : embedded_tria.active_cell_iterators())
+        {
+          for (const auto &f : cell->face_indices())
+
+            if (cell->face(f)->at_boundary())
+              {
+                Point<3> pt =
+                  cell->face(f)->get_manifold().get_new_point_on_face(
+                    cell->face(f));
+              }
+        }
+    }
+
 
   DoFHandler<spacedim>      space_dh(space_tria);
   DoFHandler<dim, spacedim> embedded_dh(embedded_tria);
@@ -114,12 +131,15 @@ test()
           Surface_mesh sm;
           CGALWrappers::dealii_cell_to_cgal_surface_mesh(
             cell1, embedded_cache->get_mapping(), sm);
+
           CGAL::Polygon_mesh_processing::triangulate_faces(sm);
           deallog << "With CGAL:" << CGAL::Polygon_mesh_processing::volume(sm)
                   << std::endl;
           // sum += CGAL::Polygon_mesh_processing::volume(sm);
           if (cell1->active_cell_index() == 8)
             {
+              std::ofstream filename("test_face.ply");
+              CGAL::write_ply(filename, sm);
               for (const auto &v_deal :
                    (embedded_cache->get_mapping()).get_vertices(cell1))
                 {
@@ -162,8 +182,19 @@ test()
                                                                        tria_q);
               std::ofstream out_q("test_to_understand_different_area_quad.vtk");
               GridOut().write_vtk(tria_q, out_q);
+              for (const auto &f : cell1->face_indices())
+                {
+                  // if (cell1->face(f)->at_boundary())
+                  //   {
+                  deallog
+                    << "New point: "
+                    << cell1->face(f)->get_manifold().get_new_point_on_face(
+                         cell1->face(f))
+                    << std::endl;
+                  // }
+                }
             }
-          else if (cell1->active_cell_index() == 21)
+          else if (cell1->active_cell_index() == 64)
             {
               for (const auto &v_deal :
                    (embedded_cache->get_mapping()).get_vertices(cell1))
@@ -196,6 +227,8 @@ test()
                       << std::endl;
               deallog << "NUMERO DI CELLE INF:" << tr.number_of_cells()
                       << std::endl;
+
+
               CGALWrappers::cgal_triangulation_to_dealii_triangulation(tr,
                                                                        tria_sq);
               std::ofstream out_dq("test_to_understand_same_area_quad.vtk");
