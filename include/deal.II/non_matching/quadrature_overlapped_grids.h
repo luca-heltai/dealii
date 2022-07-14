@@ -21,6 +21,8 @@
 #ifdef DEAL_II_WITH_CGAL
 #  include <deal.II/base/quadrature_lib.h>
 
+#  include <deal.II/grid/grid_tools_cache.h>
+
 #  include <deal.II/cgal/intersections.h>
 #  include <deal.II/cgal/triangulation.h>
 

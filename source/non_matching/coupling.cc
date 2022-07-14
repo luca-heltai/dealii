@@ -969,7 +969,6 @@ namespace NonMatching
 
 
 
-#ifdef DEAL_II_WITH_CGAL
   template <int dim0,
             int dim1,
             int spacedim,
@@ -989,6 +988,7 @@ namespace NonMatching
     const ComponentMask &                        immersed_comps,
     const AffineConstraints<number> &            immersed_constraints)
   {
+#ifdef DEAL_II_WITH_CGAL
     AssertDimension(sparsity.n_rows(), space_dh.n_dofs());
     AssertDimension(sparsity.n_cols(), immersed_dh.n_dofs());
     Assert(dim1 <= dim0,
@@ -1000,8 +1000,6 @@ namespace NonMatching
               &immersed_dh.get_triangulation()) == nullptr),
            ExcNotImplemented());
 
-
-
     const auto &       space_fe                 = space_dh.get_fe();
     const auto &       immersed_fe              = immersed_dh.get_fe();
     const unsigned int n_dofs_per_space_cell    = space_fe.n_dofs_per_cell();
@@ -1012,11 +1010,9 @@ namespace NonMatching
     std::vector<types::global_dof_index> immersed_dofs(
       n_dofs_per_immersed_cell);
 
-
     const ComponentMask space_c =
       (space_comps.size() == 0 ? ComponentMask(n_space_fe_components, true) :
                                  space_comps);
-
 
     const ComponentMask immersed_c =
       (immersed_comps.size() == 0 ?
@@ -1025,7 +1021,6 @@ namespace NonMatching
 
     AssertDimension(space_c.size(), n_space_fe_components);
     AssertDimension(immersed_c.size(), n_immersed_fe_components);
-
 
     // Global 2 Local indices
     std::vector<unsigned int> space_gtl(n_space_fe_components);
@@ -1042,8 +1037,6 @@ namespace NonMatching
         if (immersed_c[i])
           immersed_gtl[i] = j++;
       }
-
-
 
     Table<2, bool> dof_mask(n_dofs_per_space_cell, n_dofs_per_immersed_cell);
     dof_mask.fill(false); // start off by assuming they don't couple
@@ -1122,6 +1115,18 @@ namespace NonMatching
                                                     dof_mask);
           }
       }
+
+#else
+    (void)intersections_info;
+    (void)space_dh;
+    (void)immersed_dh;
+    (void)sparsity;
+    (void)constraints;
+    (void)space_comps;
+    (void)immersed_comps;
+    (void)immersed_constraints;
+    Assert(false, ExcMessage("This function needs CGAL installed to work."));
+#endif
   }
 
 
@@ -1143,6 +1148,7 @@ namespace NonMatching
     const Mapping<dim1, spacedim> &                       immersed_mapping,
     const AffineConstraints<typename Matrix::value_type> &immersed_constraints)
   {
+#ifdef DEAL_II_WITH_CGAL
     AssertDimension(matrix.m(), space_dh.n_dofs());
     AssertDimension(matrix.n(), immersed_dh.n_dofs());
     Assert((dim1 <= dim0) && (dim0 <= spacedim),
@@ -1310,10 +1316,233 @@ namespace NonMatching
         std::cout << "Distribuiti" << std::endl;
       }
     matrix.compress(VectorOperation::add);
+#else
+    (void)space_dh;
+    (void)immersed_dh;
+    (void)cells_and_quads;
+    (void)matrix;
+    (void)space_constraints;
+    (void)space_comps;
+    (void)immersed_comps;
+    (void)space_mapping;
+    (void)immersed_mapping;
+    (void)immersed_constraints;
+    Assert(false, ExcMessage("This function needs CGAL installed to work."));
+
+#endif
   }
 
 
+
+  template <int dim0, int dim1, int spacedim, typename Matrix>
+  void
+  assemble_nitsche_with_exact_intersections(
+    const DoFHandler<dim0, spacedim> &space_dh,
+    const std::vector<
+      std::tuple<typename dealii::Triangulation<dim0, spacedim>::cell_iterator,
+                 typename dealii::Triangulation<dim1, spacedim>::cell_iterator,
+                 dealii::Quadrature<spacedim>>>           &cells_and_quads,
+    Matrix                                                &matrix,
+    const AffineConstraints<typename Matrix::value_type>  &space_constraints,
+    const ComponentMask                                   &space_comps,
+    const Mapping<dim0, spacedim>                         &space_mapping,
+    const Function<spacedim, typename Matrix::value_type> &nitsche_coefficient,
+    const double                                           penalty)
+  {
+#ifdef DEAL_II_WITH_CGAL
+    AssertDimension(matrix.m(), space_dh.n_dofs());
+    AssertDimension(matrix.n(), space_dh.n_dofs());
+    Assert((dim1 <= dim0) && (dim0 <= spacedim),
+           ExcMessage("This function can only work if dim1<=dim0<=spacedim"));
+    Assert(
+      cells_and_quads.size() > 0,
+      ExcMessage(
+        "The background and immersed mesh must overlap in order to use this function."));
+    const auto        &space_fe              = space_dh.get_fe();
+    const unsigned int n_dofs_per_space_cell = space_fe.n_dofs_per_cell();
+    const unsigned int n_space_fe_components = space_fe.n_components();
+    std::vector<unsigned int> space_gtl(n_space_fe_components,
+                                        numbers::invalid_unsigned_int);
+    // DoF indices
+    std::vector<types::global_dof_index> local_space_dof_indices(
+      n_dofs_per_space_cell);
+
+    const ComponentMask space_c =
+      (space_comps.size() == 0 ? ComponentMask(n_space_fe_components, true) :
+                                 space_comps);
+    AssertDimension(space_c.size(), n_space_fe_components);
+
+    for (unsigned int i = 0, j = 0; i < n_space_fe_components; ++i)
+      {
+        if (space_c[i])
+          space_gtl[i] = j++;
+      }
+
+    FullMatrix<typename Matrix::value_type> local_cell_matrix(
+      n_dofs_per_space_cell, n_dofs_per_space_cell);
+    // Loop over vector of tuples, and gather everything together
+    double h;
+    for (const auto &infos : cells_and_quads)
+      {
+        const auto &[first_cell, second_cell, quad_formula] = infos;
+        if (first_cell->is_active())
+          {
+            local_cell_matrix = typename Matrix::value_type();
+
+            const unsigned int n_quad_pts = quad_formula.size();
+            const auto        &real_qpts  = quad_formula.get_points();
+            std::vector<typename Matrix::value_type> nitsche_coefficient_values(
+              n_quad_pts);
+            nitsche_coefficient.value_list(real_qpts,
+                                           nitsche_coefficient_values);
+
+            std::vector<Point<dim0>> ref_pts_space(n_quad_pts);
+
+            space_mapping.transform_points_real_to_unit_cell(first_cell,
+                                                             real_qpts,
+                                                             ref_pts_space);
+
+            h               = first_cell->diameter();
+            const auto &JxW = quad_formula.get_weights();
+            for (unsigned int q = 0; q < n_quad_pts; ++q)
+              {
+                const auto &q_ref_point = ref_pts_space[q];
+                for (unsigned int i = 0; i < n_dofs_per_space_cell; ++i)
+                  {
+                    const unsigned int comp_i =
+                      space_dh.get_fe().system_to_component_index(i).first;
+                    if (comp_i != numbers::invalid_unsigned_int)
+                      {
+                        for (unsigned int j = 0; j < n_dofs_per_space_cell; ++j)
+                          {
+                            const unsigned int comp_j =
+                              space_dh.get_fe()
+                                .system_to_component_index(j)
+                                .first;
+                            if (space_gtl[comp_i] == space_gtl[comp_j])
+                              {
+                                local_cell_matrix(i, j) +=
+                                  nitsche_coefficient_values[q] *
+                                  (penalty / h) *
+                                  space_fe.shape_value(i, q_ref_point) *
+                                  space_fe.shape_value(j, q_ref_point) * JxW[q];
+                              }
+                          }
+                      }
+                  }
+              }
+            typename DoFHandler<dim0, spacedim>::cell_iterator space_cell_dh(
+              *first_cell, &space_dh);
+
+            space_cell_dh->get_dof_indices(local_space_dof_indices);
+            space_constraints.distribute_local_to_global(
+              local_cell_matrix, local_space_dof_indices, matrix);
+          }
+      }
+#else
+    (void)space_dh;
+    (void)cells_and_quads;
+    (void)matrix;
+    (void)space_constraints;
+    (void)space_comps;
+    (void)space_mapping;
+    (void)nitsche_coefficient;
+    (void)penalty;
+    Assert(false, ExcMessage("This function needs CGAL installed to work."));
 #endif
+  }
+
+
+
+  template <int dim0, int dim1, int spacedim>
+  void
+  create_nitsche_rhs_with_exact_intersections(
+    const DoFHandler<dim0, spacedim> &space_dh,
+    const std::vector<
+      std::tuple<typename dealii::Triangulation<dim0, spacedim>::cell_iterator,
+                 typename dealii::Triangulation<dim1, spacedim>::cell_iterator,
+                 dealii::Quadrature<spacedim>>> &cells_and_quads,
+    Vector<double>                              &rhs_vector,
+    const AffineConstraints<double>             &space_constraints,
+    const Mapping<dim0, spacedim>               &space_mapping,
+    const Function<spacedim, double>            &rhs_function,
+    const Function<spacedim, double>            &coefficient,
+    const double                                 penalty)
+  {
+#ifdef DEAL_II_WITH_CGAL
+    AssertDimension(rhs_vector.size(), space_dh.n_dofs());
+    Assert(dim1 <= dim0,
+           ExcMessage("This function can only work if dim1<=dim0"));
+
+    const auto        &space_fe              = space_dh.get_fe();
+    const unsigned int n_dofs_per_space_cell = space_fe.n_dofs_per_cell();
+    Vector<double>     local_rhs(n_dofs_per_space_cell);
+    // DoF indices
+    std::vector<types::global_dof_index> local_space_dof_indices(
+      n_dofs_per_space_cell);
+
+    // Loop over vector of tuples, and gather everything together
+    double h;
+    for (const auto &infos : cells_and_quads)
+      {
+        const auto &[first_cell, second_cell, quad_formula] = infos;
+
+        if (first_cell->is_active())
+          {
+            h         = first_cell->diameter();
+            local_rhs = 0.;
+            // local_rhs = typename VectorType::value_type();
+
+
+            const unsigned int       n_quad_pts = quad_formula.size();
+            const auto              &real_qpts  = quad_formula.get_points();
+            std::vector<Point<dim0>> ref_pts_space(n_quad_pts);
+            std::vector<double>      rhs_function_values(n_quad_pts);
+            rhs_function.value_list(real_qpts, rhs_function_values);
+
+
+            std::vector<double> coefficient_values(n_quad_pts);
+            coefficient.value_list(real_qpts, coefficient_values);
+
+            space_mapping.transform_points_real_to_unit_cell(first_cell,
+                                                             real_qpts,
+                                                             ref_pts_space);
+
+            const auto &JxW = quad_formula.get_weights();
+            for (unsigned int q = 0; q < n_quad_pts; ++q)
+              {
+                const auto &q_ref_point = ref_pts_space[q];
+                for (unsigned int i = 0; i < n_dofs_per_space_cell; ++i)
+                  {
+                    local_rhs(i) += coefficient_values[q] * (penalty / h) *
+                                    space_fe.shape_value(i, q_ref_point) *
+                                    rhs_function_values[q] * JxW[q];
+                  }
+              }
+            typename DoFHandler<dim0, spacedim>::cell_iterator space_cell_dh(
+              *first_cell, &space_dh);
+
+            space_cell_dh->get_dof_indices(local_space_dof_indices);
+            space_constraints.distribute_local_to_global(
+              local_rhs, local_space_dof_indices, rhs_vector);
+          }
+      }
+#else
+    (void)space_dh;
+    (void)cells_and_quads;
+    (void)rhs_vector;
+    (void)space_constraints;
+    (void)space_mapping;
+    (void)rhs_function;
+    (void)coefficient;
+    (void)penalty;
+    Assert(false,
+           ExcMessage("This function function needs CGAL installed to work."));
+#endif
+  }
+
+
+
 #ifndef DOXYGEN
 #  include "coupling.inst"
 #endif

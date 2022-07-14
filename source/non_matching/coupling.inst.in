@@ -130,6 +130,43 @@ for (dim0 : DIMENSIONS; dim1 : DIMENSIONS; spacedim : SPACE_DIMENSIONS;
       const Mapping<dim0, spacedim> &,
       const Mapping<dim1, spacedim> &,
       const AffineConstraints<Matrix::value_type> &);
+
+    template void
+    assemble_nitsche_with_exact_intersections<dim0, dim1, spacedim, Matrix>(
+      const DoFHandler<dim0, spacedim> &            space_dh,
+      const std::vector<std::tuple<
+        typename dealii::Triangulation<dim0, spacedim>::cell_iterator,
+        typename dealii::Triangulation<dim1, spacedim>::cell_iterator,
+        dealii::Quadrature<spacedim>>> &            cells_and_quads,
+      Matrix &                                      matrix,
+      const AffineConstraints<Matrix::value_type> & space_constraints,
+      const ComponentMask &                         space_comps,
+      const Mapping<dim0, spacedim> &               space_mapping,
+      const Function<spacedim, Matrix::value_type> &nitsche_coefficient,
+      const double                                  penalty);
+#  endif
+#endif
+  }
+
+for (dim0 : DIMENSIONS; dim1 : DIMENSIONS; spacedim : SPACE_DIMENSIONS)
+  {
+#ifdef DEAL_II_WITH_CGAL
+
+#  if dim1 <= spacedim && dim0 <= spacedim
+
+    template void
+    create_nitsche_rhs_with_exact_intersections<dim0, dim1, spacedim>(
+      const DoFHandler<dim0, spacedim> &space_dh,
+      const std::vector<std::tuple<
+        typename dealii::Triangulation<dim0, spacedim>::cell_iterator,
+        typename dealii::Triangulation<dim1, spacedim>::cell_iterator,
+        dealii::Quadrature<spacedim>>> &cells_and_quads,
+      Vector<double> &                  rhs,
+      const AffineConstraints<double> & space_constraints,
+      const Mapping<dim0, spacedim> &   space_mapping,
+      const Function<spacedim, double> &rhs_function,
+      const Function<spacedim, double> &coefficient,
+      const double                      penalty);
 #  endif
 #endif
   }
