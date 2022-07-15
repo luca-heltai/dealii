@@ -19,6 +19,7 @@
 
 #include <deal.II/lac/linear_operator_tools.h>
 
+#include <deal.II/base/convergence_table.h>
 #include <deal.II/non_matching/quadrature_overlapped_grids.h>
 #include <deal.II/numerics/error_estimator.h>
 #include <deal.II/base/function.h>
@@ -30,7 +31,7 @@
 #include <deal.II/dofs/dof_tools.h>
 
 #include <deal.II/fe/fe_q.h>
-#include <deal.II/fe/fe_values.h>
+// #include <deal.II/fe/fe_values.h>
 
 #include <deal.II/grid/filtered_iterator.h>
 #include <deal.II/grid/grid_generator.h>
@@ -75,9 +76,81 @@ template <int dim>
 double RightHandSide<dim>::value(const Point<dim> & p,
                                  const unsigned int component) const
 {
+  // (void)p;
+  (void)component;
+  // return 1.;
+  return 12. * numbers::PI * numbers::PI *
+         (std::sin(2. * numbers::PI * p[0]) *
+          std::sin(2. * numbers::PI * p[1]) *
+          std::sin(2. * numbers::PI * p[2]));
+}
+
+
+
+template <int dim>
+class BoundaryCondition : public Function<dim>
+{
+public:
+  virtual double value(const Point<dim>  &p,
+                       const unsigned int component = 0) const override;
+};
+
+
+
+template <int dim>
+double BoundaryCondition<dim>::value(const Point<dim>  &p,
+                                     const unsigned int component) const
+{
   (void)p;
   (void)component;
-  return 1.;
+  return 1.5;
+}
+
+
+
+template <int dim>
+class Solution : public Function<dim>
+{
+public:
+  virtual double value(const Point<dim>  &p,
+                       const unsigned int component = 0) const override;
+
+  virtual Tensor<1, dim>
+  gradient(const Point<dim>  &p,
+           const unsigned int component = 0) const override;
+};
+
+
+
+template <int dim>
+double Solution<dim>::value(const Point<dim>  &p,
+                            const unsigned int component) const
+{
+  (void)component;
+  return std::sin(2. * numbers::PI * p[0]) * std::sin(2. * numbers::PI * p[1]) *
+         std::sin(2. * numbers::PI * p[2]);
+}
+
+
+template <int dim>
+Tensor<1, dim> Solution<dim>::gradient(const Point<dim>  &p,
+                                       const unsigned int component) const
+{
+  (void)component;
+  Tensor<1, dim> gradient;
+  gradient[0] = std::cos(2. * numbers ::PI * p[0]) *
+                std::sin(2. * numbers::PI * p[1]) *
+                std::sin(2. * numbers::PI * p[2]);
+
+  gradient[1] = std::sin(2. * numbers ::PI * p[0]) *
+                std::cos(2. * numbers::PI * p[1]) *
+                std::sin(2. * numbers::PI * p[2]);
+
+  gradient[2] = std::sin(2. * numbers ::PI * p[0]) *
+                std::sin(2. * numbers::PI * p[1]) *
+                std::cos(2. * numbers::PI * p[2]);
+
+  return 2. * numbers::PI * gradient;
 }
 
 
@@ -188,8 +261,7 @@ private:
 
   // mutable TimerOutput timer;
 
-
-  // ConvergenceTable error_table;
+  mutable ConvergenceTable convergence_table;
 
 
 
@@ -221,7 +293,7 @@ private:
 
   double penalty = 100.0;
 
-  unsigned int n_refinement_cycles = 4;
+  unsigned int n_refinement_cycles = 5;
 };
 
 
@@ -238,10 +310,12 @@ void PoissonNitscheInterface<dim, spacedim>::generate_grids()
 {
   // TimerOutput::Scope timer_section(timer, "Generate grids");
 
-  GridGenerator::hyper_cube(space_triangulation, -1., 1.);
+  GridGenerator::hyper_cube(space_triangulation, -.5, 1.);
 
-  GridGenerator::hyper_cube(embedded_triangulation, -.45, .35);
-  GridTools::rotate(numbers::PI_4, 2, embedded_triangulation);
+  GridGenerator::hyper_cube(embedded_triangulation, 0.4, 0.6);
+  GridTools::rotate(Tensor<1, 3>({0, 1, 0}),
+                    numbers::PI_4,
+                    embedded_triangulation);
   space_triangulation.refine_global(1);
   // We create unique pointers to cached triangulations. This This objects
   // will be necessary to compute the the Quadrature formulas on the
@@ -278,7 +352,8 @@ void PoissonNitscheInterface<dim, spacedim>::setup_system()
   VectorTools::interpolate_boundary_values(
     space_dh,
     0,
-    Functions::ZeroFunction<spacedim>(),
+    /*Functions::ZeroFunction<spacedim>(),*/
+    Solution<dim>(),
     space_constraints); // zero Dirichlet on the boundary
   space_constraints.close();
   DynamicSparsityPattern dsp(space_dh.n_dofs());
@@ -371,7 +446,7 @@ void PoissonNitscheInterface<dim, spacedim>::assemble_system()
         system_rhs,
         space_constraints,
         MappingQ1<spacedim>(),
-        RightHandSide<spacedim>(),
+        Solution<spacedim>(),
         Functions::ConstantFunction<spacedim>(2.0),
         penalty);
   }
@@ -413,6 +488,37 @@ void PoissonNitscheInterface<dim, spacedim>::output_results(
   data_out.build_patches();
   std::ofstream output("solution_nitsche" + std::to_string(cycle) + ".vtu");
   data_out.write_vtu(output);
+  {
+    Vector<double> difference_per_cell(space_triangulation.n_active_cells());
+    VectorTools::integrate_difference(space_dh,
+                                      solution,
+                                      Solution<spacedim>(),
+                                      difference_per_cell,
+                                      QGauss<spacedim>(2 * space_fe.degree + 1),
+                                      VectorTools::L2_norm);
+    const double L2_error =
+      VectorTools::compute_global_error(space_triangulation,
+                                        difference_per_cell,
+                                        VectorTools::L2_norm);
+
+    difference_per_cell.reinit(space_triangulation.n_active_cells());
+    VectorTools::integrate_difference(space_dh,
+                                      solution,
+                                      Solution<spacedim>(),
+                                      difference_per_cell,
+                                      QGauss<spacedim>(2 * space_fe.degree + 1),
+                                      VectorTools::H1_norm);
+    const double H1_error =
+      VectorTools::compute_global_error(space_triangulation,
+                                        difference_per_cell,
+                                        VectorTools::H1_norm);
+
+    convergence_table.add_value("cycle", cycle);
+    convergence_table.add_value("cells", space_triangulation.n_active_cells());
+    convergence_table.add_value("dofs", space_dh.n_dofs());
+    convergence_table.add_value("L2", L2_error);
+    convergence_table.add_value("H1", H1_error);
+  }
 
   {
     std::ofstream output_test_space("space_grid.vtk");
@@ -451,6 +557,16 @@ void PoissonNitscheInterface<dim, spacedim>::run()
       if (cycle < n_refinement_cycles - 1)
         space_triangulation.refine_global(1);
     }
+
+  convergence_table.set_precision("L2", 3);
+  convergence_table.set_precision("H1", 3);
+  convergence_table.set_scientific("L2", true);
+  convergence_table.set_scientific("H1", true);
+  convergence_table.evaluate_convergence_rates(
+    "L2", ConvergenceTable::reduction_rate_log2);
+  convergence_table.evaluate_convergence_rates(
+    "H1", ConvergenceTable::reduction_rate_log2);
+  convergence_table.write_text(std::cout);
   // Make sure we output the error table after the last cycle
   // error_table.output_table(std::cout);
 }
