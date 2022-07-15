@@ -1341,11 +1341,11 @@ namespace NonMatching
     const std::vector<
       std::tuple<typename dealii::Triangulation<dim0, spacedim>::cell_iterator,
                  typename dealii::Triangulation<dim1, spacedim>::cell_iterator,
-                 dealii::Quadrature<spacedim>>>           &cells_and_quads,
-    Matrix                                                &matrix,
-    const AffineConstraints<typename Matrix::value_type>  &space_constraints,
-    const ComponentMask                                   &space_comps,
-    const Mapping<dim0, spacedim>                         &space_mapping,
+                 dealii::Quadrature<spacedim>>> &          cells_and_quads,
+    Matrix &                                               matrix,
+    const AffineConstraints<typename Matrix::value_type> & space_constraints,
+    const ComponentMask &                                  space_comps,
+    const Mapping<dim0, spacedim> &                        space_mapping,
     const Function<spacedim, typename Matrix::value_type> &nitsche_coefficient,
     const double                                           penalty)
   {
@@ -1358,7 +1358,7 @@ namespace NonMatching
       cells_and_quads.size() > 0,
       ExcMessage(
         "The background and immersed mesh must overlap in order to use this function."));
-    const auto        &space_fe              = space_dh.get_fe();
+    const auto &       space_fe              = space_dh.get_fe();
     const unsigned int n_dofs_per_space_cell = space_fe.n_dofs_per_cell();
     const unsigned int n_space_fe_components = space_fe.n_components();
     std::vector<unsigned int> space_gtl(n_space_fe_components,
@@ -1390,7 +1390,7 @@ namespace NonMatching
             local_cell_matrix = typename Matrix::value_type();
 
             const unsigned int n_quad_pts = quad_formula.size();
-            const auto        &real_qpts  = quad_formula.get_points();
+            const auto &       real_qpts  = quad_formula.get_points();
             std::vector<typename Matrix::value_type> nitsche_coefficient_values(
               n_quad_pts);
             nitsche_coefficient.value_list(real_qpts,
@@ -1462,11 +1462,11 @@ namespace NonMatching
       std::tuple<typename dealii::Triangulation<dim0, spacedim>::cell_iterator,
                  typename dealii::Triangulation<dim1, spacedim>::cell_iterator,
                  dealii::Quadrature<spacedim>>> &cells_and_quads,
-    Vector<double>                              &rhs_vector,
-    const AffineConstraints<double>             &space_constraints,
-    const Mapping<dim0, spacedim>               &space_mapping,
-    const Function<spacedim, double>            &rhs_function,
-    const Function<spacedim, double>            &coefficient,
+    Vector<double> &                             rhs_vector,
+    const AffineConstraints<double> &            space_constraints,
+    const Mapping<dim0, spacedim> &              space_mapping,
+    const Function<spacedim, double> &           rhs_function,
+    const Function<spacedim, double> &           coefficient,
     const double                                 penalty)
   {
 #ifdef DEAL_II_WITH_CGAL
@@ -1474,7 +1474,7 @@ namespace NonMatching
     Assert(dim1 <= dim0,
            ExcMessage("This function can only work if dim1<=dim0"));
 
-    const auto        &space_fe              = space_dh.get_fe();
+    const auto &       space_fe              = space_dh.get_fe();
     const unsigned int n_dofs_per_space_cell = space_fe.n_dofs_per_cell();
     Vector<double>     local_rhs(n_dofs_per_space_cell);
     // DoF indices
@@ -1495,7 +1495,7 @@ namespace NonMatching
 
 
             const unsigned int       n_quad_pts = quad_formula.size();
-            const auto              &real_qpts  = quad_formula.get_points();
+            const auto &             real_qpts  = quad_formula.get_points();
             std::vector<Point<dim0>> ref_pts_space(n_quad_pts);
             std::vector<double>      rhs_function_values(n_quad_pts);
             rhs_function.value_list(real_qpts, rhs_function_values);

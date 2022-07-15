@@ -31,7 +31,6 @@
 #include <deal.II/dofs/dof_tools.h>
 
 #include <deal.II/fe/fe_q.h>
-// #include <deal.II/fe/fe_values.h>
 
 #include <deal.II/grid/filtered_iterator.h>
 #include <deal.II/grid/grid_generator.h>
@@ -72,9 +71,9 @@ public:
 
 
 
-template <int dim>
-double RightHandSide<dim>::value(const Point<dim> & p,
-                                 const unsigned int component) const
+template <>
+double RightHandSide<3>::value(const Point<3>    &p,
+                               const unsigned int component) const
 {
   // (void)p;
   (void)component;
@@ -87,24 +86,38 @@ double RightHandSide<dim>::value(const Point<dim> & p,
 
 
 
-template <int dim>
-class BoundaryCondition : public Function<dim>
+template <>
+double RightHandSide<2>::value(const Point<2>    &p,
+                               const unsigned int component) const
 {
-public:
-  virtual double value(const Point<dim>  &p,
-                       const unsigned int component = 0) const override;
-};
-
-
-
-template <int dim>
-double BoundaryCondition<dim>::value(const Point<dim>  &p,
-                                     const unsigned int component) const
-{
-  (void)p;
+  // (void)p;
   (void)component;
-  return 1.5;
+  // return 1.;
+  return 8. * numbers::PI * numbers::PI *
+         (std::sin(2. * numbers::PI * p[0]) *
+          std::sin(2. * numbers::PI * p[1]));
 }
+
+
+
+// template <int dim>
+// class BoundaryCondition : public Function<dim>
+// {
+// public:
+//   virtual double value(const Point<dim>  &p,
+//                        const unsigned int component = 0) const override;
+// };
+
+
+
+// template <int dim>
+// double BoundaryCondition<dim>::value(const Point<dim>  &p,
+//                                      const unsigned int component) const
+// {
+//   (void)p;
+//   (void)component;
+//   return 1.5;
+// }
 
 
 
@@ -122,9 +135,8 @@ public:
 
 
 
-template <int dim>
-double Solution<dim>::value(const Point<dim>  &p,
-                            const unsigned int component) const
+template <>
+double Solution<3>::value(const Point<3> &p, const unsigned int component) const
 {
   (void)component;
   return std::sin(2. * numbers::PI * p[0]) * std::sin(2. * numbers::PI * p[1]) *
@@ -132,12 +144,21 @@ double Solution<dim>::value(const Point<dim>  &p,
 }
 
 
-template <int dim>
-Tensor<1, dim> Solution<dim>::gradient(const Point<dim>  &p,
-                                       const unsigned int component) const
+
+template <>
+double Solution<2>::value(const Point<2> &p, const unsigned int component) const
 {
   (void)component;
-  Tensor<1, dim> gradient;
+  return std::sin(2. * numbers::PI * p[0]) * std::sin(2. * numbers::PI * p[1]);
+}
+
+
+template <>
+Tensor<1, 3> Solution<3>::gradient(const Point<3>    &p,
+                                   const unsigned int component) const
+{
+  (void)component;
+  Tensor<1, 3> gradient;
   gradient[0] = std::cos(2. * numbers ::PI * p[0]) *
                 std::sin(2. * numbers::PI * p[1]) *
                 std::sin(2. * numbers::PI * p[2]);
@@ -149,6 +170,23 @@ Tensor<1, dim> Solution<dim>::gradient(const Point<dim>  &p,
   gradient[2] = std::sin(2. * numbers ::PI * p[0]) *
                 std::sin(2. * numbers::PI * p[1]) *
                 std::cos(2. * numbers::PI * p[2]);
+
+  return 2. * numbers::PI * gradient;
+}
+
+
+
+template <>
+Tensor<1, 2> Solution<2>::gradient(const Point<2>    &p,
+                                   const unsigned int component) const
+{
+  (void)component;
+  Tensor<1, 2> gradient;
+  gradient[0] =
+    std::cos(2. * numbers ::PI * p[0]) * std::sin(2. * numbers::PI * p[1]);
+
+  gradient[1] =
+    std::sin(2. * numbers ::PI * p[0]) * std::cos(2. * numbers::PI * p[1]);
 
   return 2. * numbers::PI * gradient;
 }
@@ -279,12 +317,8 @@ private:
     1024 1089 1.436e-02 2.12 2.160e-02 2.00 1.007e+00 1.05
     4096 4225 3.605e-03 2.04 5.519e-03 2.01 5.037e-01 1.02
    */
-  mutable DataOut<spacedim, spacedim> data_out;
+  mutable DataOut<spacedim> data_out;
 
-  /**
-   * Level of log verbosity.
-   */
-  unsigned int console_level = 1;
 
   /**
    * The penalty parameter which multiplies Nitsche's terms. In this program
@@ -312,10 +346,25 @@ void PoissonNitscheInterface<dim, spacedim>::generate_grids()
 
   GridGenerator::hyper_cube(space_triangulation, -.5, 1.);
 
-  GridGenerator::hyper_cube(embedded_triangulation, 0.4, 0.6);
-  GridTools::rotate(Tensor<1, 3>({0, 1, 0}),
-                    numbers::PI_4,
-                    embedded_triangulation);
+  if constexpr (spacedim == 3)
+    {
+      GridGenerator::hyper_cube(embedded_triangulation, 0.4, 0.6);
+      GridTools::rotate(Tensor<1, 3>({0, 1, 0}),
+                        numbers::PI_4,
+                        embedded_triangulation);
+    }
+  else if constexpr (dim == 1 && spacedim == 2)
+    {
+      GridGenerator::hyper_sphere(embedded_triangulation, {}, 0.45);
+      embedded_triangulation.refine_global(2);
+      space_triangulation.refine_global(1);
+    }
+  else if constexpr (dim == 2 && spacedim == 2)
+    {
+      GridGenerator::hyper_ball(embedded_triangulation, {}, 0.45, false);
+      embedded_triangulation.refine_global(2);
+      space_triangulation.refine_global(1);
+    }
   space_triangulation.refine_global(1);
   // We create unique pointers to cached triangulations. This This objects
   // will be necessary to compute the the Quadrature formulas on the
@@ -345,16 +394,13 @@ void PoissonNitscheInterface<dim, spacedim>::setup_system()
   DoFTools::make_hanging_node_constraints(space_dh, space_constraints);
 
   // This is where we apply essential boundary conditions.
-  // boundary_conditions.apply_essential_boundary_conditions(*mapping,
-  //                                                         space_dh,
-  //                                                         space_constraints);
-
   VectorTools::interpolate_boundary_values(
     space_dh,
     0,
     /*Functions::ZeroFunction<spacedim>(),*/
-    Solution<dim>(),
+    Solution<spacedim>(),
     space_constraints); // zero Dirichlet on the boundary
+
   space_constraints.close();
   DynamicSparsityPattern dsp(space_dh.n_dofs());
   DoFTools::make_sparsity_pattern(space_dh, dsp, space_constraints, false);
@@ -486,7 +532,9 @@ void PoissonNitscheInterface<dim, spacedim>::output_results(
   data_out.attach_dof_handler(space_dh);
   data_out.add_data_vector(solution, "solution");
   data_out.build_patches();
-  std::ofstream output("solution_nitsche" + std::to_string(cycle) + ".vtu");
+  std::ofstream output("solution_nitsche" + std::to_string(dim) +
+                       std::to_string(spacedim) + std::to_string(cycle) +
+                       ".vtu");
   data_out.write_vtu(output);
   {
     Vector<double> difference_per_cell(space_triangulation.n_active_cells());
@@ -501,7 +549,9 @@ void PoissonNitscheInterface<dim, spacedim>::output_results(
                                         difference_per_cell,
                                         VectorTools::L2_norm);
 
-    difference_per_cell.reinit(space_triangulation.n_active_cells());
+    difference_per_cell.reinit(
+      space_triangulation
+        .n_active_cells()); // zero out again to store the H1 error
     VectorTools::integrate_difference(space_dh,
                                       solution,
                                       Solution<spacedim>(),
@@ -539,7 +589,7 @@ void PoissonNitscheInterface<dim, spacedim>::run()
     {
       std::cout << "Cycle: " << cycle << std::endl;
 
-      // Here we compute all the things we need to assemble the Nitsche's
+      // HCompute all the things we need to assemble the Nitsche's
       // contributions, namely the two cached triangulations and a degree to
       // integrate over the intersections.
       std::cout << "Start collecting quadratures" << std::endl;
@@ -567,14 +617,34 @@ void PoissonNitscheInterface<dim, spacedim>::run()
   convergence_table.evaluate_convergence_rates(
     "H1", ConvergenceTable::reduction_rate_log2);
   convergence_table.write_text(std::cout);
-  // Make sure we output the error table after the last cycle
-  // error_table.output_table(std::cout);
 }
 
 
 
 int main()
 {
-  PoissonNitscheInterface<3> problem;
-  problem.run();
+  try
+    {
+      {
+        std::cout << "Solving in 1D/2D" << std::endl;
+        PoissonNitscheInterface<1, 2> problem;
+        problem.run();
+      }
+      {
+        std::cout << "Solving in 2D/2D" << std::endl;
+        PoissonNitscheInterface<2> problem;
+        problem.run();
+      }
+      {
+        std::cout << "Solving in 3D/3D" << std::endl;
+        PoissonNitscheInterface<3> problem;
+        problem.run();
+      }
+      return 0;
+    }
+  catch (const std::exception &e)
+    {
+      std::cerr << e.what() << '\n';
+      return 1;
+    }
 }
