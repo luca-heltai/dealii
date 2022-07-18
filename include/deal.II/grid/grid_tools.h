@@ -954,32 +954,17 @@ namespace GridTools
    * function compute_point_locations_try_all() that also returns a vector of
    * indices indicating the points for which the search failed.
    *
-   * @note The actual return type of this function, i.e., the type referenced
-   * above as @p return_type, is
-   * @code
-   * std::tuple<
-   *   std::vector<
-   *     typename Triangulation<dim, spacedim>::active_cell_iterator>,
-   *   std::vector<std::vector<Point<dim>>>,
-   *   std::vector<std::vector<unsigned int>>>
-   * @endcode
-   * The type is abbreviated in the online documentation to improve readability
-   * of this page.
-   *
    * @note This function optimizes the search by making use of
    * GridTools::Cache::get_cell_bounding_boxes_rtree(), which either returns
    * a cached rtree or builds and stores one. Building an rtree might hinder
    * the performance if the function is called only once on few points.
    */
   template <int dim, int spacedim>
-#ifndef DOXYGEN
-  std::tuple<
-    std::vector<typename Triangulation<dim, spacedim>::active_cell_iterator>,
-    std::vector<std::vector<Point<dim>>>,
-    std::vector<std::vector<unsigned int>>>
-#else
-  return_type
-#endif
+  DEAL_II_LONG_RETURN_TYPE(
+    (std::tuple<
+      std::vector<typename Triangulation<dim, spacedim>::active_cell_iterator>,
+      std::vector<std::vector<Point<dim>>>,
+      std::vector<std::vector<unsigned int>>>))
   compute_point_locations(
     const Cache<dim, spacedim> &        cache,
     const std::vector<Point<spacedim>> &points,
