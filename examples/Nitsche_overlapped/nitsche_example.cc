@@ -72,7 +72,7 @@ public:
 
 
 template <>
-double RightHandSide<3>::value(const Point<3>    &p,
+double RightHandSide<3>::value(const Point<3> &   p,
                                const unsigned int component) const
 {
   // (void)p;
@@ -87,7 +87,7 @@ double RightHandSide<3>::value(const Point<3>    &p,
 
 
 template <>
-double RightHandSide<2>::value(const Point<2>    &p,
+double RightHandSide<2>::value(const Point<2> &   p,
                                const unsigned int component) const
 {
   // (void)p;
@@ -125,11 +125,11 @@ template <int dim>
 class Solution : public Function<dim>
 {
 public:
-  virtual double value(const Point<dim>  &p,
+  virtual double value(const Point<dim> & p,
                        const unsigned int component = 0) const override;
 
   virtual Tensor<1, dim>
-  gradient(const Point<dim>  &p,
+  gradient(const Point<dim> & p,
            const unsigned int component = 0) const override;
 };
 
@@ -154,7 +154,7 @@ double Solution<2>::value(const Point<2> &p, const unsigned int component) const
 
 
 template <>
-Tensor<1, 3> Solution<3>::gradient(const Point<3>    &p,
+Tensor<1, 3> Solution<3>::gradient(const Point<3> &   p,
                                    const unsigned int component) const
 {
   (void)component;
@@ -177,7 +177,7 @@ Tensor<1, 3> Solution<3>::gradient(const Point<3>    &p,
 
 
 template <>
-Tensor<1, 2> Solution<2>::gradient(const Point<2>    &p,
+Tensor<1, 2> Solution<2>::gradient(const Point<2> &   p,
                                    const unsigned int component) const
 {
   (void)component;
@@ -327,7 +327,7 @@ private:
 
   double penalty = 100.0;
 
-  unsigned int n_refinement_cycles = 5;
+  unsigned int n_refinement_cycles = 4;
 };
 
 
@@ -344,11 +344,11 @@ void PoissonNitscheInterface<dim, spacedim>::generate_grids()
 {
   // TimerOutput::Scope timer_section(timer, "Generate grids");
 
-  GridGenerator::hyper_cube(space_triangulation, -.5, 1.);
+  GridGenerator::hyper_cube(space_triangulation, -1., 1.);
 
-  if constexpr (spacedim == 3)
+  if constexpr (dim == 3 && spacedim == 3)
     {
-      GridGenerator::hyper_cube(embedded_triangulation, 0.4, 0.6);
+      GridGenerator::hyper_cube(embedded_triangulation, 0.42, 0.66);
       GridTools::rotate(Tensor<1, 3>({0, 1, 0}),
                         numbers::PI_4,
                         embedded_triangulation);
@@ -365,7 +365,15 @@ void PoissonNitscheInterface<dim, spacedim>::generate_grids()
       embedded_triangulation.refine_global(2);
       space_triangulation.refine_global(1);
     }
-  space_triangulation.refine_global(1);
+  else if constexpr (dim == 2 && spacedim == 3)
+    {
+      GridGenerator::hyper_cube(embedded_triangulation, -0.45, .35);
+      embedded_triangulation.refine_global(2);
+      // GridTools::rotate(Tensor<1, 3>({0, 1, 0}),
+      //                   numbers::PI_4,
+      //                   embedded_triangulation);
+    }
+  space_triangulation.refine_global(2);
   // We create unique pointers to cached triangulations. This This objects
   // will be necessary to compute the the Quadrature formulas on the
   // intersection of the cells.
@@ -597,6 +605,16 @@ void PoissonNitscheInterface<dim, spacedim>::run()
         *space_cache, *embedded_cache, 2 * space_fe.degree + 1);
       std::cout << "Collected quadratures" << std::endl;
 
+      double sum = 0.;
+      for (const auto &p : cells_and_quads)
+        {
+          auto quad = std::get<2>(p);
+          sum += std::accumulate(quad.get_weights().begin(),
+                                 quad.get_weights().end(),
+                                 0.);
+        }
+      std::cout << "Area/Measure: " << sum << std::endl;
+
       setup_system();
       assemble_system();
       solve();
@@ -633,6 +651,11 @@ int main()
       {
         std::cout << "Solving in 2D/2D" << std::endl;
         PoissonNitscheInterface<2> problem;
+        problem.run();
+      }
+      {
+        std::cout << "Solving in 2D/3D" << std::endl;
+        PoissonNitscheInterface<2, 3> problem;
         problem.run();
       }
       {

@@ -36,11 +36,13 @@
 #  include <CGAL/Delaunay_mesh_face_base_2.h>
 #  include <CGAL/Delaunay_mesh_size_criteria_2.h>
 #  include <CGAL/Delaunay_mesher_2.h>
+#  include <CGAL/Delaunay_triangulation_2.h>
 #  include <CGAL/Exact_predicates_exact_constructions_kernel_with_sqrt.h>
 #  include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
 #  include <CGAL/Kernel_traits.h>
 #  include <CGAL/Polygon_2.h>
 #  include <CGAL/Polygon_with_holes_2.h>
+#  include <CGAL/Projection_traits_xy_3.h>
 #  include <CGAL/Segment_3.h>
 #  include <CGAL/Simple_cartesian.h>
 #  include <CGAL/Tetrahedron_3.h>
@@ -59,20 +61,28 @@
 
 
 using K           = CGAL::Exact_predicates_exact_constructions_kernel_with_sqrt;
+using K_exact     = CGAL::Exact_predicates_exact_constructions_kernel;
 using K_inexact   = CGAL::Exact_predicates_inexact_constructions_kernel;
 using CGALPolygon = CGAL::Polygon_2<K>;
 using Polygon_with_holes_2   = CGAL::Polygon_with_holes_2<K>;
 using CGALTriangle2          = K::Triangle_2;
 using CGALTriangle3          = K::Triangle_3;
+using CGALTriangle3_exact          = K_exact::Triangle_3;
 using CGALPoint2             = K::Point_2;
 using CGALPoint3             = K::Point_3;
+using CGALPoint3_exact             = K_exact::Point_3;
 using CGALSegment2           = K::Segment_2;
 using Surface_mesh           = CGAL::Surface_mesh<K_inexact::Point_3>;
 using CGALSegment3           = K::Segment_3;
+using CGALSegment3_exact           = K_exact::Segment_3;
 using CGALTetra              = K::Tetrahedron_3;
+using CGALTetra_exact        = K_exact::Tetrahedron_3;
 using Triangulation2         = CGAL::Triangulation_2<K>;
 using Triangulation3         = CGAL::Triangulation_3<K>;
+using Triangulation3_exact         = CGAL::Triangulation_3<K_exact>;
 using Triangulation3_inexact = CGAL::Triangulation_3<K_inexact>;
+typedef CGAL::Projection_traits_xy_3<K_exact> Gt;
+typedef CGAL::Delaunay_triangulation_2<Gt>    Delaunay;
 
 struct FaceInfo2
 {

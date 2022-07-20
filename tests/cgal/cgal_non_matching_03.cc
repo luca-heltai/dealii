@@ -139,7 +139,7 @@ test()
           if (cell1->active_cell_index() == 8)
             {
               std::ofstream filename("test_face.ply");
-              CGAL::write_ply(filename, sm);
+              // CGAL::write_ply(filename, sm);
               for (const auto &v_deal :
                    (embedded_cache->get_mapping()).get_vertices(cell1))
                 {

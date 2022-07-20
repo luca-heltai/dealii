@@ -1239,10 +1239,12 @@ QSimplex<dim>::compute_affine_transformation(
     Bt[d] = vertices[d + 1] - vertices[0];
 
   const auto   B = Bt.transpose();
+  std::cout << "CALCOLO DETERMINANTE: " << std::endl;
   const double J = std::abs(B.determinant());
 
   // if the determinant is zero, we return an empty quadrature
-  if (J < 1e-12)
+  std::cout << "DETERMINANTE: " << J << std::endl;
+  if (J < 1e-14)
     return Quadrature<spacedim>();
 
   std::vector<Point<spacedim>> qp(this->size());
@@ -1275,16 +1277,22 @@ QSimplex<dim>::mapped_quadrature(
   std::vector<double>          ws;
   for (const auto &simplex : simplices)
     {
+      std::cout << "Prima di TRANSformare" << std::endl;
       const auto rule = this->compute_affine_transformation(simplex);
-      std::transform(rule.get_points().begin(),
-                     rule.get_points().end(),
-                     std::back_inserter(qp),
-                     [&](const Point<spacedim> &p) { return p; });
-      std::transform(rule.get_weights().begin(),
-                     rule.get_weights().end(),
-                     std::back_inserter(ws),
-                     [&](const double w) { return w; });
+      std::cout << "DOPO aver TRANSformato" << std::endl;
+      if (rule.size() > 0)
+        {
+          std::transform(rule.get_points().begin(),
+                         rule.get_points().end(),
+                         std::back_inserter(qp),
+                         [&](const Point<spacedim> &p) { return p; });
+          std::transform(rule.get_weights().begin(),
+                         rule.get_weights().end(),
+                         std::back_inserter(ws),
+                         [&](const double w) { return w; });
+        }
     }
+  std::cout << "Trasformato tutto" << std::endl;
   return Quadrature<spacedim>(qp, ws);
 }
 

@@ -464,50 +464,150 @@ namespace CGALWrappers
     std::copy_n(mapping0.get_vertices(cell0).begin(), 8, vertices0.begin());
     std::copy_n(mapping1.get_vertices(cell1).begin(), 4, vertices1.begin());
 
-    std::array<CGALPoint3, 8> pts_hex;
-    std::array<CGALPoint3, 4> pts_quad;
+    std::array<CGALPoint3_exact, 8> pts_hex;
+    std::array<CGALPoint3_exact, 4> pts_quad;
     std::transform(vertices0.begin(),
                    vertices0.end(),
                    pts_hex.begin(),
                    [&](const Point<3> &p) {
-                     return dealii_point_to_cgal_point<CGALPoint3>(p);
+                     return dealii_point_to_cgal_point<CGALPoint3_exact>(p);
                    });
 
     std::transform(vertices1.begin(),
                    vertices1.end(),
                    pts_quad.begin(),
                    [&](const Point<3> &p) {
-                     return dealii_point_to_cgal_point<CGALPoint3>(p);
+                     return dealii_point_to_cgal_point<CGALPoint3_exact>(p);
                    });
 
     // Subdivide hex into tetrahedrons
     std::vector<std::array<Point<3>, 3>> vertices;
-    Triangulation3                       tria;
+    Triangulation3_exact                 tria;
     tria.insert(pts_hex.begin(), pts_hex.end());
 
     // Subdivide quad into triangles
-    CGALPolygon poly(pts_quad.begin(), pts_quad.end());
-    CDT         cdt;
-    cdt.insert_constraint(poly.vertices_begin(), poly.vertices_end(), true);
-    internal::mark_domains(cdt);
+
+
+    Delaunay tria_quad(pts_quad.begin(), pts_quad.end());
+    // Delaunay tria_quad;
+    // Triangulation2 tria_quad;
+    // tria_quad.insert(pts_quad.begin(), pts_quad.end());
+    // CGALPolygon poly(pts_quad.begin(), pts_quad.end());
+    // CDT         cdt;
+    // cdt.insert_constraint(poly.vertices_begin(), poly.vertices_end(), true);
+    // internal::mark_domains(cdt);
 
     for (const auto &c : tria.finite_cell_handles())
       {
         const auto &tet = tria.tetrahedron(c);
+        // std::cout << "Tetrahedron" << std::endl;
+        // for (unsigned int i = 0; i < 4; ++i)
+        //   {
+        //     std::cout << tet.vertex(i) << std::endl;
+        //   }
         // Check for intersection with each triangle dividing the quad:
-        for (Face_handle f : cdt.finite_face_handles())
+        // for (Face_handle f : cdt.finite_face_handles())
+        //   {
+        for (const auto f : tria_quad.finite_face_handles())
           {
-            if (f->info().in_domain() &&
-                CGAL::to_double(cdt.triangle(f).area()) > tol)
+            // std::cout << "Triangle" << std::endl;
+            // for (unsigned int i = 0; i < 3; ++i)
+            //   {
+            //     std::cout << tria_quad.triangle(f).vertex(i) << std::endl;
+            //   }
+            // if (tria_quad.triangle(f).is_degenerate())
+            //   {
+            //     std::cout << "DEGENERATE TRIANGLE" << std::endl;
+            //   }
+            std::cout << "PROVA do_intersect" << std::endl;
+            CGALTriangle3_exact tria_test(f->vertex(0)->point(),
+                                          f->vertex(1)->point(),
+                                          f->vertex(2)->point());
+            auto                b = CGAL::do_intersect(tet, tria_test);
+            // std::cout << "ANDATO con result" << std::boolalpha << b
+            //           << std::endl;
+            double positive_area = CGAL::to_double(tria_test.squared_area());
+            if (CGAL::do_intersect(tet,
+                                   /*tria_quad.triangle(f)*/ tria_test))
               {
-                const auto intersection =
-                  CGAL::intersection(cdt.triangle(f), tet);
-                if (const CGALTriangle3 *t =
-                      boost::get<CGALTriangle3>(&*intersection))
-                  vertices.push_back({{(*t)[0], (*t)[1], (*t)[2]}});
+                // if (std::abs(positive_area) > 1e-10)
+                //   {
+                const auto intersection = CGAL::intersection(tria_test, tet);
+
+                //     std::cout << "Intersection succeded" << std::endl;
+
+                if (const CGALTriangle3_exact *t =
+                      boost::get<CGALTriangle3_exact>(&*intersection))
+                  {
+                    std::cout << "TRIANGOLO trovato" << std::endl;
+
+                    if (CGAL::to_double(t->squared_area()) > tol * tol)
+                      {
+                        vertices.push_back(
+                          {{cgal_point_to_dealii_point<3>((*t)[0]),
+                            cgal_point_to_dealii_point<3>((*t)[1]),
+                            cgal_point_to_dealii_point<3>((*t)[2])}});
+                      }
+                  }
+
+
+                // if (const CGALSegment3_exact *seg =
+                //       boost::get<CGALSegment3_exact>(&*intersection))
+                //   {
+                //     std::cout << "TRIANGOLO trovato" << std::endl;
+                //     if (!seg->is_degenerate())
+                //       {
+                //         vertices.push_back(
+                //           {{cgal_point_to_dealii_point<3>((*seg)[0]),
+                //             cgal_point_to_dealii_point<3>((*seg)[1])}});
+                //       }
+                //   }
+
+                if (const std::vector<CGALPoint3_exact> *vps =
+                      boost::get<std::vector<CGALPoint3_exact>>(&*intersection))
+                  {
+                    Delaunay tria_inter(vps->begin(), vps->end());
+                    std::cout << "Punti: " << vps->size() << std::endl;
+                    for (auto it = tria_inter.finite_faces_begin();
+                         it != tria_inter.finite_faces_end();
+                         ++it)
+                      {
+                        // const auto tria_inside =
+                        // tria_inter.triangle(face);
+                        CGALTriangle3_exact tria_testt(it->vertex(0)->point(),
+                                                       it->vertex(1)->point(),
+                                                       it->vertex(2)->point());
+
+                        if (CGAL::to_double(tria_testt.squared_area()) >
+                            tol * tol)
+                          {
+                            std::cout
+                              << "Area: "
+                              << CGAL::to_double(tria_testt.squared_area())
+                              << std::endl;
+                            std::cout << "Prima del pushback: " << std::endl;
+                            std::cout << "0: " << tria_testt[0] << std::endl;
+                            std::cout << "1: " << tria_testt[1] << std::endl;
+                            std::cout << "2: " << tria_testt[2] << std::endl;
+
+                            std::array<Point<3>, 3> verts = {
+                              {CGALWrappers::cgal_point_to_dealii_point<3>(
+                                 tria_testt[0]),
+                               CGALWrappers::cgal_point_to_dealii_point<3>(
+                                 tria_testt[1]),
+                               CGALWrappers::cgal_point_to_dealii_point<3>(
+                                 tria_testt[2])}};
+
+                            vertices.push_back(verts);
+                          }
+                      }
+                  }
               }
+            std::cout << "Quindi sono qui" << std::endl;
           }
       }
+
+    std::cout << "E SONO ARRIVAT* QUA" << std::endl;
     return vertices;
 
 #  else

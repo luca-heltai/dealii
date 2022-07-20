@@ -127,11 +127,12 @@ namespace NonMatching
     const Mapping<2, 3> &                              mapping1)
   {
 #  if defined(CGAL_GEQ_515)
-    const std::vector<std::array<Point<3>, 4>> &vec_of_simplices =
+    const std::vector<std::array<Point<3>, 3>> &vec_of_simplices =
       CGALWrappers::compute_intersection_of_cells(cell0,
                                                   cell1,
                                                   mapping0,
                                                   mapping1);
+    std::cout << "Qui arrivato" << std::endl;
     return QGaussSimplex<2>(degree).mapped_quadrature(vec_of_simplices);
 #  else
     (void)cell0;
@@ -244,6 +245,15 @@ namespace NonMatching
   collect_quadratures_on_overlapped_grids(
     const GridTools::Cache<2, 2> &space_cache,
     const GridTools::Cache<2, 2> &immersed_cache,
+    const unsigned int            degree,
+    const double                  tol);
+
+  template std::vector<std::tuple<typename Triangulation<3, 3>::cell_iterator,
+                                  typename Triangulation<2, 3>::cell_iterator,
+                                  Quadrature<3>>>
+  collect_quadratures_on_overlapped_grids(
+    const GridTools::Cache<3, 3> &space_cache,
+    const GridTools::Cache<2, 3> &immersed_cache,
     const unsigned int            degree,
     const double                  tol);
 
