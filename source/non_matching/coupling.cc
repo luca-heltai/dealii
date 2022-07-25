@@ -1226,11 +1226,11 @@ namespace NonMatching
     // Loop over vector of tuples, and gather everything together
     for (const auto &infos : cells_and_quads)
       {
-        const auto &[first_cell, second_cell, quad_formula] = infos;
-        std::cout << "Space cell: " << first_cell->active_cell_index()
+        const auto &[space_cell, embedded_cell, quad_formula] = infos;
+        std::cout << "Space cell: " << space_cell->active_cell_index()
                   << std::endl;
-        std::cout << "Immersed cell: " << second_cell->active_cell_index()
-                  << "on the boundary? " << second_cell->at_boundary()
+        std::cout << "Immersed cell: " << embedded_cell->active_cell_index()
+                  << "on the boundary? " << embedded_cell->at_boundary()
                   << std::endl;
 
 
@@ -1241,7 +1241,7 @@ namespace NonMatching
         std::vector<Point<dim0>> ref_pts_space(n_quad_pts);
         std::vector<Point<dim1>> ref_pts_immersed(n_quad_pts);
 
-        space_mapping.transform_points_real_to_unit_cell(first_cell,
+        space_mapping.transform_points_real_to_unit_cell(space_cell,
                                                          real_qpts,
                                                          ref_pts_space);
         std::cout << "Space indietro fatto" << std::endl;
@@ -1250,7 +1250,7 @@ namespace NonMatching
         //   {
         //     std::cout << "dynamic cast passato" << std::endl;
         //     immersed_mapping.transform_points_real_to_unit_cell(
-        //       second_cell, real_qpts, ref_pts_immersed);
+        //       embedded_cell, real_qpts, ref_pts_immersed);
         //   }
         // else
         //   {
@@ -1258,7 +1258,7 @@ namespace NonMatching
         for (unsigned int q = 0; q < n_quad_pts; ++q)
           {
             ref_pts_immersed[q] =
-              immersed_mapping.transform_real_to_unit_cell(second_cell,
+              immersed_mapping.transform_real_to_unit_cell(embedded_cell,
                                                            real_qpts[q]);
           }
         // }
@@ -1297,10 +1297,10 @@ namespace NonMatching
           }
         std::cout << "Assemblato" << std::endl;
         typename DoFHandler<dim0, spacedim>::cell_iterator space_cell_dh(
-          *first_cell, &space_dh);
+          *space_cell, &space_dh);
         std::cout << "DoFHandler space fatto" << std::endl;
         typename DoFHandler<dim1, spacedim>::cell_iterator immersed_cell_dh(
-          *second_cell, &immersed_dh);
+          *embedded_cell, &immersed_dh);
         std::cout << "DoFHandler immerso fatto" << std::endl;
 
 
@@ -1384,8 +1384,8 @@ namespace NonMatching
     double h;
     for (const auto &infos : cells_and_quads)
       {
-        const auto &[first_cell, second_cell, quad_formula] = infos;
-        if (first_cell->is_active())
+        const auto &[space_cell, embedded_cell, quad_formula] = infos;
+        if (space_cell->is_active())
           {
             local_cell_matrix = typename Matrix::value_type();
 
@@ -1398,11 +1398,11 @@ namespace NonMatching
 
             std::vector<Point<dim0>> ref_pts_space(n_quad_pts);
 
-            space_mapping.transform_points_real_to_unit_cell(first_cell,
+            space_mapping.transform_points_real_to_unit_cell(space_cell,
                                                              real_qpts,
                                                              ref_pts_space);
 
-            h               = first_cell->diameter();
+            h               = space_cell->diameter();
             const auto &JxW = quad_formula.get_weights();
             for (unsigned int q = 0; q < n_quad_pts; ++q)
               {
@@ -1432,7 +1432,7 @@ namespace NonMatching
                   }
               }
             typename DoFHandler<dim0, spacedim>::cell_iterator space_cell_dh(
-              *first_cell, &space_dh);
+              *space_cell, &space_dh);
 
             space_cell_dh->get_dof_indices(local_space_dof_indices);
             space_constraints.distribute_local_to_global(
@@ -1485,11 +1485,11 @@ namespace NonMatching
     double h;
     for (const auto &infos : cells_and_quads)
       {
-        const auto &[first_cell, second_cell, quad_formula] = infos;
+        const auto &[space_cell, embedded_cell, quad_formula] = infos;
 
-        if (first_cell->is_active())
+        if (space_cell->is_active())
           {
-            h         = first_cell->diameter();
+            h         = space_cell->diameter();
             local_rhs = 0.;
             // local_rhs = typename VectorType::value_type();
 
@@ -1504,7 +1504,7 @@ namespace NonMatching
             std::vector<double> coefficient_values(n_quad_pts);
             coefficient.value_list(real_qpts, coefficient_values);
 
-            space_mapping.transform_points_real_to_unit_cell(first_cell,
+            space_mapping.transform_points_real_to_unit_cell(space_cell,
                                                              real_qpts,
                                                              ref_pts_space);
 
@@ -1520,7 +1520,7 @@ namespace NonMatching
                   }
               }
             typename DoFHandler<dim0, spacedim>::cell_iterator space_cell_dh(
-              *first_cell, &space_dh);
+              *space_cell, &space_dh);
 
             space_cell_dh->get_dof_indices(local_space_dof_indices);
             space_constraints.distribute_local_to_global(

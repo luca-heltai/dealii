@@ -132,7 +132,7 @@ namespace NonMatching
                                                   cell1,
                                                   mapping0,
                                                   mapping1);
-    std::cout << "Qui arrivato" << std::endl;
+    // std::cout << "Qui arrivato" << std::endl;
     return QGaussSimplex<2>(degree).mapped_quadrature(vec_of_simplices);
 #  else
     (void)cell0;

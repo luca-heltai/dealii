@@ -1238,12 +1238,12 @@ QSimplex<dim>::compute_affine_transformation(
   for (unsigned int d = 0; d < dim; ++d)
     Bt[d] = vertices[d + 1] - vertices[0];
 
-  const auto   B = Bt.transpose();
-  std::cout << "CALCOLO DETERMINANTE: " << std::endl;
+  const auto B = Bt.transpose();
+  // std::cout << "CALCOLO DETERMINANTE: " << std::endl;
   const double J = std::abs(B.determinant());
 
   // if the determinant is zero, we return an empty quadrature
-  std::cout << "DETERMINANTE: " << J << std::endl;
+  // std::cout << "DETERMINANTE: " << J << std::endl;
   if (J < 1e-14)
     return Quadrature<spacedim>();
 
@@ -1277,9 +1277,9 @@ QSimplex<dim>::mapped_quadrature(
   std::vector<double>          ws;
   for (const auto &simplex : simplices)
     {
-      std::cout << "Prima di TRANSformare" << std::endl;
+      // std::cout << "Prima di TRANSformare" << std::endl;
       const auto rule = this->compute_affine_transformation(simplex);
-      std::cout << "DOPO aver TRANSformato" << std::endl;
+      // std::cout << "DOPO aver TRANSformato" << std::endl;
       if (rule.size() > 0)
         {
           std::transform(rule.get_points().begin(),
@@ -1292,12 +1292,12 @@ QSimplex<dim>::mapped_quadrature(
                          [&](const double w) { return w; });
         }
     }
-  std::cout << "Trasformato tutto" << std::endl;
+  // std::cout << "Trasformato tutto" << std::endl;
   return Quadrature<spacedim>(qp, ws);
 }
 
 
-
+//
 QTrianglePolar::QTrianglePolar(const Quadrature<1> &radial_quadrature,
                                const Quadrature<1> &angular_quadrature)
   : QSimplex<2>(Quadrature<2>())

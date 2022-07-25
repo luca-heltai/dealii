@@ -67,19 +67,19 @@ using CGALPolygon = CGAL::Polygon_2<K>;
 using Polygon_with_holes_2   = CGAL::Polygon_with_holes_2<K>;
 using CGALTriangle2          = K::Triangle_2;
 using CGALTriangle3          = K::Triangle_3;
-using CGALTriangle3_exact          = K_exact::Triangle_3;
+using CGALTriangle3_exact    = K_exact::Triangle_3;
 using CGALPoint2             = K::Point_2;
 using CGALPoint3             = K::Point_3;
-using CGALPoint3_exact             = K_exact::Point_3;
+using CGALPoint3_exact       = K_exact::Point_3;
 using CGALSegment2           = K::Segment_2;
 using Surface_mesh           = CGAL::Surface_mesh<K_inexact::Point_3>;
 using CGALSegment3           = K::Segment_3;
-using CGALSegment3_exact           = K_exact::Segment_3;
+using CGALSegment3_exact     = K_exact::Segment_3;
 using CGALTetra              = K::Tetrahedron_3;
 using CGALTetra_exact        = K_exact::Tetrahedron_3;
 using Triangulation2         = CGAL::Triangulation_2<K>;
 using Triangulation3         = CGAL::Triangulation_3<K>;
-using Triangulation3_exact         = CGAL::Triangulation_3<K_exact>;
+using Triangulation3_exact   = CGAL::Triangulation_3<K_exact>;
 using Triangulation3_inexact = CGAL::Triangulation_3<K_inexact>;
 typedef CGAL::Projection_traits_xy_3<K_exact> Gt;
 typedef CGAL::Delaunay_triangulation_2<Gt>    Delaunay;
@@ -159,11 +159,11 @@ namespace CGALWrappers
   } // namespace internal
 
   /**
-   * Given two deal.II cells, compute the intersection and return a vector of
-   * simplices, each one identified by an array of deal.II Points. Each array
-   * identify a simplex, and all the simplices together are a subdivision of the
-   * intersection. If cells are non-affine, a geometrical error will be
-   * necessarily introduced.
+   * Given two affine deal.II cells, compute the intersection and return a
+   * vector of simplices, each one identified by an array of deal.II Points.
+   * Each array identify a simplex, and all the simplices together are a
+   * subdivision of the intersection. If cells are non-affine, a geometrical
+   * error will be necessarily introduced.
    *
    *
    * @param cell0 Iterator to the first cell
