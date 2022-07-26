@@ -19,6 +19,9 @@
 
 #include <deal.II/lac/linear_operator_tools.h>
 
+#include <deal.II/dofs/dof_accessor.h>
+#include <deal.II/fe/fe_nothing.h>
+#include <deal.II/hp/fe_collection.h>
 #include <deal.II/base/convergence_table.h>
 #include <deal.II/non_matching/quadrature_overlapped_grids.h>
 #include <deal.II/non_matching/coupling.h>
@@ -203,7 +206,16 @@ public:
   PoissonDLM();
   void run();
 
+
+  enum ActiveFEIndex
+  {
+    lagrange = 0,
+    nothing  = 1
+  };
+
 private:
+  void classify_mesh();
+
   void setup_grids_and_dofs();
 
   void setup_coupling();
@@ -286,6 +298,8 @@ private:
   Vector<double> solution;
   Vector<double> lambda;
 
+  hp::FECollection<dim> fe_collection;
+
 
 
   /**
@@ -323,9 +337,9 @@ private:
 
   mutable DataOut<spacedim> data_out;
 
-  unsigned int n_refinement_cycles = 5;
+  unsigned int n_refinement_cycles = 3;
 
-  unsigned int delta_refinement_cycles = 2;
+  unsigned int delta_refinement_cycles = 1;
 
   unsigned int coupling_quadrature_order = 3;
 
@@ -339,6 +353,45 @@ PoissonDLM<dim, spacedim>::PoissonDLM()
   : space_fe(1)
   , embedded_fe(1)
 {}
+
+
+template <int dim, int spacedim>
+void PoissonDLM<dim, spacedim>::classify_mesh()
+{
+  // const auto &space_tree =
+  //   space_cache->get_locally_owned_cell_bounding_boxes_rtree();
+
+  // // The immersed tree *must* contain all cells, also the non-locally owned
+  // // ones.
+  // const auto &immersed_tree =
+  // embedded_cache->get_cell_bounding_boxes_rtree();
+
+  // namespace bgi = boost::geometry::index;
+  // // Whenever the BB space_cell intersects the BB of an embedded cell,
+  // // store the space_cell in the set of intersected_cells
+  // unsigned int i = 0.;
+
+  // for (const auto &[immersed_box, immersed_cell] : immersed_tree)
+  //   {
+  //     for (const auto &[space_box, space_cell] : space_tree)
+  //       {
+  //         typename DoFHandler<spacedim>::active_cell_iterator space_cell_dh(
+  //           *space_cell, space_dh.get());
+
+  //         if (boost::geometry::intersects(space_box, immersed_box))
+  //           {
+  //             std::cout << ++i << std::endl;
+  //             space_cell_dh->set_active_fe_index(ActiveFEIndex::lagrange);
+  //           }
+  //         else if (!boost::geometry::intersects(space_box, immersed_box))
+  //           {
+  //             space_cell_dh->set_active_fe_index(ActiveFEIndex::nothing);
+  //           }
+  //       }
+  //   }
+  // space_dh->distribute_dofs(fe_collection);
+}
+
 
 
 template <int dim, int spacedim>
@@ -364,9 +417,10 @@ void PoissonDLM<dim, spacedim>::setup_grids_and_dofs()
         }
       else if constexpr (dim == 2 && spacedim == 2)
         {
-          GridGenerator::hyper_ball(embedded_triangulation, {}, 0.45, false);
-          embedded_triangulation.refine_global(2);
-          space_triangulation.refine_global(5);
+          GridGenerator::hyper_cube(embedded_triangulation, -0.45, .35);
+          // GridGenerator::hyper_ball(embedded_triangulation, {}, 0.45, false);
+          embedded_triangulation.refine_global(3);
+          space_triangulation.refine_global(4);
         }
       else if constexpr (dim == 2 && spacedim == 3)
         {
@@ -389,10 +443,12 @@ void PoissonDLM<dim, spacedim>::setup_grids_and_dofs()
   adjust_grids();
 
   setup_space_dofs();
-
-  // We create unique pointers to cached triangulations. This This objects
-  // will be necessary to compute the the Quadrature formulas on the
-  // intersection of the cells.
+  {
+    std::ofstream output_test_space("space_grid.vtk");
+    GridOut().write_vtk(space_triangulation, output_test_space);
+    std::ofstream output_test_embedded("embedded_grid.vtk");
+    GridOut().write_vtk(embedded_triangulation, output_test_embedded);
+  }
 }
 
 
@@ -422,27 +478,22 @@ void PoissonDLM<dim, spacedim>::setup_space_dofs()
 {
   // Setup space DoFs
   space_dh = std::make_unique<DoFHandler<spacedim>>(space_triangulation);
-  space_dh->distribute_dofs(space_fe);
-  std::cout << "Number of dofs in space: " << space_dh->n_dofs() << std::endl;
-  space_constraints.clear();
-  DoFTools::make_hanging_node_constraints(*space_dh, space_constraints);
-
-  // This is where we apply essential boundary conditions.
-  VectorTools::interpolate_boundary_values(
-    *space_dh,
-    0,
-    Solution<spacedim>(),
-    space_constraints); // zero Dirichlet on the boundary
-
-  space_constraints.close();
-
-
-  DynamicSparsityPattern dsp(space_dh->n_dofs(), space_dh->n_dofs());
-  DoFTools::make_sparsity_pattern(*space_dh, dsp, space_constraints);
-  stiffness_sparsity_pattern.copy_from(dsp);
-  stiffness_matrix.reinit(stiffness_sparsity_pattern);
-  solution.reinit(space_dh->n_dofs());
-  space_rhs.reinit(space_dh->n_dofs());
+  fe_collection.push_back(FE_Q<spacedim>(1));
+  fe_collection.push_back(FE_Nothing<spacedim>());
+  // space_dh->distribute_dofs(space_fe);
+  // classify_mesh();
+  // for (const auto &cell : space_dh->active_cell_iterators())
+  //   {
+  //     if (cell->active_cell_index() % 2 == 0)
+  //       {
+  //         cell->set_active_fe_index(ActiveFEIndex::lagrange);
+  //       }
+  //     else
+  //       {
+  //         cell->set_active_fe_index(ActiveFEIndex::nothing);
+  //       }
+  //   }
+  // space_dh->distribute_dofs(fe_collection);
 }
 
 
@@ -490,20 +541,22 @@ void PoissonDLM<dim, spacedim>::assemble_system()
     // TimerOutput::Scope timer_section(timer, "Assemble system");
     std::cout << "Assemble system" << std::endl;
 
-    QGauss<spacedim>             quadrature_formula(2 * space_fe.degree + 1);
-    FEValues<spacedim, spacedim> fe_values(space_mapping,
-                                           space_fe,
-                                           quadrature_formula,
-                                           update_values | update_gradients |
-                                             update_quadrature_points |
-                                             update_JxW_values);
+    QGauss<spacedim>   quadrature_formula(2 * space_fe.degree + 1);
+    FEValues<spacedim> fe_values(space_mapping,
+                                 space_fe,
+                                 quadrature_formula,
+                                 update_values | update_gradients |
+                                   update_quadrature_points |
+                                   update_JxW_values);
 
     const unsigned int      dofs_per_cell = space_fe.n_dofs_per_cell();
     FullMatrix<double>      cell_matrix(dofs_per_cell, dofs_per_cell);
     Vector<double>          cell_rhs(dofs_per_cell);
     RightHandSide<spacedim> rhs;
     std::vector<types::global_dof_index> local_dof_indices(dofs_per_cell);
-    for (const auto &cell : space_dh->active_cell_iterators())
+    for (const auto &cell :
+         space_dh->active_cell_iterators() |
+           IteratorFilters::ActiveFEIndexEqualTo(ActiveFEIndex::lagrange))
       {
         fe_values.reinit(cell);
         cell_matrix          = 0;
@@ -545,29 +598,18 @@ void PoissonDLM<dim, spacedim>::assemble_system()
   {
     // TimerOutput::Scope timer_section(timer, "Assemble Nitsche terms");
 
-    NonMatching::create_coupling_mass_matrix(*space_cache,
-                                             *space_dh,
-                                             *embedded_dh,
-                                             QGauss<dim>(space_fe.degree + 1),
-                                             coupling_matrix,
-                                             space_constraints,
-                                             ComponentMask(),
-                                             ComponentMask(),
-                                             embedded_mapping,
-                                             embedded_constraints);
-
     // Coupling mass matrix
-    // NonMatching::create_coupling_mass_matrix_with_exact_intersections(
-    //   *space_dh,
-    //   *embedded_dh,
-    //   cells_and_quads,
-    //   coupling_matrix,
-    //   space_constraints,
-    //   ComponentMask(),
-    //   ComponentMask(),
-    //   space_mapping,
-    //   embedded_mapping,
-    //   embedded_constraints);
+    NonMatching::create_coupling_mass_matrix_with_exact_intersections(
+      *space_dh,
+      *embedded_dh,
+      cells_and_quads,
+      coupling_matrix,
+      space_constraints,
+      ComponentMask(),
+      ComponentMask(),
+      space_mapping,
+      embedded_mapping,
+      embedded_constraints);
   }
 }
 
@@ -657,13 +699,6 @@ void PoissonDLM<dim, spacedim>::output_results(const unsigned cycle) const
     convergence_table.add_value("L2", L2_error);
     convergence_table.add_value("H1", H1_error);
   }
-
-  {
-    std::ofstream output_test_space("space_grid.vtk");
-    GridOut().write_vtk(space_triangulation, output_test_space);
-    std::ofstream output_test_embedded("embedded_grid.vtk");
-    GridOut().write_vtk(embedded_triangulation, output_test_embedded);
-  }
 }
 
 
@@ -676,7 +711,17 @@ void PoissonDLM<dim, spacedim>::run()
     {
       std::cout << "Cycle: " << cycle << std::endl;
       setup_grids_and_dofs();
-
+      // unsigned int i = 0;
+      std::cout << "Number of cells in space:"
+                << space_triangulation.n_active_cells() << std::endl;
+      std::cout << "Number of cells in immersed:"
+                << embedded_triangulation.n_active_cells() << std::endl;
+      // for (const auto &cell :
+      //      space_dh->active_cell_iterators() |
+      //        IteratorFilters::ActiveFEIndexEqualTo(ActiveFEIndex::lagrange))
+      //   {
+      //     std::cout << ++i << std::endl;
+      //   }
       // Compute all the things we need to assemble the Nitsche's
       // contributions, namely the two cached triangulations and a degree to
       // integrate over the intersections.
@@ -684,6 +729,52 @@ void PoissonDLM<dim, spacedim>::run()
       cells_and_quads = NonMatching::collect_quadratures_on_overlapped_grids(
         *space_cache, *embedded_cache, 2 * space_fe.degree + 1);
       std::cout << "Collected quadratures" << std::endl;
+
+      std::vector<types::global_cell_index> background_cells;
+      for (const auto &t : cells_and_quads)
+        {
+          const auto &cell = std::get<0>(t);
+          background_cells.push_back(cell->active_cell_index());
+        }
+
+      {
+        for (const auto &cell : space_dh->active_cell_iterators())
+          {
+            if (std::find(background_cells.begin(),
+                          background_cells.end(),
+                          cell->active_cell_index()) != background_cells.end())
+              {
+                cell->set_active_fe_index(ActiveFEIndex::lagrange);
+              }
+            else
+              {
+                cell->set_active_fe_index(ActiveFEIndex::nothing);
+              }
+          }
+        space_dh->distribute_dofs(fe_collection);
+        std::cout << "Number of dofs in space: " << space_dh->n_dofs()
+                  << std::endl;
+        // Assert(false, ExcMessage("Fermati."));
+        space_constraints.clear();
+        DoFTools::make_hanging_node_constraints(*space_dh, space_constraints);
+
+        // This is where we apply essential boundary conditions.
+        VectorTools::interpolate_boundary_values(
+          *space_dh,
+          0,
+          Solution<spacedim>(),
+          space_constraints); // zero Dirichlet on the boundary
+
+        space_constraints.close();
+
+
+        DynamicSparsityPattern dsp(space_dh->n_dofs(), space_dh->n_dofs());
+        DoFTools::make_sparsity_pattern(*space_dh, dsp, space_constraints);
+        stiffness_sparsity_pattern.copy_from(dsp);
+        stiffness_matrix.reinit(stiffness_sparsity_pattern);
+        solution.reinit(space_dh->n_dofs());
+        space_rhs.reinit(space_dh->n_dofs());
+      }
 
       double sum = 0.;
       for (const auto &p : cells_and_quads)
@@ -699,7 +790,7 @@ void PoissonDLM<dim, spacedim>::run()
       assemble_system();
       solve();
 
-      // error_table.error_from_exact(space_dh, solution, exact_solution);
+      // error_table.eßrror_from_exact(space_dh, solution, exact_solution);
       output_results(cycle);
 
       if (cycle < n_refinement_cycles - 1)
@@ -731,6 +822,29 @@ int main()
         std::cout << "Solving in 2D/2D" << std::endl;
         PoissonDLM<2> problem;
         problem.run();
+        // Triangulation<2> tria;
+        // GridGenerator::hyper_cube(tria);
+        // tria.refine_global(1);
+        // DoFHandler<2>       dh(tria);
+        // hp::FECollection<2> fe_collection;
+        // FE_Q<2>             fe(1);
+        // fe_collection.push_back(fe);
+        // fe_collection.push_back(FE_Nothing<2>());
+
+        // for (const auto &cell : dh.active_cell_iterators())
+        //   {
+        //     if (cell->active_cell_index() % 2 == 0)
+        //       {
+        //         cell->set_active_fe_index(1);
+        //       }
+        //     else
+        //       {
+        //         cell->set_active_fe_index(0);
+        //       }
+        //   }
+        // dh.distribute_dofs(fe_collection);
+        // std::cout << dh.n_dofs() << std::endl;
+        // std::cout << tria.n_active_cells() << std::endl;
       }
       {
         // std::cout << "Solving in 2D/3D" << std::endl;
