@@ -57,7 +57,7 @@
 #include <fstream>
 #include <iostream>
 
-
+const double R = .45;
 
 using namespace dealii;
 
@@ -96,9 +96,9 @@ double RightHandSide<2>::value(const Point<2> &   p,
   // (void)p;
   (void)component;
   // return 1.;
-  return 8. * numbers::PI * numbers::PI *
-         (std::sin(2. * numbers::PI * p[0]) *
-          std::sin(2. * numbers::PI * p[1]));
+  return 0.; /*8. * numbers::PI *
+                   numbers::PI * (std::sin(2. * numbers::PI * p[0]) *
+                    std::sin(2. * numbers::PI * p[1]));*/
 }
 
 
@@ -152,7 +152,11 @@ template <>
 double Solution<2>::value(const Point<2> &p, const unsigned int component) const
 {
   (void)component;
-  return std::sin(2. * numbers::PI * p[0]) * std::sin(2. * numbers::PI * p[1]);
+  const double r = p.norm();
+  return (r <= R) ?
+           p[0] :
+           ((R * R) / (r * r)) * p[0]; /*std::sin(2. * numbers::PI * p[0]) *
+                                            std::sin(2. * numbers::PI * p[1]);*/
 }
 
 
@@ -358,24 +362,24 @@ void PoissonDLM<dim, spacedim>::setup_grids_and_dofs()
         }
       else if constexpr (dim == 1 && spacedim == 2)
         {
-          GridGenerator::hyper_sphere(embedded_triangulation, {}, 0.45);
-          embedded_triangulation.refine_global(3);
-          space_triangulation.refine_global(6);
+          GridGenerator::hyper_sphere(embedded_triangulation, {}, R);
+          embedded_triangulation.refine_global(2);
+          space_triangulation.refine_global(4);
         }
       else if constexpr (dim == 2 && spacedim == 2)
         {
           GridGenerator::hyper_ball(embedded_triangulation, {}, 0.45, false);
-          embedded_triangulation.refine_global(2);
-          space_triangulation.refine_global(5);
+          embedded_triangulation.refine_global(1);
+          space_triangulation.refine_global(3);
         }
       else if constexpr (dim == 2 && spacedim == 3)
         {
           GridGenerator::hyper_cube(embedded_triangulation, -0.45, .35);
-          embedded_triangulation.refine_global(2);
+          embedded_triangulation.refine_global(1);
           // GridTools::rotate(Tensor<1, 3>({0, 1, 0}),
           //                   numbers::PI_4,
           //                   embedded_triangulation);
-          space_triangulation.refine_global(3);
+          space_triangulation.refine_global(2);
         }
     }
 
@@ -548,7 +552,8 @@ void PoissonDLM<dim, spacedim>::assemble_system()
     NonMatching::create_coupling_mass_matrix(*space_cache,
                                              *space_dh,
                                              *embedded_dh,
-                                             QGauss<dim>(space_fe.degree + 1),
+                                             QGauss<dim>(2 * space_fe.degree +
+                                                         1),
                                              coupling_matrix,
                                              space_constraints,
                                              ComponentMask(),
@@ -724,15 +729,15 @@ int main()
   try
     {
       {
-        // std::cout << "Solving in 1D/2D" << std::endl;
-        // PoissonDLM<1, 2> problem;
-        // problem.run();
-      } {
-        std::cout << "Solving in 2D/2D" << std::endl;
-        PoissonDLM<2> problem;
+        std::cout << "Solving in 1D/2D" << std::endl;
+        PoissonDLM<1, 2> problem;
         problem.run();
       }
       {
+        // std::cout << "Solving in 2D/2D" << std::endl;
+        // PoissonDLM<2> problem;
+        // problem.run();
+      } {
         // std::cout << "Solving in 2D/3D" << std::endl;
         // PoissonDLM<2, 3> problem;
         // problem.run();
