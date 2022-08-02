@@ -232,24 +232,10 @@ private:
   Triangulation<spacedim>      space_triangulation;
   Triangulation<dim, spacedim> embedded_triangulation;
 
-  /**
-   * GridTools::Cache objects are used to cache all the necessary
-   * information about a given triangulation, such as its Mapping, Bounding
-   * Boxes, etc.
-   *
-   */
   std::unique_ptr<GridTools::Cache<spacedim, spacedim>> space_cache;
   std::unique_ptr<GridTools::Cache<dim, spacedim>>      embedded_cache;
 
-  /**
-   * The coupling between the two grids is ultimately encoded in this
-   * vector. Here the i-th entry stores a tuple for which the first two
-   * elements are iterators to two cells from the space and embedded grid,
-   * respectively, that intersect each other (up to a specified tolerance)
-   * and a Quadrature object to integrate over that region.
-   *
-   *
-   */
+
   std::vector<
     std::tuple<typename dealii::Triangulation<spacedim>::cell_iterator,
                typename dealii::Triangulation<dim, spacedim>::cell_iterator,
@@ -259,18 +245,9 @@ private:
 
   FE_Q<spacedim> space_fe;
 
-  /**
-   * The actual DoFHandler class.
-   */
   DoFHandler<spacedim> space_dh;
 
-  /**
-   * According to the Triangulation type, we use a MappingFE or a MappingQ,
-   * to make sure we can run the program both on a tria/tetra grid and on
-   * quad/hex grids.
-   */
   MappingQ1<spacedim> mapping;
-
 
   AffineConstraints<double> space_constraints;
   SparsityPattern           sparsity_pattern;
@@ -312,22 +289,6 @@ private:
 
   mutable ConvergenceTable convergence_table;
 
-
-
-  /**
-   * Choosing as embedded space the square $[-.0.45,0.45]^2$ and as
-   * embedding space the square $[-1,1]^2$, with embedded value the
-   * function $g(x,y)=1$, this is what we get
-   * @image html Poisson_1_interface.png
-   *
-   *
-   * Taking a manufactured smooth solution $u=\sin(2 \pi x) \sin(2 \pi y)$,
-   * classical rates can be observed, as in the following table:
-   * cells dofs   u_L2_norm    u_Linfty_norm    u_H1_norm
-     256  289 5.851e-02    - 8.125e-02    - 2.015e+00    -
-    1024 1089 1.436e-02 2.12 2.160e-02 2.00 1.007e+00 1.05
-    4096 4225 3.605e-03 2.04 5.519e-03 2.01 5.037e-01 1.02
-   */
   mutable DataOut<spacedim> data_out;
 
 
@@ -486,11 +447,7 @@ void PoissonNitscheInterface<dim, spacedim>::assemble_system()
   {
     // TimerOutput::Scope timer_section(timer, "Assemble Nitsche terms");
 
-    // Add the
-    //   Nitsche's contribution to the system matrix. The coefficient that
-    //   multiplies
-    //     the inner product is equal to 2.0,
-    //   and the penalty is set       to 100.0.
+    // Add Nitsche's contribution to the system matrix.
     NonMatching::
       assemble_nitsche_with_exact_intersections<spacedim, dim, spacedim>(
         space_dh,
