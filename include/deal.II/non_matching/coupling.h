@@ -224,6 +224,21 @@ namespace NonMatching
     const AffineConstraints<typename Matrix::value_type> &immersed_constraints =
       AffineConstraints<typename Matrix::value_type>());
 
+  template <int dim0, int dim1, int spacedim>
+  void
+  create_coupling_mass_matrix_nitsche(
+    const GridTools::Cache<dim0, spacedim> &cache,
+    const DoFHandler<dim0, spacedim> &      space_dh,
+    const DoFHandler<dim1, spacedim> &      immersed_dh,
+    const Quadrature<dim1> &                quad,
+    SparseMatrix<double> &                  matrix,
+    Vector<double> &                        rhs_vector,
+    const Function<spacedim, double> &      rhs_function,
+    const Mapping<dim0, spacedim> &         space_mapping,
+    const Mapping<dim1, spacedim> &         immersed_mapping,
+    const AffineConstraints<double> &constraints = AffineConstraints<double>(),
+    const ComponentMask &            space_comps = ComponentMask());
+
   /**
    * Create a coupling sparsity pattern for non-matching independent grids,
    * using a convolution kernel with compact support of radius epsilon.

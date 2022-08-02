@@ -180,7 +180,7 @@ namespace CGALWrappers
     const typename Triangulation<dim1, spacedim>::cell_iterator &cell1,
     const Mapping<dim0, spacedim> &                              mapping0,
     const Mapping<dim1, spacedim> &                              mapping1,
-    const double                                                 tol = 1e-9);
+    const double                                                 tol = 1e-12);
 
 } // namespace CGALWrappers
 

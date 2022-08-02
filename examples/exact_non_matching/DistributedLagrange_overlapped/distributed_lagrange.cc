@@ -19,6 +19,7 @@
 
 #include <deal.II/lac/linear_operator_tools.h>
 
+#include <deal.II/base/function_lib.h>
 #include <deal.II/base/convergence_table.h>
 #include <deal.II/non_matching/quadrature_overlapped_grids.h>
 #include <deal.II/non_matching/coupling.h>
@@ -26,6 +27,7 @@
 #include <deal.II/base/function.h>
 #include <deal.II/base/parameter_acceptor.h>
 #include <deal.II/base/quadrature_lib.h>
+#include <deal.II/lac/solver_gmres.h>
 #include <deal.II/base/timer.h>
 #include <deal.II/lac/sparse_direct.h>
 
@@ -81,10 +83,9 @@ double RightHandSide<3>::value(const Point<3> &   p,
   // (void)p;
   (void)component;
   // return 1.;
-  return 12. * numbers::PI * numbers::PI *
-         (std::sin(2. * numbers::PI * p[0]) *
-          std::sin(2. * numbers::PI * p[1]) *
-          std::sin(2. * numbers::PI * p[2]));
+  return 0.; // 12. * numbers::PI * numbers::PI *
+  //    (std::sin(2. * numbers::PI * p[0]) * std::sin(2. * numbers::PI * p[1]) *
+  //     std::sin(2. * numbers::PI * p[2]));
 }
 
 
@@ -96,9 +97,9 @@ double RightHandSide<2>::value(const Point<2> &   p,
   // (void)p;
   (void)component;
   // return 1.;
-  return 0.; /*8. * numbers::PI *
-                   numbers::PI * (std::sin(2. * numbers::PI * p[0]) *
-                    std::sin(2. * numbers::PI * p[1]));*/
+  return /*0.;*/ 8. * numbers::PI * numbers::PI *
+         (std::sin(2. * numbers::PI * p[0]) *
+          std::sin(2. * numbers::PI * p[1]));
 }
 
 
@@ -142,8 +143,12 @@ template <>
 double Solution<3>::value(const Point<3> &p, const unsigned int component) const
 {
   (void)component;
-  return std::sin(2. * numbers::PI * p[0]) * std::sin(2. * numbers::PI * p[1]) *
-         std::sin(2. * numbers::PI * p[2]);
+  const double r = p.norm();
+  return /*(r <= R) ?
+           p[0] :
+           ((R * R) / (r * r)) * p[0];*/
+    std::sin(2. * numbers::PI * p[0]) * std::sin(2. * numbers::PI * p[1]) *
+    std::sin(2. * numbers::PI * p[2]);
 }
 
 
@@ -153,10 +158,10 @@ double Solution<2>::value(const Point<2> &p, const unsigned int component) const
 {
   (void)component;
   const double r = p.norm();
-  return (r <= R) ?
+  return /*(r <= R) ?
            p[0] :
-           ((R * R) / (r * r)) * p[0]; /*std::sin(2. * numbers::PI * p[0]) *
-                                            std::sin(2. * numbers::PI * p[1]);*/
+           ((R * R) / (r * r)) * p[0];*/
+    std::sin(2. * numbers::PI * p[0]) * std::sin(2. * numbers::PI * p[1]);
 }
 
 
@@ -327,7 +332,7 @@ private:
 
   mutable DataOut<spacedim> data_out;
 
-  unsigned int n_refinement_cycles = 5;
+  unsigned int n_refinement_cycles = 6;
 
   unsigned int delta_refinement_cycles = 2;
 
@@ -363,23 +368,24 @@ void PoissonDLM<dim, spacedim>::setup_grids_and_dofs()
       else if constexpr (dim == 1 && spacedim == 2)
         {
           GridGenerator::hyper_sphere(embedded_triangulation, {}, R);
-          embedded_triangulation.refine_global(2);
-          space_triangulation.refine_global(4);
+          space_triangulation.refine_global(4);    // 4
+          embedded_triangulation.refine_global(2); // 2
         }
       else if constexpr (dim == 2 && spacedim == 2)
         {
-          GridGenerator::hyper_ball(embedded_triangulation, {}, 0.45, false);
-          embedded_triangulation.refine_global(1);
+          // GridGenerator::hyper_ball(embedded_triangulation, {}, 0.45, false);
+          embedded_triangulation.refine_global(2);
           space_triangulation.refine_global(3);
         }
       else if constexpr (dim == 2 && spacedim == 3)
         {
-          GridGenerator::hyper_cube(embedded_triangulation, -0.45, .35);
-          embedded_triangulation.refine_global(1);
+          // GridGenerator::hyper_cube(embedded_triangulation, -0.45, .35);
+          GridGenerator::hyper_sphere(embedded_triangulation, {}, R);
+          embedded_triangulation.refine_global(2);
           // GridTools::rotate(Tensor<1, 3>({0, 1, 0}),
           //                   numbers::PI_4,
           //                   embedded_triangulation);
-          space_triangulation.refine_global(2);
+          space_triangulation.refine_global(3);
         }
     }
 
@@ -390,8 +396,27 @@ void PoissonDLM<dim, spacedim>::setup_grids_and_dofs()
 
   setup_embedded_dofs();
 
-  adjust_grids();
+  // adjust_grids();
+  const double embedded_space_maximal_diameter =
+    GridTools::maximal_cell_diameter(embedded_triangulation, embedded_mapping);
+  double embedding_space_minimal_diameter =
+    GridTools::minimal_cell_diameter(space_triangulation, space_mapping);
 
+  std::cout << "Embedding minimal diameter: "
+            << embedding_space_minimal_diameter
+            << ", embedded maximal diameter: "
+            << embedded_space_maximal_diameter << ", ratio: "
+            << embedded_space_maximal_diameter /
+                 embedding_space_minimal_diameter
+            << std::endl;
+
+  // AssertThrow(embedded_space_maximal_diameter <
+  //               embedding_space_minimal_diameter,
+  //             ExcMessage(
+  //               "The embedding grid is too refined (or the embedded grid "
+  //               "is too coarse). Adjust the parameters so that the minimal "
+  //               "grid size of the embedding grid is larger "
+  //               "than the maximal grid size of the embedded grid."));
   setup_space_dofs();
 
   // We create unique pointers to cached triangulations. This This objects
@@ -404,19 +429,21 @@ void PoissonDLM<dim, spacedim>::setup_grids_and_dofs()
 template <int dim, int spacedim>
 void PoissonDLM<dim, spacedim>::adjust_grids()
 {
-  // for (unsigned int i = 0; i < delta_refinement_cycles; ++i)
-  //   {
-  //     const auto &tree =
-  //       space_cache->get_locally_owned_cell_bounding_boxes_rtree();
+  namespace bgi = boost::geometry::index;
+  for (unsigned int i = 0; i < delta_refinement_cycles; ++i)
+    {
+      const auto &tree =
+        space_cache->get_locally_owned_cell_bounding_boxes_rtree();
 
-  //     const auto &embedded_tree =
-  //       embedded_cache->get_cell_bounding_boxes_rtree();
+      const auto &embedded_tree =
+        embedded_cache->get_cell_bounding_boxes_rtree();
 
-  //     for (const auto &[embedded_box, embedded_cell] : embedded_tree)
-  //       for (const auto &[space_box, space_cell] :
-  //            tree | bgi::adaptors::queried(bgi::intersects(embedded_box)))
-  //         space_cell->set_refine_flag();
-  //     space_tria.execute_coarsening_and_refinement();
+      for (const auto &[embedded_box, embedded_cell] : embedded_tree)
+        for (const auto &[space_box, space_cell] :
+             tree | bgi::adaptors::queried(bgi::intersects(embedded_box)))
+          space_cell->set_refine_flag();
+      space_triangulation.execute_coarsening_and_refinement();
+    }
 }
 
 
@@ -471,15 +498,46 @@ void PoissonDLM<dim, spacedim>::setup_coupling()
 
   DynamicSparsityPattern dsp(space_dh->n_dofs(), embedded_dh->n_dofs());
 
-  NonMatching::create_coupling_sparsity_pattern_with_exact_intersections(
-    cells_and_quads,
-    *space_dh,
-    *embedded_dh,
-    dsp,
-    space_constraints,
-    ComponentMask(),
-    ComponentMask(),
-    embedded_constraints);
+  const double epsilon =
+    2 * std::max(GridTools::maximal_cell_diameter(space_triangulation),
+                 GridTools::maximal_cell_diameter(embedded_triangulation));
+  std::cout << "Epsilon: " << epsilon << std::endl;
+  // NonMatching::create_coupling_sparsity_pattern(R,
+  //                                               *space_cache,
+  //                                               *embedded_cache,
+  //                                               /*    cells_and_quads,*/
+  //                                               *space_dh,
+  //                                               *embedded_dh,
+  //                                               quad,
+  //                                               dsp,
+  //                                               space_constraints,
+  //                                               ComponentMask(),
+  //                                               ComponentMask());
+
+
+  // NonMatching::create_coupling_sparsity_pattern_with_exact_intersections(
+  //   cells_and_quads,
+  //   *space_dh,
+  //   *embedded_dh,
+  //   dsp,
+  //   space_constraints,
+  //   ComponentMask(),
+  //   ComponentMask(),
+  //   embedded_constraints);
+
+
+
+  NonMatching::create_coupling_sparsity_pattern(0.,
+                                                *space_cache,
+                                                *embedded_cache,
+                                                *space_dh,
+                                                *embedded_dh,
+                                                QGauss<dim>(
+                                                  2 * space_fe.degree + 1),
+                                                dsp,
+                                                space_constraints);
+
+
 
   coupling_sparsity_pattern.copy_from(dsp);
   coupling_matrix.reinit(coupling_sparsity_pattern);
@@ -547,19 +605,40 @@ void PoissonDLM<dim, spacedim>::assemble_system()
 
   std::cout << "Assemble coupling term" << std::endl;
   {
-    // TimerOutput::Scope timer_section(timer, "Assemble Nitsche terms");
+    const double epsilon =
+      2 * std::max(GridTools::maximal_cell_diameter(space_triangulation),
+                   GridTools::maximal_cell_diameter(embedded_triangulation));
 
-    NonMatching::create_coupling_mass_matrix(*space_cache,
-                                             *space_dh,
-                                             *embedded_dh,
-                                             QGauss<dim>(2 * space_fe.degree +
-                                                         1),
-                                             coupling_matrix,
-                                             space_constraints,
-                                             ComponentMask(),
-                                             ComponentMask(),
-                                             embedded_mapping,
-                                             embedded_constraints);
+    Functions::CutOffFunctionC1<spacedim> dirac(
+      1,
+      Point<spacedim>(),
+      1,
+      Functions::CutOffFunctionBase<spacedim>::no_component,
+      true);
+    // TimerOutput::Scope timer_section(timer, "Assemble Nitsche terms");
+    // NonMatching::create_coupling_mass_matrix(
+    //   dirac,
+    //   R,
+    //   *space_cache,
+    //   *embedded_cache,
+    //   *space_dh,
+    //   *embedded_dh,
+    //   QGauss<spacedim>(space_fe.degree + 1),
+    //   QGauss<dim>(embedded_fe.degree + 1),
+    //   coupling_matrix,
+    //   space_constraints);
+    // NonMatching::create_coupling_mass_matrix(*space_dh,
+    //                                          *embedded_dh,
+    //                                          QGauss<dim>(2 * space_fe.degree
+    //                                          +
+    //                                                      1),
+    //                                          coupling_matrix,
+    //                                          space_constraints,
+    //                                          ComponentMask(),
+    //                                          ComponentMask(),
+    //                                          space_mapping,
+    //                                          embedded_mapping,
+    //                                          embedded_constraints);
 
     // Coupling mass matrix
     // NonMatching::create_coupling_mass_matrix_with_exact_intersections(
@@ -573,6 +652,19 @@ void PoissonDLM<dim, spacedim>::assemble_system()
     //   space_mapping,
     //   embedded_mapping,
     //   embedded_constraints);
+
+    // Coupling with convolution kernel
+    NonMatching::create_coupling_mass_matrix(
+      dirac,
+      0.,
+      *space_cache,
+      *embedded_cache,
+      *space_dh,
+      *embedded_dh,
+      QGauss<spacedim>(2 * space_fe.degree + 1),
+      QGauss<dim>(2 * space_fe.degree + 1),
+      coupling_matrix,
+      space_constraints);
   }
 }
 
@@ -593,13 +685,17 @@ void PoissonDLM<dim, spacedim>::solve()
 
   auto K_inv = linear_operator(K, K_inv_umfpack);
 
-  auto                     S = C * K_inv * Ct;
-  ReductionControl         reduction_control(2000, 1.0e-12, 1.0e-10);
-  SolverCG<Vector<double>> solver_cg(reduction_control);
+  auto             S = C * K_inv * Ct;
+  ReductionControl reduction_control(2000, 1.0e-12, 1.0e-10);
+  // SolverCG<Vector<double>> solver_cg(reduction_control);
+  SolverGMRES<Vector<double>> solver_cg(reduction_control);
   auto S_inv = inverse_operator(S, solver_cg, PreconditionIdentity());
 
   lambda   = S_inv * (C * K_inv * space_rhs - embedded_rhs);
   solution = K_inv * (space_rhs - Ct * lambda);
+
+  std::cout << "Solved in : " << reduction_control.last_step() << "iterations."
+            << std::endl;
 
   space_constraints.distribute(solution);
 }
@@ -698,7 +794,9 @@ void PoissonDLM<dim, spacedim>::run()
                                  quad.get_weights().end(),
                                  0.);
         }
-      std::cout << "Area/Measure: " << sum << std::endl;
+      std::cout << "Area/Measure: "
+                << (sum - GridTools::volume(embedded_triangulation))
+                << std::endl;
 
       setup_coupling();
       assemble_system();
@@ -706,9 +804,11 @@ void PoissonDLM<dim, spacedim>::run()
 
       // error_table.error_from_exact(space_dh, solution, exact_solution);
       output_results(cycle);
-
+      // cells_and_quads.clear();
       if (cycle < n_refinement_cycles - 1)
         space_triangulation.refine_global(1);
+      cells_and_quads.clear();
+      // embedded_triangulation.refine_global(1);
     }
 
   convergence_table.set_precision("L2", 3);

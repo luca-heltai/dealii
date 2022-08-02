@@ -20,6 +20,7 @@
 #include <deal.II/distributed/shared_tria.h>
 #include <deal.II/distributed/tria.h>
 
+#include <deal.II/fe/fe_q.h>
 #include <deal.II/fe/fe_values.h>
 
 #include <deal.II/grid/filtered_iterator.h>
@@ -558,7 +559,9 @@ namespace NonMatching
     for (unsigned int j = 0; cell != endc; ++cell, ++j)
       {
         // Reinitialize the cell and the fe_values
+        // std::cout << "Prima reinit()" << std::endl;
         fe_v.reinit(cell);
+        // std::cout << "reinit() fatto" << std::endl;
         cell->get_dof_indices(dofs);
 
         // Get a list of outer cells, qpoints and maps.
@@ -624,6 +627,258 @@ namespace NonMatching
       }
   }
 
+
+
+  template <int dim0, int dim1, int spacedim>
+  void
+  create_coupling_mass_matrix_nitsche(
+    const GridTools::Cache<dim0, spacedim> &cache,
+    const DoFHandler<dim0, spacedim> &      space_dh,
+    const DoFHandler<dim1, spacedim> &      immersed_dh,
+    const Quadrature<dim1> &                quad,
+    SparseMatrix<double> &                  matrix,
+    Vector<double> &                        rhs_vector,
+    const Function<spacedim, double> &      rhs_function,
+    const Mapping<dim0, spacedim> &         space_mapping,
+    const Mapping<dim1, spacedim> &         immersed_mapping,
+    const AffineConstraints<double> &       constraints,
+    const ComponentMask &                   space_comps)
+  {
+    AssertDimension(matrix.m(), space_dh.n_dofs());
+    AssertDimension(matrix.n(), space_dh.n_dofs());
+    Assert(dim1 <= dim0,
+           ExcMessage("This function can only work if dim1 <= dim0"));
+    Assert((dynamic_cast<
+              const parallel::distributed::Triangulation<dim1, spacedim> *>(
+              &space_dh.get_triangulation()) == nullptr),
+           ExcNotImplemented());
+
+    const bool tria_is_parallel =
+      (dynamic_cast<const parallel::TriangulationBase<dim1, spacedim> *>(
+         &space_dh.get_triangulation()) != nullptr);
+
+    const auto &space_fe    = space_dh.get_fe();
+    const auto &immersed_fe = space_dh.get_fe();
+
+    // Dof indices
+    std::vector<types::global_dof_index> dofs(
+      immersed_dh.get_fe().n_dofs_per_cell());
+    std::vector<types::global_dof_index> odofs(space_fe.n_dofs_per_cell());
+
+    // Take care of components
+    const ComponentMask space_c =
+      (space_comps.size() == 0 ? ComponentMask(space_fe.n_components(), true) :
+                                 space_comps);
+
+    const ComponentMask immersed_c =
+      (space_comps.size() == 0 ?
+         ComponentMask(immersed_fe.n_components(), true) :
+         space_comps);
+
+    AssertDimension(space_c.size(), space_fe.n_components());
+    AssertDimension(immersed_c.size(), immersed_fe.n_components());
+
+    std::vector<unsigned int> space_gtl(space_fe.n_components(),
+                                        numbers::invalid_unsigned_int);
+    std::vector<unsigned int> immersed_gtl(immersed_fe.n_components(),
+                                           numbers::invalid_unsigned_int);
+
+    for (unsigned int i = 0, j = 0; i < space_gtl.size(); ++i)
+      if (space_c[i])
+        space_gtl[i] = j++;
+
+    for (unsigned int i = 0, j = 0; i < immersed_gtl.size(); ++i)
+      if (immersed_c[i])
+        immersed_gtl[i] = j++;
+
+    FullMatrix<double> cell_matrix(space_dh.get_fe().n_dofs_per_cell(),
+                                   space_dh.get_fe().n_dofs_per_cell());
+    Vector<double>     local_rhs(space_dh.get_fe().n_dofs_per_cell());
+
+
+    // FE_Q<dim1, spacedim>     my_fe(1);
+    FEValues<dim1, spacedim> fe_v(immersed_mapping,
+                                  immersed_dh.get_fe(),
+                                  quad,
+                                  update_JxW_values | update_quadrature_points |
+                                    update_values);
+
+    const unsigned int n_q_points = quad.size();
+    const unsigned int n_active_c =
+      space_dh.get_triangulation().n_active_cells();
+
+    const auto used_cells_data = internal::qpoints_over_locally_owned_cells(
+      cache, immersed_dh, quad, immersed_mapping, tria_is_parallel);
+
+    const auto &points_over_local_cells = std::get<0>(used_cells_data);
+    const auto &used_cells_ids          = std::get<1>(used_cells_data);
+
+    // Get a list of outer cells, qpoints and maps.
+    const auto cpm =
+      GridTools::compute_point_locations(cache, points_over_local_cells);
+    const auto &all_cells   = std::get<0>(cpm);
+    const auto &all_qpoints = std::get<1>(cpm);
+    const auto &all_maps    = std::get<2>(cpm);
+
+    std::vector<
+      std::vector<typename Triangulation<dim0, spacedim>::active_cell_iterator>>
+      cell_container(n_active_c);
+    std::vector<std::vector<std::vector<Point<dim0>>>> qpoints_container(
+      n_active_c);
+    std::vector<std::vector<std::vector<unsigned int>>> maps_container(
+      n_active_c);
+
+    // Cycle over all cells of underling mesh found
+    // call it omesh, elaborating the output
+    for (unsigned int o = 0; o < all_cells.size(); ++o)
+      {
+        for (unsigned int j = 0; j < all_maps[o].size(); ++j)
+          {
+            // Find the index of the "owner" cell and qpoint
+            // with regard to the immersed mesh
+            // Find in which cell of immersed triangulation the point lies
+            unsigned int cell_id;
+            if (tria_is_parallel)
+              cell_id = used_cells_ids[all_maps[o][j] / n_q_points];
+            else
+              cell_id = all_maps[o][j] / n_q_points;
+
+            const unsigned int n_pt = all_maps[o][j] % n_q_points;
+
+            // If there are no cells, we just add our data
+            if (cell_container[cell_id].empty())
+              {
+                cell_container[cell_id].emplace_back(all_cells[o]);
+                qpoints_container[cell_id].emplace_back(
+                  std::vector<Point<dim0>>{all_qpoints[o][j]});
+                maps_container[cell_id].emplace_back(
+                  std::vector<unsigned int>{n_pt});
+              }
+            // If there are already cells, we begin by looking
+            // at the last inserted cell, which is more likely:
+            else if (cell_container[cell_id].back() == all_cells[o])
+              {
+                qpoints_container[cell_id].back().emplace_back(
+                  all_qpoints[o][j]);
+                maps_container[cell_id].back().emplace_back(n_pt);
+              }
+            else
+              {
+                // We don't need to check the last element
+                const auto cell_p = std::find(cell_container[cell_id].begin(),
+                                              cell_container[cell_id].end() - 1,
+                                              all_cells[o]);
+
+                if (cell_p == cell_container[cell_id].end() - 1)
+                  {
+                    cell_container[cell_id].emplace_back(all_cells[o]);
+                    qpoints_container[cell_id].emplace_back(
+                      std::vector<Point<dim0>>{all_qpoints[o][j]});
+                    maps_container[cell_id].emplace_back(
+                      std::vector<unsigned int>{n_pt});
+                  }
+                else
+                  {
+                    const unsigned int pos =
+                      cell_p - cell_container[cell_id].begin();
+                    qpoints_container[cell_id][pos].emplace_back(
+                      all_qpoints[o][j]);
+                    maps_container[cell_id][pos].emplace_back(n_pt);
+                  }
+              }
+          }
+      }
+
+    typename DoFHandler<dim1, spacedim>::active_cell_iterator
+      cell = immersed_dh.begin_active(),
+      endc = immersed_dh.end();
+
+    for (unsigned int j = 0; cell != endc; ++cell, ++j)
+      {
+        // Reinitialize the cell and the fe_values
+        // std::cout << "Prima reinit" << std::endl;
+        fe_v.reinit(cell);
+        // std::cout << "Dopo reinit" << std::endl;
+        cell->get_dof_indices(dofs);
+
+        // Get a list of outer cells, qpoints and maps.
+        const auto &cells   = cell_container[j];
+        const auto &qpoints = qpoints_container[j];
+        const auto &maps    = maps_container[j];
+
+        for (unsigned int c = 0; c < cells.size(); ++c)
+          {
+            // Get the ones in the current outer cell
+            typename DoFHandler<dim0, spacedim>::active_cell_iterator ocell(
+              *cells[c], &space_dh);
+            // Make sure we act only on locally_owned cells
+            if (ocell->is_locally_owned())
+              {
+                const std::vector<Point<dim0>> & qps = qpoints[c];
+                const std::vector<unsigned int> &ids = maps[c];
+
+                FEValues<dim0, spacedim> o_fe_v(cache.get_mapping(),
+                                                space_dh.get_fe(),
+                                                qps,
+                                                update_values);
+                o_fe_v.reinit(ocell);
+                ocell->get_dof_indices(odofs);
+
+                // Reset the matrices.
+                cell_matrix = 0.;
+                local_rhs   = 0.;
+                for (unsigned int i = 0;
+                     i < space_dh.get_fe().n_dofs_per_cell();
+                     ++i)
+                  {
+                    const auto comp_i =
+                      space_dh.get_fe().system_to_component_index(i).first;
+                    if (space_gtl[comp_i] != numbers::invalid_unsigned_int)
+                      {
+                        for (unsigned int oq = 0;
+                             oq < o_fe_v.n_quadrature_points;
+                             ++oq)
+                          {
+                            // Get the corresponding q point
+                            const unsigned int q = ids[oq];
+
+                            local_rhs(i) +=
+                              rhs_function.value(fe_v.quadrature_point(q)) *
+                              2. * (100. / ocell->diameter()) *
+                              o_fe_v.shape_value(i, oq) * fe_v.JxW(q);
+                          }
+                        for (unsigned int j = 0;
+                             j < space_dh.get_fe().n_dofs_per_cell();
+                             ++j)
+                          {
+                            const auto comp_j = space_dh.get_fe()
+                                                  .system_to_component_index(j)
+                                                  .first;
+                            if (space_gtl[comp_i] == immersed_gtl[comp_j])
+                              for (unsigned int oq = 0;
+                                   oq < o_fe_v.n_quadrature_points;
+                                   ++oq)
+                                {
+                                  // Get the corresponding q point
+                                  const unsigned int q = ids[oq];
+
+                                  cell_matrix(i, j) +=
+                                    2. * (100. / ocell->diameter()) *
+                                    o_fe_v.shape_value(j, oq) *
+                                    o_fe_v.shape_value(i, oq) * fe_v.JxW(q);
+                                }
+                          }
+                      }
+                  }
+
+                // Now assemble the matrices
+                constraints.distribute_local_to_global(
+                  cell_matrix, local_rhs, odofs, matrix, rhs_vector);
+              }
+          }
+      }
+  }
+
   template <int dim0,
             int dim1,
             int spacedim,
@@ -636,11 +891,12 @@ namespace NonMatching
     const GridTools::Cache<dim1, spacedim> &cache1,
     const DoFHandler<dim0, spacedim> &      dh0,
     const DoFHandler<dim1, spacedim> &      dh1,
-    const Quadrature<dim1> &                quad,
-    Sparsity &                              sparsity,
-    const AffineConstraints<Number> &       constraints0,
-    const ComponentMask &                   comps0,
-    const ComponentMask &                   comps1)
+
+    const Quadrature<dim1> &         quad,
+    Sparsity &                       sparsity,
+    const AffineConstraints<Number> &constraints0,
+    const ComponentMask &            comps0,
+    const ComponentMask &            comps1)
   {
     if (epsilon == 0.0)
       {
@@ -1227,11 +1483,11 @@ namespace NonMatching
     for (const auto &infos : cells_and_quads)
       {
         const auto &[space_cell, embedded_cell, quad_formula] = infos;
-        std::cout << "Space cell: " << space_cell->active_cell_index()
-                  << std::endl;
-        std::cout << "Immersed cell: " << embedded_cell->active_cell_index()
-                  << "on the boundary? " << embedded_cell->at_boundary()
-                  << std::endl;
+        // std::cout << "Space cell: " << space_cell->active_cell_index()
+        //           << std::endl;
+        // std::cout << "Immersed cell: " << embedded_cell->active_cell_index()
+        //           << "on the boundary? " << embedded_cell->at_boundary()
+        //           << std::endl;
 
 
         local_cell_matrix = typename Matrix::value_type();
@@ -1263,13 +1519,13 @@ namespace NonMatching
           }
         // }
 
-        std::cout << "Show unit points embedded" << std::endl;
-        for (const auto &p : ref_pts_immersed)
-          std::cout << p << std::endl;
+        // std::cout << "Show unit points embedded" << std::endl;
+        // for (const auto &p : ref_pts_immersed)
+        //   std::cout << p << std::endl;
 
-        std::cout << "Immersed indietro fatto" << std::endl;
+        // std::cout << "Immersed indietro fatto" << std::endl;
         const auto &JxW = quad_formula.get_weights();
-        std::cout << "Jacobiani presi con size:" << JxW.size() << std::endl;
+        // std::cout << "Jacobiani presi con size:" << JxW.size() << std::endl;
         for (unsigned int q = 0; q < n_quad_pts; ++q)
           {
             for (unsigned int i = 0; i < n_dofs_per_space_cell; ++i)
@@ -1295,25 +1551,25 @@ namespace NonMatching
                   }
               }
           }
-        std::cout << "Assemblato" << std::endl;
+        // std::cout << "Assemblato" << std::endl;
         typename DoFHandler<dim0, spacedim>::cell_iterator space_cell_dh(
           *space_cell, &space_dh);
-        std::cout << "DoFHandler space fatto" << std::endl;
+        // std::cout << "DoFHandler space fatto" << std::endl;
         typename DoFHandler<dim1, spacedim>::cell_iterator immersed_cell_dh(
           *embedded_cell, &immersed_dh);
-        std::cout << "DoFHandler immerso fatto" << std::endl;
+        // std::cout << "DoFHandler immerso fatto" << std::endl;
 
 
         space_cell_dh->get_dof_indices(local_space_dof_indices);
         immersed_cell_dh->get_dof_indices(local_immersed_dof_indices);
 
-        std::cout << "DoFIndices fatti" << std::endl;
+        // std::cout << "DoFIndices fatti" << std::endl;
         space_constraints.distribute_local_to_global(local_cell_matrix,
                                                      local_space_dof_indices,
                                                      immersed_constraints,
                                                      local_immersed_dof_indices,
                                                      matrix);
-        std::cout << "Distribuiti" << std::endl;
+        // std::cout << "Distribuiti" << std::endl;
       }
     matrix.compress(VectorOperation::add);
 #else
@@ -1545,6 +1801,19 @@ namespace NonMatching
 
 #ifndef DOXYGEN
 #  include "coupling.inst"
+  template void
+  create_coupling_mass_matrix_nitsche<2, 1, 2>(
+    const GridTools::Cache<2, 2> &   cache,
+    const DoFHandler<2, 2> &         space_dh,
+    const DoFHandler<1, 2> &         immersed_dh,
+    const Quadrature<1> &            quad,
+    SparseMatrix<double> &           matrix,
+    Vector<double> &                 rhs_vector,
+    const Function<2, double> &      rhs_function,
+    const Mapping<2, 2> &            space_mapping,
+    const Mapping<1, 2> &            immersed_mapping,
+    const AffineConstraints<double> &constraints,
+    const ComponentMask &            space_comps);
 #endif
 } // namespace NonMatching
 
