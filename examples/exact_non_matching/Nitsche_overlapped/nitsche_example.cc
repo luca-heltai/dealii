@@ -152,7 +152,8 @@ double Solution<2>::value(const Point<2> &p, const unsigned int component) const
   (void)component;
   const double r = p.norm();
   return (r <= R) ? p[0] : ((R * R) / (r * r)) * p[0];
-  // std::sin(2. * numbers::PI * p[0]) * std::sin(2. * numbers::PI * p[1]);
+  // return std::sin(2. * numbers::PI * p[0]) * std::sin(2. * numbers::PI *
+  // p[1]);
 }
 
 
@@ -188,10 +189,9 @@ Tensor<1, 2> Solution<2>::gradient(const Point<2> &   p,
 
   Tensor<1, 2> gradient;
   gradient[0] =
-    (r <= R) ? 1. : (R * p[0] * p[0]) / (std::pow(p.norm_square(), 1.5));
+    (r <= R) ? 1. : -(R * R * (p[0] * p[0] - p[1] * p[1])) / (r * r * r * r);
 
-  gradient[1] =
-    (r <= R) ? 0. : (R * p[0] * p[1]) / (std::pow(p.norm_square(), 1.5));
+  gradient[1] = (r <= R) ? 0. : -(2. * R * R * p[0] * p[1]) / (r * r * r * r);
   return gradient;
   // gradient[0] =
   //   std::cos(2. * numbers ::PI * p[0]) * std::sin(2. * numbers::PI * p[1]);
@@ -285,7 +285,7 @@ private:
 
   // BoundaryConditions<spacedim> boundary_conditions;
 
-  // mutable TimerOutput timer;
+  mutable TimerOutput timer;
 
   mutable ConvergenceTable convergence_table;
 
@@ -299,7 +299,7 @@ private:
 
   double penalty = 10.0;
 
-  unsigned int n_refinement_cycles = 5;
+  unsigned int n_refinement_cycles = 7;
 };
 
 
@@ -308,13 +308,14 @@ template <int dim, int spacedim>
 PoissonNitscheInterface<dim, spacedim>::PoissonNitscheInterface()
   : space_fe(1)
   , space_dh(space_triangulation)
+  , timer(std::cout, TimerOutput::summary, TimerOutput::cpu_and_wall_times)
 {}
 
 
 template <int dim, int spacedim>
 void PoissonNitscheInterface<dim, spacedim>::generate_grids()
 {
-  // TimerOutput::Scope timer_section(timer, "Generate grids");
+  TimerOutput::Scope timer_section(timer, "Generate grids");
 
   GridGenerator::hyper_cube(space_triangulation, -1., 1.);
 
@@ -328,7 +329,7 @@ void PoissonNitscheInterface<dim, spacedim>::generate_grids()
   else if constexpr (dim == 1 && spacedim == 2)
     {
       GridGenerator::hyper_sphere(embedded_triangulation, {}, R);
-      embedded_triangulation.refine_global(2); // 5
+      embedded_triangulation.refine_global(5); // 5
       space_triangulation.refine_global(2);    // 2
     }
   else if constexpr (dim == 2 && spacedim == 2)
@@ -360,8 +361,8 @@ void PoissonNitscheInterface<dim, spacedim>::generate_grids()
 template <int dim, int spacedim>
 void PoissonNitscheInterface<dim, spacedim>::setup_system()
 {
-  // TimerOutput::Scope timer_section(timer, "Setup system");
-  std::cout << "System setup" << std::endl;
+  TimerOutput::Scope timer_section(timer, "Setup system");
+  // std::cout << "System setup" << std::endl;
 
 
   // We propagate the information about the constants to all functions of
@@ -397,8 +398,8 @@ template <int dim, int spacedim>
 void PoissonNitscheInterface<dim, spacedim>::assemble_system()
 {
   {
-    // TimerOutput::Scope timer_section(timer, "Assemble system");
-    std::cout << "Assemble system" << std::endl;
+    TimerOutput::Scope timer_section(timer, "Assemble system");
+    // std::cout << "Assemble system" << std::endl;
 
 
     QGauss<spacedim>             quadrature_formula(2 * space_fe.degree + 1);
@@ -445,55 +446,53 @@ void PoissonNitscheInterface<dim, spacedim>::assemble_system()
 
   std::cout << "Assemble Nitsche contributions" << std::endl;
   {
-    // TimerOutput::Scope timer_section(timer, "Assemble Nitsche terms");
+    TimerOutput::Scope timer_section(timer, "Assemble Nitsche terms");
 
-    // Add Nitsche's contribution to the system matrix.
-    NonMatching::
-      assemble_nitsche_with_exact_intersections<spacedim, dim, spacedim>(
-        space_dh,
-        cells_and_quads,
-        system_matrix,
-        space_constraints,
-        ComponentMask(),
-        MappingQ1<spacedim, spacedim>(),
-        Functions::ConstantFunction<spacedim>(2.0),
-        penalty);
+    // // Add Nitsche's contribution to the system matrix.
+    // NonMatching::
+    //   assemble_nitsche_with_exact_intersections<spacedim, dim, spacedim>(
+    //     space_dh,
+    //     cells_and_quads,
+    //     system_matrix,
+    //     space_constraints,
+    //     ComponentMask(),
+    //     MappingQ1<spacedim, spacedim>(),
+    //     Functions::ConstantFunction<spacedim>(2.0),
+    //     penalty);
 
-    // Add the Nitsche's contribution to the rhs. The embedded value is
-    // parsed from the parameter file, while we have again the constant 2.0
-    // in front of that term, parsed as above from command line. Finally, we
-    // have the penalty parameter as before.
-    NonMatching::
-      create_nitsche_rhs_with_exact_intersections<spacedim, dim, spacedim>(
-        space_dh,
-        cells_and_quads,
-        system_rhs,
-        space_constraints,
-        MappingQ1<spacedim>(),
-        Solution<spacedim>(),
-        Functions::ConstantFunction<spacedim>(2.0),
-        penalty);
-
-
-    // FE_Q<dim, spacedim>       embedded_fe(1);
-    // DoFHandler<dim, spacedim> embedded_dh(embedded_triangulation);
-    // embedded_dh.distribute_dofs(embedded_fe);
+    // // Add the Nitsche's contribution to the rhs. The embedded value is
+    // // parsed from the parameter file, while we have again the constant 2.0
+    // // in front of that term, parsed as above from command line. Finally, we
+    // // have the penalty parameter as before.
+    // NonMatching::
+    //   create_nitsche_rhs_with_exact_intersections<spacedim, dim, spacedim>(
+    //     space_dh,
+    //     cells_and_quads,
+    //     system_rhs,
+    //     space_constraints,
+    //     MappingQ1<spacedim>(),
+    //     Solution<spacedim>(),
+    //     Functions::ConstantFunction<spacedim>(2.0),
+    //     penalty);
 
 
+    FE_Q<dim, spacedim>       embedded_fe(1);
+    DoFHandler<dim, spacedim> embedded_dh(embedded_triangulation);
+    embedded_dh.distribute_dofs(embedded_fe);
 
-    // NonMatching::create_coupling_mass_matrix_nitsche(*space_cache,
-    //                                                  space_dh,
-    //                                                  embedded_dh,
-    //                                                  QGauss<dim>(
-    //                                                    2 * space_fe.degree +
-    //                                                    1),
-    //                                                  system_matrix,
-    //                                                  system_rhs,
-    //                                                  Solution<spacedim>(),
-    //                                                  mapping,
-    //                                                  MappingQ1<dim,
-    //                                                  spacedim>(),
-    //                                                  space_constraints);
+
+
+    NonMatching::create_coupling_mass_matrix_nitsche(*space_cache,
+                                                     space_dh,
+                                                     embedded_dh,
+                                                     QGauss<dim>(
+                                                       2 * space_fe.degree + 1),
+                                                     system_matrix,
+                                                     system_rhs,
+                                                     Solution<spacedim>(),
+                                                     mapping,
+                                                     MappingQ1<dim, spacedim>(),
+                                                     space_constraints);
   }
 }
 
@@ -502,8 +501,8 @@ void PoissonNitscheInterface<dim, spacedim>::assemble_system()
 template <int dim, int spacedim>
 void PoissonNitscheInterface<dim, spacedim>::solve()
 {
-  // TimerOutput::Scope timer_section(timer, "Solve system");
-  std::cout << "Solve system" << std::endl;
+  TimerOutput::Scope timer_section(timer, "Solve system");
+  // std::cout << "Solve system" << std::endl;
 
   PreconditionJacobi<SparseMatrix<double>> preconditioner;
   preconditioner.initialize(system_matrix);
@@ -528,8 +527,8 @@ template <int dim, int spacedim>
 void PoissonNitscheInterface<dim, spacedim>::output_results(
   const unsigned cycle) const
 {
-  // TimerOutput::Scope timer_section(timer, "Output results");
-  std::cout << "Output results" << std::endl;
+  TimerOutput::Scope timer_section(timer, "Output results");
+  // std::cout << "Output results" << std::endl;
   data_out.clear();
   data_out.attach_dof_handler(space_dh);
   data_out.add_data_vector(solution, "solution");
@@ -594,34 +593,41 @@ void PoissonNitscheInterface<dim, spacedim>::run()
     {
       std::cout << "Cycle: " << cycle << std::endl;
 
-      // HCompute all the things we need to assemble the Nitsche's
+      // Compute all the things we need to assemble the Nitsche's
       // contributions, namely the two cached triangulations and a degree to
       // integrate over the intersections.
-      std::cout << "Start collecting quadratures" << std::endl;
-      cells_and_quads = NonMatching::collect_quadratures_on_overlapped_grids(
-        *space_cache, *embedded_cache, 2 * space_fe.degree + 1);
-      std::cout << "Collected quadratures" << std::endl;
+      {
+        TimerOutput::Scope timer_section(timer,
+                                         "Total time cycle " +
+                                           std::to_string(cycle));
+        std::cout << "Start collecting quadratures" << std::endl;
+        cells_and_quads = NonMatching::collect_quadratures_on_overlapped_grids(
+          *space_cache, *embedded_cache, 2 * space_fe.degree + 1);
+        std::cout << "Collected quadratures" << std::endl;
 
-      double sum = 0.;
-      for (const auto &p : cells_and_quads)
-        {
-          auto quad = std::get<2>(p);
-          sum += std::accumulate(quad.get_weights().begin(),
-                                 quad.get_weights().end(),
-                                 0.);
-        }
-      std::cout << "Area/Measure: " << sum << std::endl;
+        double sum = 0.;
+        for (const auto &p : cells_and_quads)
+          {
+            auto quad = std::get<2>(p);
+            sum += std::accumulate(quad.get_weights().begin(),
+                                   quad.get_weights().end(),
+                                   0.);
+          }
+        std::cout << "Area/Measure: " << sum << std::endl;
 
-      setup_system();
-      assemble_system();
-      solve();
+        setup_system();
+        assemble_system();
+        solve();
+      }
 
       // error_table.error_from_exact(space_dh, solution, exact_solution);
       output_results(cycle);
 
       if (cycle < n_refinement_cycles - 1)
-        space_triangulation.refine_global(1);
-      embedded_triangulation.refine_global(1);
+        {
+          space_triangulation.refine_global(1);
+          // embedded_triangulation.refine_global(1);
+        }
       cells_and_quads.clear();
     }
 

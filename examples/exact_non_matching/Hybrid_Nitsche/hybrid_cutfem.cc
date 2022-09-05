@@ -29,6 +29,7 @@
 #include <deal.II/fe/fe_system.h>
 #include <deal.II/fe/fe_update_flags.h>
 #include <deal.II/fe/fe_values.h>
+#include <deal.II/hp/fe_values.h>
 #include <deal.II/hp/q_collection.h>
 
 #include <deal.II/grid/filtered_iterator.h>
@@ -37,12 +38,12 @@
 
 #include <deal.II/hp/fe_collection.h>
 #include <deal.II/hp/q_collection.h>
+#include <deal.II/base/timer.h>
 
 #include <deal.II/lac/affine_constraints.h>
 #include <deal.II/lac/dynamic_sparsity_pattern.h>
 #include <deal.II/lac/full_matrix.h>
 #include <deal.II/lac/precondition.h>
-#include <deal.II/base/timer.h>
 #include <deal.II/lac/solver_cg.h>
 #include <deal.II/lac/solver_control.h>
 #include <deal.II/lac/sparse_matrix.h>
@@ -146,7 +147,7 @@ namespace Step85
     , fe_surf(FE_Q<dim>(fe_degree), 1, FE_Q<dim>(fe_degree), 1)
     , fe_out(FE_Nothing<dim>(), 1, FE_Q<dim>(fe_degree), 1)
     , mesh_classifier(level_set_dof_handler, level_set)
-    , timer(std::cout, TimerOutput::summary, TimerOutput::cpu_and_wall_times)
+    , timer(std::cout, TimerOutput::summary, TimerOutput::cpu_times)
   {
     fe_collection.push_back(fe_in);
     fe_collection.push_back(fe_surf);
@@ -190,12 +191,12 @@ namespace Step85
   {
     AssertIndexRange(component, this->n_components);
     (void)component;
-    const double R = .45;
-    const double r = point.norm();
-    return (r <= R) ? point[0] : ((R * R) / (r * r)) * point[0];
+    // const double R = .45;
+    // const double r = point.norm();
+    // return (r <= R) ? point[0] : ((R * R) / (r * r)) * point[0];
 
-    // return std::sin(2. * numbers::PI * point[0]) *
-    //        std::sin(2. * numbers::PI * point[1]);
+    return std::sin(2. * numbers::PI * point[0]) *
+           std::sin(2. * numbers::PI * point[1]);
     // 1. - 2. / dim * (point.norm_square() - 1.);
   }
 
@@ -257,10 +258,9 @@ namespace Step85
                                  const unsigned int component) const
   {
     (void)component;
-    // return 8. * numbers::PI * numbers::PI * std::sin(2. * numbers::PI * p[0])
-    // *
-    //        std::sin(2. * numbers::PI * p[1]);
-    return 0.;
+    return 8. * numbers::PI * numbers::PI * std::sin(2. * numbers::PI * p[0]) *
+           std::sin(2. * numbers::PI * p[1]);
+    // return 0.;
   }
 
   enum ActiveFEIndex
@@ -685,6 +685,13 @@ namespace Step85
                                                       level_set_dof_handler,
                                                       level_set);
 
+    hp::QCollection<dim> q_collection{QGauss<dim>(2 * fe_degree + 1)};
+    hp::FEValues<dim>    hp_fe_values(fe_collection,
+                                   q_collection,
+                                   update_values | update_gradients |
+                                     update_JxW_values |
+                                     update_quadrature_points);
+
     RhsFunction<dim> rhs_function;
 
     // Here I loop only on the inside
@@ -783,17 +790,17 @@ namespace Step85
         constraints.distribute_local_to_global(
           local_stiffness, local_rhs, local_dof_indices, stiffness_matrix, rhs);
 
-        for (unsigned int f : cell->face_indices())
-          {
-            if (face_has_ghost_penalty_outside(cell, f))
-              {
-                distribute_penalty_terms(cell,
-                                         f,
-                                         ghost_parameter,
-                                         cell_side_length,
-                                         1); // reminder == 1
-              }
-          }
+        // for (unsigned int f : cell->face_indices())
+        //   {
+        //     if (face_has_ghost_penalty_outside(cell, f))
+        //       {
+        //         distribute_penalty_terms(cell,
+        //                                  f,
+        //                                  ghost_parameter,
+        //                                  cell_side_length,
+        //                                  1); // reminder == 1
+        //       }
+        //   }
       }
 
     // Solve on intersection
@@ -810,53 +817,33 @@ namespace Step85
         const std_cxx17::optional<FEValues<dim>> &inside_fe_values =
           non_matching_fe_values.get_inside_fe_values();
 
+        hp_fe_values.reinit(cell);
+        const FEValues<dim> &fe_values = hp_fe_values.get_present_fe_values();
+
         if (inside_fe_values)
           {
-            for (const unsigned int q :
-                 inside_fe_values->quadrature_point_indices())
+            for (const unsigned int q : fe_values.quadrature_point_indices())
               {
-                const Point<dim> &point = inside_fe_values->quadrature_point(q);
-                for (const unsigned int i : inside_fe_values->dof_indices())
+                const Point<dim> &point = fe_values.quadrature_point(q);
+                for (const unsigned int i : fe_values.dof_indices())
                   {
-                    for (const unsigned int j : inside_fe_values->dof_indices())
+                    for (const unsigned int j : fe_values.dof_indices())
                       {
                         if (i % 2 == 0 && j % 2 == 0)
                           {
                             local_stiffness_surf(i, j) +=
-                              inside_fe_values->shape_grad(i, q) *
-                              inside_fe_values->shape_grad(j, q) *
-                              inside_fe_values->JxW(q);
+                              fe_values.shape_grad(i, q) *
+                              fe_values.shape_grad(j, q) * fe_values.JxW(q);
                           }
                       }
 
                     if (i % 2 == 0)
                       {
-                        local_rhs_surf(i) +=
-                          rhs_function.value(point) *
-                          inside_fe_values->shape_value(i, q) *
-                          inside_fe_values->JxW(q);
+                        local_rhs_surf(i) += rhs_function.value(point) *
+                                             fe_values.shape_value(i, q) *
+                                             fe_values.JxW(q);
                       }
                   }
-              }
-          }
-
-        for (unsigned int f : cell->face_indices())
-          {
-            if (face_has_ghost_penalty(cell, f))
-              {
-                distribute_penalty_terms(cell,
-                                         f,
-                                         ghost_parameter,
-                                         cell_side_length,
-                                         0); // reminder == 0
-              }
-            if (face_has_ghost_penalty_outside(cell, f))
-              {
-                distribute_penalty_terms(cell,
-                                         f,
-                                         ghost_parameter,
-                                         cell_side_length,
-                                         1); // reminder == 1
               }
           }
 
@@ -865,34 +852,120 @@ namespace Step85
 
         if (outside_fe_values)
           {
-            for (const unsigned int q :
-                 outside_fe_values->quadrature_point_indices())
+            for (const unsigned int q : fe_values.quadrature_point_indices())
               {
-                const Point<dim> &point =
-                  outside_fe_values->quadrature_point(q);
-                for (const unsigned int i : outside_fe_values->dof_indices())
+                const Point<dim> &point = fe_values.quadrature_point(q);
+                for (const unsigned int i : fe_values.dof_indices())
                   {
-                    for (const unsigned int j :
-                         outside_fe_values->dof_indices())
+                    for (const unsigned int j : fe_values.dof_indices())
                       {
                         if (i % 2 == 1 && j % 2 == 1)
                           {
                             local_stiffness_surf(i, j) +=
-                              outside_fe_values->shape_grad(i, q) *
-                              outside_fe_values->shape_grad(j, q) *
-                              outside_fe_values->JxW(q);
+                              fe_values.shape_grad(i, q) *
+                              fe_values.shape_grad(j, q) * fe_values.JxW(q);
                           }
                       }
+
                     if (i % 2 == 1)
                       {
-                        local_rhs_surf(i) +=
-                          rhs_function.value(point) *
-                          outside_fe_values->shape_value(i, q) *
-                          outside_fe_values->JxW(q);
+                        local_rhs_surf(i) += rhs_function.value(point) *
+                                             fe_values.shape_value(i, q) *
+                                             fe_values.JxW(q);
                       }
                   }
               }
           }
+        // non_matching_fe_values.reinit(cell);
+
+        // const std_cxx17::optional<FEValues<dim>> &inside_fe_values =
+        //   non_matching_fe_values.get_inside_fe_values();
+
+        // if (inside_fe_values)
+        //   {
+        //     for (const unsigned int q :
+        //          inside_fe_values->quadrature_point_indices())
+        //       {
+        //         const Point<dim> &point =
+        //         inside_fe_values->quadrature_point(q); for (const unsigned
+        //         int i : inside_fe_values->dof_indices())
+        //           {
+        //             for (const unsigned int j :
+        //             inside_fe_values->dof_indices())
+        //               {
+        //                 if (i % 2 == 0 && j % 2 == 0)
+        //                   {
+        //                     local_stiffness_surf(i, j) +=
+        //                       inside_fe_values->shape_grad(i, q) *
+        //                       inside_fe_values->shape_grad(j, q) *
+        //                       inside_fe_values->JxW(q);
+        //                   }
+        //               }
+
+        //             if (i % 2 == 0)
+        //               {
+        //                 local_rhs_surf(i) +=
+        //                   rhs_function.value(point) *
+        //                   inside_fe_values->shape_value(i, q) *
+        //                   inside_fe_values->JxW(q);
+        //               }
+        //           }
+        //       }
+        //   }
+
+        // for (unsigned int f : cell->face_indices())
+        //   {
+        //     if (face_has_ghost_penalty(cell, f))
+        //       {
+        //         distribute_penalty_terms(cell,
+        //                                  f,
+        //                                  ghost_parameter,
+        //                                  cell_side_length,
+        //                                  0); // reminder == 0
+        //       }
+        //     if (face_has_ghost_penalty_outside(cell, f))
+        //       {
+        //         distribute_penalty_terms(cell,
+        //                                  f,
+        //                                  ghost_parameter,
+        //                                  cell_side_length,
+        //                                  1); // reminder == 1
+        //       }
+        //   }
+
+        // const std_cxx17::optional<FEValues<dim>> &outside_fe_values =
+        //   non_matching_fe_values.get_outside_fe_values();
+
+        // if (outside_fe_values)
+        //   {
+        //     for (const unsigned int q :
+        //          outside_fe_values->quadrature_point_indices())
+        //       {
+        //         const Point<dim> &point =
+        //           outside_fe_values->quadrature_point(q);
+        //         for (const unsigned int i : outside_fe_values->dof_indices())
+        //           {
+        //             for (const unsigned int j :
+        //                  outside_fe_values->dof_indices())
+        //               {
+        //                 if (i % 2 == 1 && j % 2 == 1)
+        //                   {
+        //                     local_stiffness_surf(i, j) +=
+        //                       outside_fe_values->shape_grad(i, q) *
+        //                       outside_fe_values->shape_grad(j, q) *
+        //                       outside_fe_values->JxW(q);
+        //                   }
+        //               }
+        //             if (i % 2 == 1)
+        //               {
+        //                 local_rhs_surf(i) +=
+        //                   rhs_function.value(point) *
+        //                   outside_fe_values->shape_value(i, q) *
+        //                   outside_fe_values->JxW(q);
+        //               }
+        //           }
+        //       }
+        //   }
 
         const std_cxx17::optional<NonMatching::FEImmersedSurfaceValues<dim>>
           &surface_fe_values = non_matching_fe_values.get_surface_fe_values();
@@ -952,11 +1025,6 @@ namespace Step85
 
                     if (i % 2 == 0)
                       {
-                        // std::cout
-                        //   << "Test: "
-                        //   << surface_fe_values->shape_value_component(i, q,
-                        //   1)
-                        //   << std::endl;
                         local_rhs_surf(i) +=
                           AnalyticalSolution<dim>().value(point) *
                           (nitsche_parameter / cell_side_length *
@@ -1016,7 +1084,7 @@ namespace Step85
       });
 
     data_out.build_patches();
-    std::ofstream output_inside_inter("cutFEM_inside_intersected.vtu");
+    std::ofstream output_inside_inter("cutFEM_inside_intersected_hybrid.vtu");
     data_out.write_vtu(output_inside_inter);
 
     data_out.set_cell_selection(
@@ -1027,7 +1095,7 @@ namespace Step85
       });
 
     data_out.build_patches();
-    std::ofstream output_outside("cutFEM_outside.vtu");
+    std::ofstream output_outside("cutFEM_outside_hybrid.vtu");
     data_out.write_vtu(output_outside);
   }
 
@@ -1252,22 +1320,20 @@ namespace Step85
     make_grid();
     for (unsigned int cycle = 0; cycle <= n_refinements; cycle++)
       {
-        {
-          TimerOutput::Scope timer_section(timer,
-                                           "Total time cycle " +
-                                             std::to_string(cycle));
-          std::cout << "Refinement cycle " << cycle << std::endl;
-          triangulation.refine_global(1);
-          setup_discrete_level_set();
-          std::cout << "Classifying cells" << std::endl;
-          mesh_classifier.reclassify();
-          distribute_dofs();
-          std::cout << "Solving with " << dof_handler.n_dofs() << "DoFs"
-                    << std::endl;
-          initialize_matrices();
-          assemble_system();
-          solve();
-        }
+        TimerOutput::Scope timer_section(timer,
+                                         "Total time cycle " +
+                                           std::to_string(cycle));
+        std::cout << "Refinement cycle " << cycle << std::endl;
+        triangulation.refine_global(1);
+        setup_discrete_level_set();
+        std::cout << "Classifying cells" << std::endl;
+        mesh_classifier.reclassify();
+        distribute_dofs();
+        std::cout << "Solving with " << dof_handler.n_dofs() << "DoFs"
+                  << std::endl;
+        initialize_matrices();
+        assemble_system();
+        solve();
         // if (cycle == 3)
         output_results();
         // const double error_L2 = compute_L2_error_from_inside();

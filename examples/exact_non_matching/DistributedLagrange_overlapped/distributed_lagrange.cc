@@ -37,6 +37,7 @@
 #include <deal.II/dofs/dof_tools.h>
 
 #include <deal.II/fe/fe_q.h>
+#include <deal.II/fe/fe_dgq.h>
 
 #include <deal.II/grid/filtered_iterator.h>
 #include <deal.II/grid/grid_generator.h>
@@ -65,150 +66,6 @@ const double R = .45;
 using namespace dealii;
 
 
-// // Functors-like classes to describe boundary values, right hand side,
-// // analytical solution, if any.
-// template <int dim>
-// class RightHandSide : public Function<dim>
-// {
-// public:
-//   virtual double value(const Point<dim> & p,
-//                        const unsigned int component = 0) const override;
-// };
-
-
-
-// template <>
-// double RightHandSide<3>::value(const Point<3> &   p,
-//                                const unsigned int component) const
-// {
-//   // (void)p;
-//   (void)component;
-//   // return 1.;
-//   return 0.; // 12. * numbers::PI * numbers::PI *
-//   //    (std::sin(2. * numbers::PI * p[0]) * std::sin(2. * numbers::PI *
-//   p[1]) *
-//   //     std::sin(2. * numbers::PI * p[2]));
-// }
-
-
-
-// template <>
-// double RightHandSide<2>::value(const Point<2> &   p,
-//                                const unsigned int component) const
-// {
-//   // (void)p;
-//   (void)component;
-//   // return 1.;
-//   return /*0.;*/ 8. * numbers::PI * numbers::PI *
-//          (std::sin(2. * numbers::PI * p[0]) *
-//           std::sin(2. * numbers::PI * p[1]));
-// }
-
-
-
-// // template <int dim>
-// // class BoundaryCondition : public Function<dim>
-// // {
-// // public:
-// //   virtual double value(const Point<dim>  &p,
-// //                        const unsigned int component = 0) const override;
-// // };
-
-
-
-// // template <int dim>
-// // double BoundaryCondition<dim>::value(const Point<dim>  &p,
-// //                                      const unsigned int component) const
-// // {
-// //   (void)p;
-// //   (void)component;
-// //   return 1.5;
-// // }
-
-
-
-// template <int dim>
-// class Solution : public Function<dim>
-// {
-// public:
-//   virtual double value(const Point<dim> & p,
-//                        const unsigned int component = 0) const override;
-
-//   virtual Tensor<1, dim>
-//   gradient(const Point<dim> & p,
-//            const unsigned int component = 0) const override;
-// };
-
-
-
-// template <>
-// double Solution<3>::value(const Point<3> &p, const unsigned int component)
-// const
-// {
-//   (void)component;
-//   const double r = p.norm();
-//   return /*(r <= R) ?
-//            p[0] :
-//            ((R * R) / (r * r)) * p[0];*/
-//     std::sin(2. * numbers::PI * p[0]) * std::sin(2. * numbers::PI * p[1]) *
-//     std::sin(2. * numbers::PI * p[2]);
-// }
-
-
-
-// template <>
-// double Solution<2>::value(const Point<2> &p, const unsigned int component)
-// const
-// {
-//   (void)component;
-//   const double r = p.norm();
-//   return /*(r <= R) ?
-//            p[0] :
-//            ((R * R) / (r * r)) * p[0];*/
-//     std::sin(2. * numbers::PI * p[0]) * std::sin(2. * numbers::PI * p[1]);
-// }
-
-
-// template <>
-// Tensor<1, 3> Solution<3>::gradient(const Point<3> &   p,
-//                                    const unsigned int component) const
-// {
-//   (void)component;
-//   Tensor<1, 3> gradient;
-//   gradient[0] = std::cos(2. * numbers ::PI * p[0]) *
-//                 std::sin(2. * numbers::PI * p[1]) *
-//                 std::sin(2. * numbers::PI * p[2]);
-
-//   gradient[1] = std::sin(2. * numbers ::PI * p[0]) *
-//                 std::cos(2. * numbers::PI * p[1]) *
-//                 std::sin(2. * numbers::PI * p[2]);
-
-//   gradient[2] = std::sin(2. * numbers ::PI * p[0]) *
-//                 std::sin(2. * numbers::PI * p[1]) *
-//                 std::cos(2. * numbers::PI * p[2]);
-
-//   return 2. * numbers::PI * gradient;
-// }
-
-
-
-// template <>
-// Tensor<1, 2> Solution<2>::gradient(const Point<2> &   p,
-//                                    const unsigned int component) const
-// {
-//   (void)component;
-//   Tensor<1, 2> gradient;
-//   gradient[0] =
-//     std::cos(2. * numbers ::PI * p[0]) * std::sin(2. * numbers::PI * p[1]);
-
-//   gradient[1] =
-//     std::sin(2. * numbers ::PI * p[0]) * std::cos(2. * numbers::PI * p[1]);
-
-//   return 2. * numbers::PI * gradient;
-// }
-
-
-
 template <int dim, int spacedim = dim>
 class PoissonDLM
 {
@@ -220,7 +77,11 @@ public:
 
     unsigned int n_refinement_cycles = 6;
 
-    unsigned int delta_refinement_cycles = 2;
+    bool apply_delta_refinements;
+
+    bool adjust_grids_ratio = false;
+
+    unsigned int space_pre_refinement_cycles = 2;
 
     unsigned int space_initial_global_refinements = 4;
 
@@ -228,7 +89,17 @@ public:
 
     bool initialized = false;
 
+    bool use_space;
+
+    bool use_embedded;
+
+    int embedded_post_refinement_cycles = 0;
+
     std::string coupling_strategy;
+
+    unsigned int fe_space_degree = 1;
+
+    unsigned int fe_embedded_degree = 1;
   };
 
   PoissonDLM(const Parameters &parameters);
@@ -269,8 +140,8 @@ private:
     cells_and_quads;
 
 
-  FE_Q<spacedim>      space_fe;
-  FE_Q<dim, spacedim> embedded_fe;
+  std::unique_ptr<FE_Q<spacedim>>      space_fe;
+  std::unique_ptr<FE_Q<dim, spacedim>> embedded_fe;
 
   /**
    * The actual DoFHandler class.
@@ -304,7 +175,7 @@ private:
   ParameterAcceptorProxy<Functions::ParsedFunction<spacedim>>
     boundary_condition_function;
 
-  // mutable TimerOutput timer;
+  mutable TimerOutput timer;
 
   mutable ConvergenceTable convergence_table;
 
@@ -319,6 +190,8 @@ PoissonDLM<dim, spacedim>::Parameters::Parameters()
   : ParameterAcceptor("/Distributed Lagrange<" + Utilities::int_to_string(dim) +
                       "," + Utilities::int_to_string(spacedim) + ">/")
 {
+  add_parameter("Adjust grids", adjust_grids_ratio);
+
   add_parameter("Number of refinement cycles", n_refinement_cycles);
 
   add_parameter("Number of space initial refinement cycles",
@@ -327,10 +200,25 @@ PoissonDLM<dim, spacedim>::Parameters::Parameters()
   add_parameter("Number of embedded initial refinement cycles",
                 embedded_initial_global_refinements);
 
-  add_parameter("Local refinements steps near embedded domain",
-                delta_refinement_cycles);
+  add_parameter("Space pre refinements cycles", space_pre_refinement_cycles);
+
+  add_parameter("Embedded post refinement cycles",
+                embedded_post_refinement_cycles);
+
+  add_parameter("Apply space refinements steps near embedded domain",
+                apply_delta_refinements);
+
+  // add_parameter("Number of refinements steps", delta_refinement_cycles);
+
+  add_parameter("Use space refinement", use_space);
+
+  add_parameter("Use embedded refinement", use_embedded);
 
   add_parameter("Coupling strategy", coupling_strategy);
+
+  add_parameter("Finite element space degree", fe_space_degree);
+
+  add_parameter("Finite element embedded degree", fe_embedded_degree);
 
   parse_parameters_call_back.connect([&]() -> void { initialized = true; });
 }
@@ -338,11 +226,12 @@ PoissonDLM<dim, spacedim>::Parameters::Parameters()
 template <int dim, int spacedim>
 PoissonDLM<dim, spacedim>::PoissonDLM(const Parameters &parameters)
   : parameters(parameters)
-  , space_fe(1)
-  , embedded_fe(1)
   , rhs_function("Right hand side")
   , solution_function("Solution")
   , boundary_condition_function("Boundary condition")
+  , timer(std::cout,
+          TimerOutput::every_call_and_summary,
+          TimerOutput::cpu_times)
 {
   rhs_function.declare_parameters_call_back.connect(
     []() -> void { ParameterAcceptor::prm.set("Function expression", "0"); });
@@ -380,45 +269,50 @@ void PoissonDLM<dim, spacedim>::setup_grids_and_dofs()
         }
       else if constexpr (dim == 2 && spacedim == 2)
         {
-          embedded_triangulation.refine_global(2);
-          space_triangulation.refine_global(3);
+          embedded_triangulation.refine_global(
+            parameters.embedded_initial_global_refinements);
+          space_triangulation.refine_global(
+            parameters.space_initial_global_refinements);
         }
       else if constexpr (dim == 2 && spacedim == 3)
         {
-          GridGenerator::hyper_sphere(embedded_triangulation, {}, R);
-          embedded_triangulation.refine_global(2);
-          space_triangulation.refine_global(3);
+          GridGenerator::hyper_cube(embedded_triangulation, -0.42, 0.56);
+          // GridGenerator::hyper_sphere(embedded_triangulation, {}, R);
+          // GridGenerator::hyper_cross(embedded_triangulation, {0, 0, 1, 0});
+          space_triangulation.refine_global(
+            parameters.space_initial_global_refinements); // 4
+          embedded_triangulation.refine_global(
+            parameters.embedded_initial_global_refinements); // 2
         }
     }
+
+  space_fe = std::make_unique<FE_Q<spacedim>>(parameters.fe_space_degree);
+  embedded_fe =
+    std::make_unique<FE_Q<dim, spacedim>>(parameters.fe_embedded_degree);
 
   space_cache =
     std::make_unique<GridTools::Cache<spacedim, spacedim>>(space_triangulation);
   embedded_cache =
     std::make_unique<GridTools::Cache<dim, spacedim>>(embedded_triangulation);
 
-  setup_embedded_dofs();
 
-  // adjust_grids();
+  if (parameters.adjust_grids_ratio == true)
+    {
+      adjust_grids();
+    }
   const double embedded_space_maximal_diameter =
     GridTools::maximal_cell_diameter(embedded_triangulation, embedded_mapping);
   double embedding_space_minimal_diameter =
     GridTools::minimal_cell_diameter(space_triangulation, space_mapping);
 
-  std::cout << "Embedding minimal diameter: "
-            << embedding_space_minimal_diameter
+  std::cout << "Space minimal diameter: " << embedding_space_minimal_diameter
             << ", embedded maximal diameter: "
             << embedded_space_maximal_diameter << ", ratio: "
             << embedded_space_maximal_diameter /
                  embedding_space_minimal_diameter
             << std::endl;
 
-  // AssertThrow(embedded_space_maximal_diameter <
-  //               embedding_space_minimal_diameter,
-  //             ExcMessage(
-  //               "The embedding grid is too refined (or the embedded grid "
-  //               "is too coarse). Adjust the parameters so that the minimal "
-  //               "grid size of the embedding grid is larger "
-  //               "than the maximal grid size of the embedded grid."));
+  setup_embedded_dofs();
   setup_space_dofs();
 }
 
@@ -427,21 +321,124 @@ void PoissonDLM<dim, spacedim>::setup_grids_and_dofs()
 template <int dim, int spacedim>
 void PoissonDLM<dim, spacedim>::adjust_grids()
 {
+  // Adjust grid diameters to satisfy ratio suggested by the theory.
+
+  std::cout << "Adjusting the grids..." << std::endl;
   namespace bgi = boost::geometry::index;
-  for (unsigned int i = 0; i < parameters.delta_refinement_cycles; ++i)
+
+  auto refine = [&]() {
+    bool done = false;
+
+    double min_embedded = 1e10;
+    double max_embedded = 0;
+    double min_space    = 1e10;
+    double max_space    = 0;
+
+    while (done == false)
+      {
+        // Bounding boxes of the space grid
+        const auto &tree =
+          space_cache->get_locally_owned_cell_bounding_boxes_rtree();
+
+        // Bounding boxes of the embedded grid
+        const auto &embedded_tree =
+          embedded_cache->get_cell_bounding_boxes_rtree();
+
+        // Let's check all cells whose bounding box contains an embedded
+        // bounding box
+        done = true;
+
+        const bool use_space = parameters.use_space;
+
+        const bool use_embedded = parameters.use_embedded;
+
+        AssertThrow(!(use_embedded && use_space),
+                    ExcMessage("You can't refine both the embedded and "
+                               "the space grid at the same time."));
+
+        for (const auto &[embedded_box, embedded_cell] : embedded_tree)
+          {
+            const auto &[p1, p2] = embedded_box.get_boundary_points();
+            const auto diameter  = p1.distance(p2);
+            min_embedded         = std::min(min_embedded, diameter);
+            max_embedded         = std::max(max_embedded, diameter);
+
+            for (const auto &[space_box, space_cell] :
+                 tree | bgi::adaptors::queried(bgi::intersects(embedded_box)))
+              {
+                const auto &[sp1, sp2]    = space_box.get_boundary_points();
+                const auto space_diameter = sp1.distance(sp2);
+                min_space                 = std::min(min_space, space_diameter);
+                max_space                 = std::max(max_space, space_diameter);
+
+                if (use_embedded && space_diameter < diameter)
+                  {
+                    embedded_cell->set_refine_flag();
+                    done = false;
+                  }
+                if (use_space && diameter < space_diameter)
+                  {
+                    space_cell->set_refine_flag();
+                    done = false;
+                  }
+              }
+          }
+        if (done == false)
+          {
+            if (use_embedded)
+              {
+                // Compute again the embedded displacement grid
+                embedded_triangulation.execute_coarsening_and_refinement();
+              }
+            if (use_space)
+              {
+                // Compute again the embedded displacement grid
+                space_triangulation.execute_coarsening_and_refinement();
+              }
+          }
+      }
+    return std::make_tuple(min_space, max_space, min_embedded, max_embedded);
+  };
+
+  // Do the refinement loop once, to make sure we satisfy our criterions
+  refine();
+
+  // Pre refine the space grid according to the delta refinement
+  if (parameters.apply_delta_refinements &&
+      parameters.space_pre_refinement_cycles != 0)
+    for (unsigned int i = 0; i < parameters.space_pre_refinement_cycles; ++i)
+      {
+        const auto &tree =
+          space_cache->get_locally_owned_cell_bounding_boxes_rtree();
+
+        const auto &embedded_tree =
+          embedded_cache->get_cell_bounding_boxes_rtree();
+
+        for (const auto &[embedded_box, embedded_cell] : embedded_tree)
+          for (const auto &[space_box, space_cell] :
+               tree | bgi::adaptors::queried(bgi::intersects(embedded_box)))
+            space_cell->set_refine_flag();
+        space_triangulation.execute_coarsening_and_refinement();
+
+        // Make sure again we satisfy our criterion after the space refinement
+        refine();
+      }
+
+  // Post refinement on embedded grid is easy
+  if (parameters.apply_delta_refinements &&
+      parameters.embedded_post_refinement_cycles != 0)
     {
-      const auto &tree =
-        space_cache->get_locally_owned_cell_bounding_boxes_rtree();
-
-      const auto &embedded_tree =
-        embedded_cache->get_cell_bounding_boxes_rtree();
-
-      for (const auto &[embedded_box, embedded_cell] : embedded_tree)
-        for (const auto &[space_box, space_cell] :
-             tree | bgi::adaptors::queried(bgi::intersects(embedded_box)))
-          space_cell->set_refine_flag();
-      space_triangulation.execute_coarsening_and_refinement();
+      embedded_triangulation.refine_global(
+        parameters.embedded_post_refinement_cycles);
     }
+
+  // Check once again we satisfy our criterion, and record min/max
+  const auto [sm, sM, em, eM] = refine();
+
+  std::cout << "Space local min/max diameters   : " << sm << "/" << sM
+            << std::endl
+            << "Embedded space min/max diameters: " << em << "/" << eM
+            << std::endl;
 }
 
 
@@ -451,7 +448,7 @@ void PoissonDLM<dim, spacedim>::setup_space_dofs()
 {
   // Setup space DoFs
   space_dh = std::make_unique<DoFHandler<spacedim>>(space_triangulation);
-  space_dh->distribute_dofs(space_fe);
+  space_dh->distribute_dofs(*space_fe);
   std::cout << "Number of dofs in space: " << space_dh->n_dofs() << std::endl;
   space_constraints.clear();
   DoFTools::make_hanging_node_constraints(*space_dh, space_constraints);
@@ -461,7 +458,7 @@ void PoissonDLM<dim, spacedim>::setup_space_dofs()
     *space_dh,
     0,
     solution_function,
-    space_constraints); // zero Dirichlet on the boundary
+    space_constraints); // Dirichlet on the boundary
 
   space_constraints.close();
 
@@ -481,7 +478,7 @@ void PoissonDLM<dim, spacedim>::setup_embedded_dofs()
 {
   embedded_dh =
     std::make_unique<DoFHandler<dim, spacedim>>(embedded_triangulation);
-  embedded_dh->distribute_dofs(embedded_fe);
+  embedded_dh->distribute_dofs(*embedded_fe);
   embedded_rhs.reinit(embedded_dh->n_dofs());
   lambda.reinit(embedded_dh->n_dofs());
 }
@@ -490,45 +487,42 @@ void PoissonDLM<dim, spacedim>::setup_embedded_dofs()
 template <int dim, int spacedim>
 void PoissonDLM<dim, spacedim>::setup_coupling()
 {
-  // TimerOutput::Scope timer_section(monitor, "Setup coupling");
-
-  QGauss<dim> quad(2 * space_fe.degree + 1);
+  QGauss<dim> quad(2 * parameters.fe_space_degree + 1);
 
   DynamicSparsityPattern dsp(space_dh->n_dofs(), embedded_dh->n_dofs());
 
-  // const double epsilon =
-  //   2 * std::max(GridTools::maximal_cell_diameter(space_triangulation),
-  //                GridTools::maximal_cell_diameter(embedded_triangulation));
-  // std::cout << "Epsilon: " << epsilon << std::endl;
-  if (parameters.coupling_strategy == "inexact")
-    {
-      NonMatching::create_coupling_sparsity_pattern(0.,
-                                                    *space_cache,
-                                                    *embedded_cache,
-                                                    *space_dh,
-                                                    *embedded_dh,
-                                                    QGauss<dim>(
-                                                      2 * space_fe.degree + 1),
-                                                    dsp,
-                                                    space_constraints);
-    }
-  else if (parameters.coupling_strategy == "exact")
-    {
-      NonMatching::create_coupling_sparsity_pattern_with_exact_intersections(
-        cells_and_quads,
-        *space_dh,
-        *embedded_dh,
-        dsp,
-        space_constraints,
-        ComponentMask(),
-        ComponentMask(),
-        embedded_constraints);
-    }
-  else
-    {
-      Assert(false, ExcMessage("Please select a valid strategy."));
-    }
+  {
+    TimerOutput::Scope timer_section(timer, "Setup coupling");
 
+    if (parameters.coupling_strategy == "inexact")
+      {
+        NonMatching::create_coupling_sparsity_pattern(
+          0.,
+          *space_cache,
+          *embedded_cache,
+          *space_dh,
+          *embedded_dh,
+          QGauss<dim>(2 * parameters.fe_space_degree + 1),
+          dsp,
+          space_constraints);
+      }
+    else if (parameters.coupling_strategy == "exact")
+      {
+        NonMatching::create_coupling_sparsity_pattern_with_exact_intersections(
+          cells_and_quads,
+          *space_dh,
+          *embedded_dh,
+          dsp,
+          space_constraints,
+          ComponentMask(),
+          ComponentMask(),
+          embedded_constraints);
+      }
+    else
+      {
+        Assert(false, ExcMessage("Please select a valid strategy."));
+      }
+  }
   coupling_sparsity_pattern.copy_from(dsp);
   coupling_matrix.reinit(coupling_sparsity_pattern);
 }
@@ -539,18 +533,18 @@ template <int dim, int spacedim>
 void PoissonDLM<dim, spacedim>::assemble_system()
 {
   {
-    // TimerOutput::Scope timer_section(timer, "Assemble system");
+    TimerOutput::Scope timer_section(timer, "Assemble system");
     std::cout << "Assemble system" << std::endl;
 
-    QGauss<spacedim>             quadrature_formula(2 * space_fe.degree + 1);
+    QGauss<spacedim> quadrature_formula(2 * parameters.fe_space_degree + 1);
     FEValues<spacedim, spacedim> fe_values(space_mapping,
-                                           space_fe,
+                                           *space_fe,
                                            quadrature_formula,
                                            update_values | update_gradients |
                                              update_quadrature_points |
                                              update_JxW_values);
 
-    const unsigned int dofs_per_cell = space_fe.n_dofs_per_cell();
+    const unsigned int dofs_per_cell = space_fe->n_dofs_per_cell();
     FullMatrix<double> cell_matrix(dofs_per_cell, dofs_per_cell);
     Vector<double>     cell_rhs(dofs_per_cell);
 
@@ -586,37 +580,32 @@ void PoissonDLM<dim, spacedim>::assemble_system()
                                                      space_rhs);
       }
 
-    VectorTools::create_right_hand_side(embedded_mapping,
-                                        *embedded_dh,
-                                        QGauss<dim>(2 * embedded_fe.degree + 1),
-                                        solution_function,
-                                        embedded_rhs);
+    VectorTools::create_right_hand_side(
+      embedded_mapping,
+      *embedded_dh,
+      QGauss<dim>(2 * parameters.fe_embedded_degree + 1),
+      solution_function,
+      embedded_rhs);
   }
 
 
   std::cout << "Assemble coupling term" << std::endl;
   {
-    // TimerOutput::Scope timer_section(timer, "Assemble Nitsche terms");
-    Functions::CutOffFunctionC1<spacedim> dirac(
-      1,
-      Point<spacedim>(),
-      1,
-      Functions::CutOffFunctionBase<spacedim>::no_component,
-      true);
+    TimerOutput::Scope timer_section(timer, "Assemble coupling term");
 
     if (parameters.coupling_strategy == "inexact")
       {
-        NonMatching::create_coupling_mass_matrix(*space_dh,
-                                                 *embedded_dh,
-                                                 QGauss<dim>(
-                                                   2 * space_fe.degree + 1),
-                                                 coupling_matrix,
-                                                 space_constraints,
-                                                 ComponentMask(),
-                                                 ComponentMask(),
-                                                 space_mapping,
-                                                 embedded_mapping,
-                                                 embedded_constraints);
+        NonMatching::create_coupling_mass_matrix(
+          *space_dh,
+          *embedded_dh,
+          QGauss<dim>(2 * parameters.fe_space_degree + 1),
+          coupling_matrix,
+          space_constraints,
+          ComponentMask(),
+          ComponentMask(),
+          space_mapping,
+          embedded_mapping,
+          embedded_constraints);
       }
     else if (parameters.coupling_strategy == "exact")
       {
@@ -654,14 +643,14 @@ void PoissonDLM<dim, spacedim>::solve()
 
   auto K_inv = linear_operator(K, K_inv_umfpack);
 
-  auto             S = C * K_inv * Ct;
-  ReductionControl reduction_control(2000, 1.0e-12, 1.0e-10);
-  // SolverCG<Vector<double>> solver_cg(reduction_control);
-  SolverGMRES<Vector<double>> solver_cg(reduction_control);
+  auto                     S = C * K_inv * Ct;
+  ReductionControl         reduction_control(2000, 1.0e-12, 1.0e-10);
+  SolverCG<Vector<double>> solver_cg(reduction_control);
   auto S_inv = inverse_operator(S, solver_cg, PreconditionIdentity());
 
   lambda   = S_inv * (C * K_inv * space_rhs - embedded_rhs);
   solution = K_inv * (space_rhs - Ct * lambda);
+  std::cout << "Norm of the multiplier: " << lambda.norm_sqr() << std::endl;
 
   std::cout << "Solved in : " << reduction_control.last_step() << "iterations."
             << std::endl;
@@ -671,8 +660,7 @@ void PoissonDLM<dim, spacedim>::solve()
 
 
 
-// Finally, we output the solution living in the embedding space, just
-// like all the other programs.
+// Finally, we output the solution living in the embedding space
 template <int dim, int spacedim>
 void PoissonDLM<dim, spacedim>::output_results(const unsigned cycle) const
 {
@@ -692,7 +680,8 @@ void PoissonDLM<dim, spacedim>::output_results(const unsigned cycle) const
                                       solution,
                                       solution_function,
                                       difference_per_cell,
-                                      QGauss<spacedim>(2 * space_fe.degree + 1),
+                                      QGauss<spacedim>(
+                                        2 * parameters.fe_space_degree + 1),
                                       VectorTools::L2_norm);
     const double L2_error =
       VectorTools::compute_global_error(space_triangulation,
@@ -706,7 +695,8 @@ void PoissonDLM<dim, spacedim>::output_results(const unsigned cycle) const
                                       solution,
                                       solution_function,
                                       difference_per_cell,
-                                      QGauss<spacedim>(2 * space_fe.degree + 1),
+                                      QGauss<spacedim>(
+                                        2 * parameters.fe_space_degree + 1),
                                       VectorTools::H1_norm);
     const double H1_error =
       VectorTools::compute_global_error(space_triangulation,
@@ -737,44 +727,42 @@ void PoissonDLM<dim, spacedim>::run()
   for (cycle = 0; cycle < parameters.n_refinement_cycles; ++cycle)
     {
       std::cout << "Cycle: " << cycle << std::endl;
-      setup_grids_and_dofs();
+      {
+        TimerOutput::Scope timer_section(timer,
+                                         "Total time cycle " +
+                                           std::to_string(cycle));
+        setup_grids_and_dofs();
 
-      // Compute all the things we need to assemble the Nitsche's
-      // contributions, namely the two cached triangulations and a degree to
-      // integrate over the intersections.
-      if (parameters.coupling_strategy == "exact")
-        {
-          std::cout << "Start collecting quadratures" << std::endl;
-          cells_and_quads =
-            NonMatching::collect_quadratures_on_overlapped_grids(
-              *space_cache, *embedded_cache, 2 * space_fe.degree + 1);
-          std::cout << "Collected quadratures" << std::endl;
+        // Compute all the things we need to assemble the Nitsche's
+        // contributions, namely the two cached triangulations and a degree to
+        // integrate over the intersections.
+        if (parameters.coupling_strategy == "exact")
+          {
+            std::cout << "Start collecting quadratures" << std::endl;
 
-          double sum = 0.;
-          for (const auto &p : cells_and_quads)
             {
-              auto quad = std::get<2>(p);
-              sum += std::accumulate(quad.get_weights().begin(),
-                                     quad.get_weights().end(),
-                                     0.);
+              TimerOutput::Scope timer_section(
+                timer, "Compute quadratures on mesh intersections");
+              cells_and_quads =
+                NonMatching::collect_quadratures_on_overlapped_grids(
+                  *space_cache,
+                  *embedded_cache,
+                  2 * parameters.fe_space_degree + 1);
             }
-          std::cout << "Error in intersection: "
-                    << (sum - GridTools::volume(embedded_triangulation))
-                    << std::endl;
-        }
+          }
 
-      setup_coupling();
-      assemble_system();
-      solve();
-
-      // error_table.error_from_exact(space_dh, solution, exact_solution);
+        setup_coupling();
+        assemble_system();
+        solve();
+      }
       output_results(cycle);
-      // cells_and_quads.clear();
       if (cycle < parameters.n_refinement_cycles - 1)
-        space_triangulation.refine_global(1);
-      cells_and_quads.clear();
-      // embedded_triangulation.refine_global(1);
+        {
+          space_triangulation.refine_global(1);
+          // embedded_triangulation.refine_global(1);
+        }
     }
+  cells_and_quads.clear();
 
   convergence_table.set_precision("L2", 3);
   convergence_table.set_precision("H1", 3);
@@ -810,10 +798,19 @@ int main(int argc, char **argv)
         // std::cout << "Solving in 2D/2D" << std::endl;
         // PoissonDLM<2> problem;
         // problem.run();
-      } {
-        // std::cout << "Solving in 2D/3D" << std::endl;
-        // PoissonDLM<2, 3> problem;
-        // problem.run();
+        // } {
+        //   std::cout << "Solving in 2D/3D" << std::endl;
+        //   PoissonDLM<2, 3>::Parameters parameters;
+        //   PoissonDLM<2, 3>             problem(parameters);
+        //   std::string                  parameter_file;
+        //   if (argc > 1)
+        //     parameter_file = argv[1];
+        //   else
+        //     parameter_file = "parameters.prm";
+
+        //   ParameterAcceptor::initialize(parameter_file,
+        //   "used_parameters.prm");
+        //   problem.run();
       } {
         // std::cout << "Solving in 3D/3D" << std::endl;
         // PoissonDLM<3> problem;
