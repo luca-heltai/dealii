@@ -28,6 +28,18 @@
 DEAL_II_NAMESPACE_OPEN
 namespace CGALWrappers
 {
+  template <int spacedim, int n_vertices>
+  void
+  transform_to_cgal_vertex_order(
+    std::array<Point<spacedim>, n_vertices> &vertices);
+
+  template <int dim0, int dim1, int spacedim>
+  std::vector<std::array<Point<spacedim>, dim1 + 1>>
+  compute_intersection_of_cells(
+    const std::array<Point<spacedim>, int(std::pow(2, dim0))> &vertices0,
+    const std::array<Point<spacedim>, int(std::pow(2, dim1))> &vertices1,
+    const double                                               tol);
+
   /**
    * Given two deal.II affine cells, compute the intersection and return a
    * vector of simplices, each one identified by an array of deal.II Points. All
