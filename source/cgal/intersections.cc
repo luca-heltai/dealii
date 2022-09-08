@@ -608,8 +608,6 @@ namespace CGALWrappers
     const std::array<Point<3>, 8> &vertices1,
     const double                   tol)
   {
-    // TODO:????????!!!
-
     // Surface_mesh surf0, surf1, sm;
     // CGALWrappers::dealii_cell_to_cgal_surface_mesh(cell0, mapping0, surf0);
     // CGALWrappers::dealii_cell_to_cgal_surface_mesh(cell1, mapping1, surf1);
@@ -639,6 +637,12 @@ namespace CGALWrappers
     //   {
     //     return vertices;
     //   }
+
+    // TODO: implememnt 3d/3d cut
+    (void)vertices0;
+    (void)vertices1;
+    (void)tol;
+    return {};
   }
 
   template <int dim0, int dim1, int spacedim>
@@ -650,7 +654,7 @@ namespace CGALWrappers
     const Mapping<dim1, spacedim> &                              mapping1,
     const double                                                 tol)
   {
-    // Elements have to be rectangular
+    // Elements have to be rectangular (TODO:)
     Assert(mapping0.get_vertices(cell0).size() == std::pow(2, dim0),
            ExcNotImplemented());
     Assert(mapping1.get_vertices(cell1).size() == std::pow(2, dim1),

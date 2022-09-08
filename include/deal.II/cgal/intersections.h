@@ -28,6 +28,7 @@
 DEAL_II_NAMESPACE_OPEN
 namespace CGALWrappers
 {
+  // TODO: bound to rectangular els
   template <int dim0, int dim1, int spacedim>
   std::vector<std::array<Point<spacedim>, dim1 + 1>>
   compute_intersection_of_cells(

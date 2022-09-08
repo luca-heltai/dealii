@@ -602,12 +602,12 @@ namespace CGALWrappers
    * @return Array of vertices in CGAL order.
    */
   template <int dim, int spacedim>
-  decltype(auto)
+  decltype(auto) // TODO:expl return type if it works for simplices
   get_vertices_in_cgal_order(
     const typename dealii::Triangulation<dim, spacedim>::cell_iterator &cell,
     const Mapping<dim, spacedim> &                                      mapping)
   {
-    // Elements have to be rectangular
+    // Elements have to be rectangular (TODO:)
     Assert(mapping.get_vertices(cell).size() == std::pow(2, dim),
            ExcNotImplemented());
 
