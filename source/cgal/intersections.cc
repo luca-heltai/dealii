@@ -335,22 +335,6 @@ namespace CGALWrappers
     }
   } // namespace internal
 
-  template <int spacedim, int n_vertices>
-  void
-  transform_to_cgal_vertex_order(
-    std::array<Point<spacedim>, n_vertices> &vertices)
-  {
-    // if vertices have to be reordered there is a specialization
-    (void)vertices;
-  }
-
-  template <>
-  void
-  transform_to_cgal_vertex_order<2, 4>(std::array<Point<2>, 4> &vertices)
-  {
-    std::swap(vertices[2], vertices[3]);
-  }
-
   // Specialization for quads
   template <>
   std::vector<std::array<Point<2>, 3>>
@@ -672,13 +656,10 @@ namespace CGALWrappers
     Assert(mapping1.get_vertices(cell1).size() == std::pow(2, dim1),
            ExcNotImplemented());
 
-    std::array<Point<spacedim>, int(std::pow(2, dim0))> vertices0;
-    std::array<Point<spacedim>, int(std::pow(2, dim1))> vertices1;
-    std::copy_n(mapping0.get_vertices(cell0).begin(), 8, vertices0.begin());
-    std::copy_n(mapping1.get_vertices(cell1).begin(), 4, vertices1.begin());
-
-    transform_to_cgal_vertex_order(vertices0);
-    transform_to_cgal_vertex_order(vertices1);
+    const auto vertices0 =
+      CGALWrappers::get_vertices_in_cgal_order(cell0, mapping0);
+    const auto vertices1 =
+      CGALWrappers::get_vertices_in_cgal_order(cell1, mapping1);
 
     return compute_intersection_of_cells(vertices0, vertices1, tol);
   }

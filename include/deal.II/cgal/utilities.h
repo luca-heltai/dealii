@@ -592,6 +592,37 @@ namespace CGALWrappers
         Assert(false, ExcInternalError());
       }
   }
+
+
+  /**
+   * Get vertices of cell in CGAL ordering
+   *
+   * @param [in] cell A cell_iterator to a deal.II cell.
+   * @param [in] mapping Mapping object for the cell.
+   * @return Array of vertices in CGAL order.
+   */
+  template <int dim, int spacedim>
+  decltype(auto)
+  get_vertices_in_cgal_order(
+    const typename dealii::Triangulation<dim, spacedim>::cell_iterator &cell,
+    const Mapping<dim, spacedim> &                                      mapping)
+  {
+    // Elements have to be rectangular
+    Assert(mapping.get_vertices(cell).size() == std::pow(2, dim),
+           ExcNotImplemented());
+
+    std::array<Point<spacedim>, int(std::pow(2, dim))> vertices;
+    std::copy_n(mapping.get_vertices(cell).begin(),
+                vertices.size(),
+                vertices.begin());
+
+    if (ReferenceCell::n_vertices_to_type(dim, vertices.size()) ==
+        ReferenceCells::Quadrilateral)
+      std::swap(vertices[2], vertices[3]);
+
+    return vertices;
+  }
+
 } // namespace CGALWrappers
 #  endif
 

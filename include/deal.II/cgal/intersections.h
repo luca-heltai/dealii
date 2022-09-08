@@ -28,11 +28,6 @@
 DEAL_II_NAMESPACE_OPEN
 namespace CGALWrappers
 {
-  template <int spacedim, int n_vertices>
-  void
-  transform_to_cgal_vertex_order(
-    std::array<Point<spacedim>, n_vertices> &vertices);
-
   template <int dim0, int dim1, int spacedim>
   std::vector<std::array<Point<spacedim>, dim1 + 1>>
   compute_intersection_of_cells(
