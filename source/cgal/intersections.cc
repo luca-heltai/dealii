@@ -669,7 +669,7 @@ namespace CGALWrappers
     // Elements have to be rectangular
     Assert(mapping0.get_vertices(cell0).size() == std::pow(2, dim0),
            ExcNotImplemented());
-    Assert(mapping0.get_vertices(cell1).size() == std::pow(2, dim1),
+    Assert(mapping1.get_vertices(cell1).size() == std::pow(2, dim1),
            ExcNotImplemented());
 
     std::array<Point<spacedim>, int(std::pow(2, dim0))> vertices0;
