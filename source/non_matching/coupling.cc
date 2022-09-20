@@ -1500,7 +1500,7 @@ namespace NonMatching
         space_mapping.transform_points_real_to_unit_cell(space_cell,
                                                          real_qpts,
                                                          ref_pts_space);
-        std::cout << "Space indietro fatto" << std::endl;
+        // std::cout << "Space indietro fatto" << std::endl;
         // if (!(dynamic_cast<const MappingQ<dim1, spacedim> *>(
         //         &immersed_mapping) == nullptr))
         //   {

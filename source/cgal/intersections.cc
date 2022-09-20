@@ -519,7 +519,7 @@ namespace CGALWrappers
             //   {
             //     std::cout << "DEGENERATE TRIANGLE" << std::endl;
             //   }
-            std::cout << "PROVA do_intersect" << std::endl;
+            // std::cout << "PROVA do_intersect" << std::endl;
             CGALTriangle3_exact tria_test(f->vertex(0)->point(),
                                           f->vertex(1)->point(),
                                           f->vertex(2)->point());
@@ -539,7 +539,7 @@ namespace CGALWrappers
                 if (const CGALTriangle3_exact *t =
                       boost::get<CGALTriangle3_exact>(&*intersection))
                   {
-                    std::cout << "TRIANGOLO trovato" << std::endl;
+                    // std::cout << "TRIANGOLO trovato" << std::endl;
 
                     if (CGAL::to_double(t->squared_area()) > tol * tol)
                       {
@@ -567,7 +567,7 @@ namespace CGALWrappers
                       boost::get<std::vector<CGALPoint3_exact>>(&*intersection))
                   {
                     Delaunay tria_inter(vps->begin(), vps->end());
-                    std::cout << "Punti: " << vps->size() << std::endl;
+                    // std::cout << "Punti: " << vps->size() << std::endl;
                     for (auto it = tria_inter.finite_faces_begin();
                          it != tria_inter.finite_faces_end();
                          ++it)
@@ -581,14 +581,14 @@ namespace CGALWrappers
                         if (CGAL::to_double(tria_testt.squared_area()) >
                             tol * tol)
                           {
-                            std::cout
-                              << "Area: "
-                              << CGAL::to_double(tria_testt.squared_area())
-                              << std::endl;
-                            std::cout << "Prima del pushback: " << std::endl;
-                            std::cout << "0: " << tria_testt[0] << std::endl;
-                            std::cout << "1: " << tria_testt[1] << std::endl;
-                            std::cout << "2: " << tria_testt[2] << std::endl;
+                            // std::cout
+                            //   << "Area: "
+                            //   << CGAL::to_double(tria_testt.squared_area())
+                            //   << std::endl;
+                            // std::cout << "Prima del pushback: " << std::endl;
+                            // std::cout << "0: " << tria_testt[0] << std::endl;
+                            // std::cout << "1: " << tria_testt[1] << std::endl;
+                            // std::cout << "2: " << tria_testt[2] << std::endl;
 
                             std::array<Point<3>, 3> verts = {
                               {CGALWrappers::cgal_point_to_dealii_point<3>(
@@ -603,11 +603,11 @@ namespace CGALWrappers
                       }
                   }
               }
-            std::cout << "Quindi sono qui" << std::endl;
+            // std::cout << "Quindi sono qui" << std::endl;
           }
       }
 
-    std::cout << "E SONO ARRIVAT* QUA" << std::endl;
+    // std::cout << "E SONO ARRIVAT* QUA" << std::endl;
     return vertices;
 
 #  else

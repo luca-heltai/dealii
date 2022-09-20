@@ -276,7 +276,11 @@ void PoissonDLM<dim, spacedim>::setup_grids_and_dofs()
         }
       else if constexpr (dim == 2 && spacedim == 3)
         {
-          GridGenerator::hyper_cube(embedded_triangulation, -0.42, 0.56);
+          GridGenerator::hyper_cube(embedded_triangulation, -0.45, 0.45);
+          // GridGenerator::hyper_cube(embedded_triangulation, -0.42, 0.56);
+          // GridTools::rotate(Tensor<1, 3>({1. / sqrt(2.), 1. / sqrt(2.), 0.}),
+          //                   numbers::PI_4,
+          //                   embedded_triangulation);
           // GridGenerator::hyper_sphere(embedded_triangulation, {}, R);
           // GridGenerator::hyper_cross(embedded_triangulation, {0, 0, 1, 0});
           space_triangulation.refine_global(
@@ -748,6 +752,19 @@ void PoissonDLM<dim, spacedim>::run()
                   *space_cache,
                   *embedded_cache,
                   2 * parameters.fe_space_degree + 1);
+
+              double sum = 0.;
+              for (const auto &info : cells_and_quads)
+                {
+                  const auto &q = std::get<2>(info);
+                  sum += std::accumulate(q.get_weights().begin(),
+                                         q.get_weights().end(),
+                                         0.);
+                }
+              std::cout << "Area: " << sum << std::endl;
+              std::cout << "Area expected: "
+                        << GridTools::volume(embedded_triangulation)
+                        << std::endl;
             }
           }
 
@@ -782,9 +799,25 @@ int main(int argc, char **argv)
   try
     {
       {
-        std::cout << "Solving in 1D/2D" << std::endl;
-        PoissonDLM<1, 2>::Parameters parameters;
-        PoissonDLM<1, 2>             problem(parameters);
+        // std::cout << "Solving in 1D/2D" << std::endl;
+        // PoissonDLM<1, 2>::Parameters parameters;
+        // PoissonDLM<1, 2>             problem(parameters);
+        // std::string                  parameter_file;
+        // if (argc > 1)
+        //   parameter_file = argv[1];
+        // else
+        //   parameter_file = "parameters.prm";
+
+        // ParameterAcceptor::initialize(parameter_file, "used_parameters.prm");
+        // problem.run();
+      } {
+        // std::cout << "Solving in 2D/2D" << std::endl;
+        // PoissonDLM<2> problem;
+        // problem.run();
+        // } {
+        std::cout << "Solving in 2D/3D" << std::endl;
+        PoissonDLM<2, 3>::Parameters parameters;
+        PoissonDLM<2, 3>             problem(parameters);
         std::string                  parameter_file;
         if (argc > 1)
           parameter_file = argv[1];
@@ -795,23 +828,6 @@ int main(int argc, char **argv)
         problem.run();
       }
       {
-        // std::cout << "Solving in 2D/2D" << std::endl;
-        // PoissonDLM<2> problem;
-        // problem.run();
-        // } {
-        //   std::cout << "Solving in 2D/3D" << std::endl;
-        //   PoissonDLM<2, 3>::Parameters parameters;
-        //   PoissonDLM<2, 3>             problem(parameters);
-        //   std::string                  parameter_file;
-        //   if (argc > 1)
-        //     parameter_file = argv[1];
-        //   else
-        //     parameter_file = "parameters.prm";
-
-        //   ParameterAcceptor::initialize(parameter_file,
-        //   "used_parameters.prm");
-        //   problem.run();
-      } {
         // std::cout << "Solving in 3D/3D" << std::endl;
         // PoissonDLM<3> problem;
         // problem.run();
