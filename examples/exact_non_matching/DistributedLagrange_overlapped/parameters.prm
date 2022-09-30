@@ -33,7 +33,7 @@ subsection Distributed Lagrange<1,2>
     # If the function you are describing represents a vector-valued function
     # with multiple components, then separate the expressions for individual
     # components by a semicolon.
-    set Function expression = sin(2*pi*x)*sin(2*pi*y) # 
+    set Function expression = sqrt(x^2+y^2)<.45 ? -(2*x*(x^2-3*y^2))/((sqrt(x^2+y^2))^3) : -(2*x*(x^2-3*y^2))/((x^2+y^2)^3) # sin(2*pi*x)*sin(2*pi*y) # 
 
     # The names of the variables as they will be used in the function,
     # separated by commas. By default, the names of variables at which the
@@ -74,7 +74,7 @@ subsection Distributed Lagrange<1,2>
     # If the function you are describing represents a vector-valued function
     # with multiple components, then separate the expressions for individual
     # components by a semicolon.
-    set Function expression = 8*pi^2*sin(2*pi*x)*sin(2*pi*y)
+    set Function expression = 0.#8*pi^2*sin(2*pi*x)*sin(2*pi*y)
 
     # The names of the variables as they will be used in the function,
     # separated by commas. By default, the names of variables at which the
@@ -115,7 +115,7 @@ subsection Distributed Lagrange<1,2>
     # If the function you are describing represents a vector-valued function
     # with multiple components, then separate the expressions for individual
     # components by a semicolon.
-    set Function expression = sin(2*pi*x)*sin(2*pi*y) # sqrt(x^2+y^2)<.45 ? x : x*(0.45*0.45)/(x^2+y^2)      # default: 0
+    set Function expression = sqrt(x^2+y^2)<.45 ? -(2*x*(x^2-3*y^2))/((sqrt(x^2+y^2))^3) : -(2*x*(x^2-3*y^2))/((x^2+y^2)^3)  #sin(2*pi*x)*sin(2*pi*y) # sqrt(x^2+y^2)<.45 ? x : x*(0.45*0.45)/(x^2+y^2)      # default: 0
 
     # The names of the variables as they will be used in the function,
     # separated by commas. By default, the names of variables at which the

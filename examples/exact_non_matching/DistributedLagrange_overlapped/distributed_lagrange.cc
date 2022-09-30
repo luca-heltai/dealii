@@ -173,6 +173,9 @@ private:
   ParameterAcceptorProxy<Functions::ParsedFunction<spacedim>> solution_function;
 
   ParameterAcceptorProxy<Functions::ParsedFunction<spacedim>>
+    multiplier_function;
+
+  ParameterAcceptorProxy<Functions::ParsedFunction<spacedim>>
     boundary_condition_function;
 
   mutable TimerOutput timer;
@@ -228,6 +231,7 @@ PoissonDLM<dim, spacedim>::PoissonDLM(const Parameters &parameters)
   : parameters(parameters)
   , rhs_function("Right hand side")
   , solution_function("Solution")
+  , multiplier_function("Solution multiplier")
   , boundary_condition_function("Boundary condition")
   , timer(std::cout,
           TimerOutput::every_call_and_summary,
@@ -238,6 +242,9 @@ PoissonDLM<dim, spacedim>::PoissonDLM(const Parameters &parameters)
 
   solution_function.declare_parameters_call_back.connect(
     []() -> void { ParameterAcceptor::prm.set("Function expression", "1"); });
+
+  multiplier_function.declare_parameters_call_back.connect(
+    []() -> void { ParameterAcceptor::prm.set("Function expression", "0"); });
 
   boundary_condition_function.declare_parameters_call_back.connect(
     []() -> void { ParameterAcceptor::prm.set("Function expression", "0"); });
@@ -712,6 +719,30 @@ void PoissonDLM<dim, spacedim>::output_results(const unsigned cycle) const
     convergence_table.add_value("dofs", space_dh->n_dofs());
     convergence_table.add_value("L2", L2_error);
     convergence_table.add_value("H1", H1_error);
+
+    // Multiplier rate
+
+    {
+      Vector<double> difference_per_cell_multiplier(
+        embedded_triangulation.n_active_cells());
+      VectorTools::integrate_difference(
+        *embedded_dh,
+        lambda,
+        multiplier_function,
+        difference_per_cell_multiplier,
+        QGauss<dim>(2 * parameters.fe_embedded_degree + 1),
+        VectorTools::L2_norm);
+      const double L2_error_multiplier =
+        VectorTools::compute_global_error(embedded_triangulation,
+                                          difference_per_cell_multiplier,
+                                          VectorTools::L2_norm);
+      std::cout << "L2 error multiplier: " << L2_error_multiplier << std::endl;
+
+      // convergence_table.add_value("cells_embedded",
+      //                             embedded_triangulation.n_active_cells());
+      // convergence_table.add_value("dofs_embedded", embedded_dh->n_dofs());
+      // convergence_table.add_value("L2_multiplier", L2_error_multiplier);
+    }
   }
 
   {
@@ -751,7 +782,8 @@ void PoissonDLM<dim, spacedim>::run()
                 NonMatching::collect_quadratures_on_overlapped_grids(
                   *space_cache,
                   *embedded_cache,
-                  2 * parameters.fe_space_degree + 1);
+                  2 * parameters.fe_space_degree + 1,
+                  1e-15);
 
               double sum = 0.;
               for (const auto &info : cells_and_quads)
@@ -789,6 +821,10 @@ void PoissonDLM<dim, spacedim>::run()
     "L2", ConvergenceTable::reduction_rate_log2);
   convergence_table.evaluate_convergence_rates(
     "H1", ConvergenceTable::reduction_rate_log2);
+  // convergence_table.set_precision("L2_multiplier", 3);
+  // convergence_table.set_scientific("L2_multiplier", true);
+  // convergence_table.evaluate_convergence_rates(
+  //   "L2_multiplier", ConvergenceTable::reduction_rate_log2);
   convergence_table.write_text(std::cout);
 }
 
@@ -799,25 +835,9 @@ int main(int argc, char **argv)
   try
     {
       {
-        // std::cout << "Solving in 1D/2D" << std::endl;
-        // PoissonDLM<1, 2>::Parameters parameters;
-        // PoissonDLM<1, 2>             problem(parameters);
-        // std::string                  parameter_file;
-        // if (argc > 1)
-        //   parameter_file = argv[1];
-        // else
-        //   parameter_file = "parameters.prm";
-
-        // ParameterAcceptor::initialize(parameter_file, "used_parameters.prm");
-        // problem.run();
-      } {
-        // std::cout << "Solving in 2D/2D" << std::endl;
-        // PoissonDLM<2> problem;
-        // problem.run();
-        // } {
-        std::cout << "Solving in 2D/3D" << std::endl;
-        PoissonDLM<2, 3>::Parameters parameters;
-        PoissonDLM<2, 3>             problem(parameters);
+        std::cout << "Solving in 1D/2D" << std::endl;
+        PoissonDLM<1, 2>::Parameters parameters;
+        PoissonDLM<1, 2>             problem(parameters);
         std::string                  parameter_file;
         if (argc > 1)
           parameter_file = argv[1];
@@ -828,6 +848,22 @@ int main(int argc, char **argv)
         problem.run();
       }
       {
+        // std::cout << "Solving in 2D/2D" << std::endl;
+        // PoissonDLM<2> problem;
+        // problem.run();
+        // // } {
+        // std::cout << "Solving in 2D/3D" << std::endl;
+        // PoissonDLM<2, 3>::Parameters parameters;
+        // PoissonDLM<2, 3>             problem(parameters);
+        // std::string                  parameter_file;
+        // if (argc > 1)
+        //   parameter_file = argv[1];
+        // else
+        //   parameter_file = "parameters.prm";
+
+        // ParameterAcceptor::initialize(parameter_file, "used_parameters.prm");
+        // problem.run();
+      } {
         // std::cout << "Solving in 3D/3D" << std::endl;
         // PoissonDLM<3> problem;
         // problem.run();
