@@ -170,7 +170,7 @@ namespace CGALWrappers
     // identified by array of points. The return type is the one of
     // CGAL::intersection(), i.e. a boost::optional<boost::variant<>>.
     // Intersection between 2D and 3D objects and 1D/3D objects are available
-    // only with CGAL versions greater or equal than 5.1.5, hence the
+    // only with CGAL versions greater or equal than 5.5, hence the
     // corresponding functions are guarded by #ifdef directives. All the
     // signatures follow the convection that the first entity has an intrinsic
     // dimension higher than the second one.
@@ -269,7 +269,7 @@ namespace CGALWrappers
     compute_intersection(const std::array<Point<3>, 2> &first_simplex,
                          const std::array<Point<3>, 4> &second_simplex)
     {
-#  if DEAL_II_CGAL_VERSION_GTE(5, 5, 0)
+#  if DEAL_II_CGAL_VERSION_GTE(5, 1, 5)
       std::array<CGALPoint3, 4> pts0;
       std::array<CGALPoint3, 2> pts1;
       std::transform(
@@ -296,7 +296,7 @@ namespace CGALWrappers
       Assert(
         false,
         ExcMessage(
-          "This function requires a version of CGAL greater or equal than 5.1.5."));
+          "This function requires a version of CGAL greater or equal than 5.5."));
       (void)first_simplex;
       (void)second_simplex;
       return {};
@@ -311,7 +311,7 @@ namespace CGALWrappers
     compute_intersection(const std::array<Point<3>, 3> &first_simplex,
                          const std::array<Point<3>, 4> &second_simplex)
     {
-#  if DEAL_II_CGAL_VERSION_GTE(5, 5, 0)
+#  if DEAL_II_CGAL_VERSION_GTE(5, 1, 5)
       std::array<CGALPoint3, 4> pts0;
       std::array<CGALPoint3, 3> pts1;
       std::transform(
@@ -337,7 +337,7 @@ namespace CGALWrappers
       Assert(
         false,
         ExcMessage(
-          "This function requires a version of CGAL greater or equal than 5.1.5."));
+          "This function requires a version of CGAL greater or equal than 5.5."));
       (void)first_simplex;
       (void)second_simplex;
       return {};
@@ -464,7 +464,7 @@ namespace CGALWrappers
     const std::array<Point<3>, 2> &vertices1,
     const double                   tol)
   {
-#  if DEAL_II_CGAL_VERSION_GTE(5, 5, 0)
+#  if DEAL_II_CGAL_VERSION_GTE(5, 1, 5)
     std::array<CGALPoint3_exact, 8> pts;
     std::transform(
       vertices0.begin(), vertices0.end(), pts.begin(), [&](const Point<3> &p) {
@@ -506,7 +506,7 @@ namespace CGALWrappers
     Assert(
       false,
       ExcMessage(
-        "This function requires a version of CGAL greater or equal than 5.1.5."));
+        "This function requires a version of CGAL greater or equal than 5.5."));
     (void)vertices0;
     (void)vertices1;
     (void)tol;
@@ -521,7 +521,7 @@ namespace CGALWrappers
     const std::array<Point<3>, 4> &vertices1,
     const double                   tol)
   {
-#  if DEAL_II_CGAL_VERSION_GTE(5, 5, 0)
+#  if DEAL_II_CGAL_VERSION_GTE(5, 1, 5)
     std::array<CGALPoint3_exact, 8> pts_hex;
     std::array<CGALPoint3_exact, 4> pts_quad;
     std::transform(
@@ -607,7 +607,7 @@ namespace CGALWrappers
     Assert(
       false,
       ExcMessage(
-        "This function requires a version of CGAL greater or equal than 5.1.5."));
+        "This function requires a version of CGAL greater or equal than 5.5."));
     (void)vertices0;
     (void)vertices1;
     (void)tol;
