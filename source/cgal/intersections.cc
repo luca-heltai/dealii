@@ -346,6 +346,19 @@ namespace CGALWrappers
   } // namespace internal
 
 
+  template <int dim0, int dim1, int spacedim, int n_vertices0, int n_vertices1>
+  std::vector<std::array<Point<spacedim>, dim1 + 1>>
+  compute_intersection_of_cells(
+    const std::array<Point<spacedim>, n_vertices0> &vertices0,
+    const std::array<Point<spacedim>, n_vertices1> &vertices1,
+    const double                                    tol)
+  {
+    (void)vertices0;
+    (void)vertices1;
+    (void)tol;
+    Assert(false, ExcMessage("No explicit template instantiation available"));
+    return {};
+  }
 
   // Specialization for quads
   template <>
@@ -723,6 +736,8 @@ namespace CGALWrappers
       CGALWrappers::get_vertices_in_cgal_order<Utilities::pow(2, dim1)>(
         cell1, mapping1);
 
+    std::array<dealii::Point<spacedim, double>, Utilities::pow(2, dim0) + 2>
+      vertices00;
     return compute_intersection_of_cells<dim0,
                                          dim1,
                                          spacedim,

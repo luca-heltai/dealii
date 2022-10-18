@@ -67,14 +67,7 @@ namespace CGALWrappers
   compute_intersection_of_cells(
     const std::array<Point<spacedim>, n_vertices0> &vertices0,
     const std::array<Point<spacedim>, n_vertices1> &vertices1,
-    const double                                    tol = 1e-9)
-  {
-    (void)vertices0;
-    (void)vertices1;
-    (void)tol;
-    Assert(false, ExcMessage("No explicit template instantiation available"));
-    return {};
-  }
+    const double                                    tol = 1e-9);
 } // namespace CGALWrappers
 
 DEAL_II_NAMESPACE_CLOSE

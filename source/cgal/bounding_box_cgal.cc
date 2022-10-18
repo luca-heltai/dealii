@@ -101,15 +101,16 @@ OptimalBoundingBox<spacedim, Number>::OptimalBoundingBox(
                      p);
                  });
   Custom_traits_BBox<K> custom_traits;
-  CGAL::oriented_bounding_box(cgal_pts,
-                              cgal_out_pts,
-                              CGAL::parameters::geom_traits(custom_traits));
-  std::transform(cgal_out_pts.begin(),
-                 cgal_out_pts.end(),
-                 extreme_pts.begin(),
-                 [&](const CGALPoint3 &p) {
-                   return CGALWrappers::cgal_point_to_dealii_point<spacedim>(p);
-                 });
+  // CGAL::oriented_bounding_box(cgal_pts,
+  //                             cgal_out_pts,
+  //                             CGAL::parameters::geom_traits(custom_traits));
+  // std::transform(cgal_out_pts.begin(),
+  //                cgal_out_pts.end(),
+  //                extreme_pts.begin(),
+  //                [&](const CGALPoint3 &p) {
+  //                  return
+  //                  CGALWrappers::cgal_point_to_dealii_point<spacedim>(p);
+  //                });
 
 
 #else

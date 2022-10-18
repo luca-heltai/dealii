@@ -47,6 +47,8 @@ private:
   std::array<Point<spacedim, Number>, Utilities::pow(2, spacedim)> extreme_pts;
 };
 
+// extern template class OptimalBoundingBox<2>;
+
 DEAL_II_NAMESPACE_CLOSE
 
 #endif
