@@ -61,20 +61,15 @@ namespace CGALWrappers
 
   /**
    * Same function as above, but working directly with vertices.
+   * @note the vertices have to be given in CGAL order
    */
   template <int dim0, int dim1, int spacedim, int n_vertices0, int n_vertices1>
   std::vector<std::array<Point<spacedim>, dim1 + 1>>
   compute_intersection_of_cells(
     const std::array<Point<spacedim>, n_vertices0> &vertices0,
     const std::array<Point<spacedim>, n_vertices1> &vertices1,
-    const double                                    tol = 1e-9)
-  {
-    (void)vertices0;
-    (void)vertices1;
-    (void)tol;
-    Assert(false, ExcMessage("No explicit template instantiation available"));
-    return {};
-  }
+    const double                                    tol = 1e-9);
+
 } // namespace CGALWrappers
 
 DEAL_II_NAMESPACE_CLOSE

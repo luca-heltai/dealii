@@ -412,7 +412,22 @@ namespace CGALWrappers
       }
   }
 
+  // Specialization for quads in 3D
+  template <>
+  std::vector<std::array<Point<3>, 3>>
+  compute_intersection_of_cells<2, 2, 3, 4, 4>(
+    const std::array<Point<3>, 4> &vertices0,
+    const std::array<Point<3>, 4> &vertices1,
+    const double                   tol)
+  {
+    // intersections of quads with arbitrary orientation in 3d
+    Assert(false, ExcNotImplemented());
 
+    (void)vertices0;
+    (void)vertices1;
+    (void)tol;
+    return {};
+  }
 
   // Specialization for quad \cap line
   template <>
@@ -454,6 +469,23 @@ namespace CGALWrappers
           }
       }
     return vertices;
+  }
+
+  // Specialization for quad \cap line in 3D
+  template <>
+  std::vector<std::array<Point<3>, 2>>
+  compute_intersection_of_cells<2, 1, 3, 4, 2>(
+    const std::array<Point<3>, 4> &vertices0,
+    const std::array<Point<3>, 2> &vertices1,
+    const double                   tol)
+  {
+    // intersections of quad \cap line with arbitrary orientation in 3d
+    Assert(false, ExcNotImplemented());
+
+    (void)vertices0;
+    (void)vertices1;
+    (void)tol;
+    return {};
   }
 
   // specialization for hex \cap line
