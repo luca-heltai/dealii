@@ -130,12 +130,16 @@ namespace PETScWrappers
                   const std::vector<IndexSet> &ghost_indices,
                   const MPI_Comm &             communicator);
 
+      /**
+       * Create a BlockVector with a PETSc Vec
+       */
+      explicit BlockVector(Vec v);
 
 
       /**
        * Destructor. Clears memory
        */
-      ~BlockVector() override = default;
+      ~BlockVector() override;
 
       /**
        * Copy operator: fill all components of the vector that are locally
@@ -149,6 +153,13 @@ namespace PETScWrappers
        */
       BlockVector &
       operator=(const BlockVector &V);
+
+      /**
+       * This method assignes the PETSc Vec to the instance of the class.
+       *
+       */
+      void
+      assign_petsc_vector(Vec v);
 
       /**
        * Reinitialize the BlockVector to contain @p n_blocks of size @p
@@ -226,6 +237,16 @@ namespace PETScWrappers
              const MPI_Comm &             communicator);
 
       /**
+       * This function collects the sizes of the sub-objects and stores them
+       * in internal arrays, in order to be able to relay global indices into
+       * the vector to indices into the subobjects. You *must* call this
+       * function each time after you have changed the size of the sub-
+       * objects.
+       */
+      void
+      collect_sizes();
+
+      /**
        * Change the number of blocks to <tt>num_blocks</tt>. The individual
        * blocks will get initialized with zero size, so it is assumed that the
        * user resizes the individual blocks by herself in an appropriate way,
@@ -246,6 +267,14 @@ namespace PETScWrappers
        */
       const MPI_Comm &
       get_mpi_communicator() const;
+
+      /**
+       * Return a reference to the underlying PETSc type. It can be used to
+       * modify the underlying data, so use it only when you know what you
+       * are doing.
+       */
+      Vec &
+      petsc_vector();
 
       /**
        * Swap the contents of this vector and the other vector <tt>v</tt>. One
@@ -284,6 +313,12 @@ namespace PETScWrappers
        * Exception
        */
       DeclException0(ExcNonMatchingBlockVectors);
+
+    private:
+      void
+      setup_nest_vec();
+
+      Vec petsc_nest_vector = nullptr;
     };
 
     /** @} */
@@ -317,6 +352,7 @@ namespace PETScWrappers
 
       for (unsigned int i = 0; i < this->n_blocks(); ++i)
         this->components[i] = v.components[i];
+      setup_nest_vec();
     }
 
     inline BlockVector::BlockVector(
@@ -332,6 +368,12 @@ namespace PETScWrappers
       const MPI_Comm &             communicator)
     {
       reinit(parallel_partitioning, ghost_indices, communicator);
+    }
+
+    inline BlockVector::BlockVector(Vec v)
+      : BlockVectorBase<Vector>()
+    {
+      this->assign_petsc_vector(v);
     }
 
     inline BlockVector &
@@ -392,6 +434,7 @@ namespace PETScWrappers
                                    block_sizes[i],
                                    locally_owned_sizes[i],
                                    omit_zeroing_entries);
+      setup_nest_vec();
     }
 
 
@@ -404,6 +447,7 @@ namespace PETScWrappers
 
       for (unsigned int i = 0; i < this->n_blocks(); ++i)
         block(i).reinit(v.block(i), omit_zeroing_entries);
+      setup_nest_vec();
     }
 
     inline void
@@ -420,6 +464,8 @@ namespace PETScWrappers
 
       for (unsigned int i = 0; i < this->n_blocks(); ++i)
         block(i).reinit(parallel_partitioning[i], communicator);
+
+      setup_nest_vec();
     }
 
     inline void
@@ -439,6 +485,8 @@ namespace PETScWrappers
         block(i).reinit(parallel_partitioning[i],
                         ghost_entries[i],
                         communicator);
+
+      setup_nest_vec();
     }
 
 
@@ -446,7 +494,12 @@ namespace PETScWrappers
     inline const MPI_Comm &
     BlockVector::get_mpi_communicator() const
     {
-      return block(0).get_mpi_communicator();
+      static MPI_Comm comm = PETSC_COMM_SELF;
+      MPI_Comm        pcomm =
+        PetscObjectComm(reinterpret_cast<PetscObject>(petsc_nest_vector));
+      if (pcomm != MPI_COMM_NULL)
+        comm = pcomm;
+      return comm;
     }
 
     inline bool
@@ -465,6 +518,7 @@ namespace PETScWrappers
     BlockVector::swap(BlockVector &v)
     {
       std::swap(this->components, v.components);
+      std::swap(this->petsc_nest_vector, v.petsc_nest_vector);
 
       ::dealii::swap(this->block_indices, v.block_indices);
     }
@@ -501,7 +555,6 @@ namespace PETScWrappers
     {
       u.swap(v);
     }
-
   } // namespace MPI
 
 } // namespace PETScWrappers
