@@ -1431,6 +1431,16 @@ public:
                     const UpdateFlags                   update_flags);
 
   /**
+   *
+   * Construct the FEInterfaceValues combining two already existing FEFaceValues
+   * objects. As such, all the usual arguments of a FEValues like constructor
+   * (‘Quadrature‘, ‘UpdateFlags‘,...) must be set before calling
+   * this function.
+   */
+  FEInterfaceValues(FEFaceValuesBase<dim, spacedim> *fe0,
+                    FEFaceValuesBase<dim, spacedim> *fe1);
+
+  /**
    * Re-initialize this object to be used on a new interface given by two faces
    * of two neighboring cells. The `cell` and `cell_neighbor` cells will be
    * referred to through `cell_index` zero and one after this call in all places
@@ -1484,6 +1494,13 @@ public:
   template <class CellIteratorType>
   void
   reinit(const CellIteratorType &cell, const unsigned int face_no);
+
+  template <class CellIteratorType, class CellNeighborIteratorType>
+  void
+  reinit(const CellIteratorType &        cell,
+         const unsigned int              face_no,
+         const CellNeighborIteratorType &cell_neighbor,
+         const unsigned int              face_no_neighbor);
 
   /**
    * Return a reference to the FEFaceValues or FESubfaceValues object
@@ -2228,6 +2245,98 @@ FEInterfaceValues<dim, spacedim>::FEInterfaceValues(
   , fe_face_values(nullptr)
   , fe_face_values_neighbor(nullptr)
 {}
+
+
+
+template <int dim, int spacedim>
+FEInterfaceValues<dim, spacedim>::FEInterfaceValues(
+  FEFaceValuesBase<dim, spacedim> *fe0,
+  FEFaceValuesBase<dim, spacedim> *fe1)
+  : n_quadrature_points(fe0->max_n_quadrature_points)
+  , internal_fe_face_values(fe0->get_mapping(),
+                            fe0->get_fe(),
+                            fe0->get_quadrature(),
+                            fe0->get_update_flags())
+  , internal_fe_subface_values(fe0->get_mapping(),
+                               fe0->get_fe(),
+                               fe0->get_quadrature(),
+                               fe0->get_update_flags())
+  , internal_fe_face_values_neighbor(fe1->get_mapping(),
+                                     fe1->get_fe(),
+                                     fe1->get_quadrature(),
+                                     fe1->get_update_flags())
+  , internal_fe_subface_values_neighbor(fe1->get_mapping(),
+                                        fe1->get_fe(),
+                                        fe1->get_quadrature(),
+                                        fe1->get_update_flags())
+
+{
+  AssertDimension(internal_fe_face_values.n_quadrature_points,
+                  internal_fe_face_values_neighbor.n_quadrature_points);
+
+  fe_face_values          = fe0;
+  fe_face_values_neighbor = fe1;
+}
+
+
+
+template <int dim, int spacedim>
+template <class CellIteratorType, class CellNeighborIteratorType>
+void
+FEInterfaceValues<dim, spacedim>::reinit(
+  const CellIteratorType &        cell,
+  const unsigned int              face_no,
+  const CellNeighborIteratorType &cell_neighbor,
+  const unsigned int              face_no_neighbor)
+{
+  Assert(fe_face_values,
+         ExcMessage("This FEValues like object has not been reinited."));
+  Assert(fe_face_values_neighbor,
+         ExcMessage("This FEValues like object has not been reinited."));
+
+  // Set up dof mapping and remove duplicates (for continuous elements).
+  {
+    // Get dof indices first:
+    std::vector<types::global_dof_index> v(
+      fe_face_values->get_fe().n_dofs_per_cell());
+    cell->get_active_or_mg_dof_indices(v);
+    std::vector<types::global_dof_index> v2(
+      fe_face_values_neighbor->get_fe().n_dofs_per_cell());
+    cell_neighbor->get_active_or_mg_dof_indices(v2);
+
+    // Fill a map from the global dof index to the left and right
+    // local index.
+    std::map<types::global_dof_index, std::pair<unsigned int, unsigned int>>
+                                          tempmap;
+    std::pair<unsigned int, unsigned int> invalid_entry(
+      numbers::invalid_unsigned_int, numbers::invalid_unsigned_int);
+
+    for (unsigned int i = 0; i < v.size(); ++i)
+      {
+        // If not already existing, add an invalid entry:
+        auto result = tempmap.insert(std::make_pair(v[i], invalid_entry));
+        result.first->second.first = i;
+      }
+
+    for (unsigned int i = 0; i < v2.size(); ++i)
+      {
+        // If not already existing, add an invalid entry:
+        auto result = tempmap.insert(std::make_pair(v2[i], invalid_entry));
+        result.first->second.second = i;
+      }
+
+    // Transfer from the map to the sorted std::vectors.
+    dofmap.resize(tempmap.size());
+    interface_dof_indices.resize(tempmap.size());
+    unsigned int idx = 0;
+    for (auto &x : tempmap)
+      {
+        interface_dof_indices[idx] = x.first;
+        dofmap[idx]                = {{x.second.first, x.second.second}};
+        ++idx;
+      }
+  }
+}
 
 
 
