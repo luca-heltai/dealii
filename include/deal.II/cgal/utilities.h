@@ -602,28 +602,26 @@ namespace CGALWrappers
    * @param mapping Mapping object for the cell.
    * @return  Array of vertices in CGAL order.
    */
-  template <int n_vertices, int dim, int spacedim>
-  std::array<Point<spacedim>, n_vertices>
+  template <int dim, int spacedim>
+  void
   get_vertices_in_cgal_order(
     const typename dealii::Triangulation<dim, spacedim>::cell_iterator &cell,
-    const Mapping<dim, spacedim> &                                      mapping)
+    const Mapping<dim, spacedim> &                                      mapping,
+    std::vector<Point<spacedim>> &out_vertices)
   {
     // Elements have to be rectangular or simplices
+    const unsigned int n_vertices = cell->n_vertices();
     Assert(n_vertices == std::pow(2, dim) || n_vertices == dim + 1,
            ExcNotImplemented());
     AssertDimension(mapping.get_vertices(cell).size(), n_vertices);
 
-    std::array<Point<spacedim>, n_vertices> vertices;
-
     std::copy_n(mapping.get_vertices(cell).begin(),
-                vertices.size(),
-                vertices.begin());
+                out_vertices.size(),
+                out_vertices.begin());
 
     if (ReferenceCell::n_vertices_to_type(dim, n_vertices) ==
         ReferenceCells::Quadrilateral)
-      std::swap(vertices[2], vertices[3]);
-
-    return vertices;
+      std::swap(out_vertices[2], out_vertices[3]);
   }
 
 } // namespace CGALWrappers

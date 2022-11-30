@@ -43,12 +43,16 @@ test_inside_intersection(Triangulation<2> &tria0, Triangulation<2> &tria1)
   const auto   cell0         = tria0.begin_active();
   const auto   cell1         = tria1.begin_active();
 
+  const unsigned int    size = MappingQ1<2>().get_vertices(cell0).size();
+  std::vector<Point<2>> vertices0(size), vertices1(size);
+  CGALWrappers::get_vertices_in_cgal_order(tria0.begin_active(),
+                                           MappingQ1<2>(),
+                                           vertices0);
+  CGALWrappers::get_vertices_in_cgal_order(tria1.begin_active(),
+                                           MappingQ1<2>(),
+                                           vertices1);
   const auto vec_of_arrays =
-    CGALWrappers::compute_intersection_of_cells<2, 2, 2, 4, 4>(
-      CGALWrappers::get_vertices_in_cgal_order<4>(tria0.begin_active(),
-                                                  MappingQ1<2>()),
-      CGALWrappers::get_vertices_in_cgal_order<4>(tria1.begin_active(),
-                                                  MappingQ1<2>()));
+    CGALWrappers::compute_intersection_of_cells<2, 2, 2>(vertices0, vertices1);
 
 
   const auto   quad = QGaussSimplex<2>(1).mapped_quadrature(vec_of_arrays);
@@ -67,15 +71,19 @@ test_intersection(Triangulation<2> &tria0, Triangulation<2> &tria1)
   GridGenerator::hyper_cube(tria1, .5, 1.45);
   const double expected_area = 0.25;
 
-  const auto cell0 = tria0.begin_active();
-  const auto cell1 = tria1.begin_active();
+  const auto         cell0 = tria0.begin_active();
+  const auto         cell1 = tria1.begin_active();
+  const unsigned int size  = MappingQ1<2>().get_vertices(cell0).size();
 
+  std::vector<Point<2>> vertices0(size), vertices1(size);
+  CGALWrappers::get_vertices_in_cgal_order(tria0.begin_active(),
+                                           MappingQ1<2>(),
+                                           vertices0);
+  CGALWrappers::get_vertices_in_cgal_order(tria1.begin_active(),
+                                           MappingQ1<2>(),
+                                           vertices1);
   const auto vec_of_arrays =
-    CGALWrappers::compute_intersection_of_cells<2, 2, 2, 4, 4>(
-      CGALWrappers::get_vertices_in_cgal_order<4>(tria0.begin_active(),
-                                                  MappingQ1<2>()),
-      CGALWrappers::get_vertices_in_cgal_order<4>(tria1.begin_active(),
-                                                  MappingQ1<2>()));
+    CGALWrappers::compute_intersection_of_cells<2, 2, 2>(vertices0, vertices1);
 
 
   const auto   quad = QGaussSimplex<2>(1).mapped_quadrature(vec_of_arrays);
@@ -94,15 +102,19 @@ test_failing_intersection(Triangulation<2> &tria0, Triangulation<2> &tria1)
   GridGenerator::hyper_cube(tria1, 1.5, 2.5);
   const double expected_area = 0.;
 
-  const auto cell0 = tria0.begin_active();
-  const auto cell1 = tria1.begin_active();
+  const auto         cell0 = tria0.begin_active();
+  const auto         cell1 = tria1.begin_active();
+  const unsigned int size  = MappingQ1<2>().get_vertices(cell0).size();
 
+  std::vector<Point<2>> vertices0(size), vertices1(size);
+  CGALWrappers::get_vertices_in_cgal_order(tria0.begin_active(),
+                                           MappingQ1<2>(),
+                                           vertices0);
+  CGALWrappers::get_vertices_in_cgal_order(tria1.begin_active(),
+                                           MappingQ1<2>(),
+                                           vertices1);
   const auto vec_of_arrays =
-    CGALWrappers::compute_intersection_of_cells<2, 2, 2, 4, 4>(
-      CGALWrappers::get_vertices_in_cgal_order<4>(tria0.begin_active(),
-                                                  MappingQ1<2>()),
-      CGALWrappers::get_vertices_in_cgal_order<4>(tria1.begin_active(),
-                                                  MappingQ1<2>()));
+    CGALWrappers::compute_intersection_of_cells<2, 2, 2>(vertices0, vertices1);
 
 
   const auto   quad = QGaussSimplex<2>(1).mapped_quadrature(vec_of_arrays);
