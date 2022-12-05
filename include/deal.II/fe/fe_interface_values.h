@@ -1437,8 +1437,8 @@ public:
    * (‘Quadrature‘, ‘UpdateFlags‘,...) must be set before calling
    * this function.
    */
-  FEInterfaceValues(FEFaceValuesBase<dim, spacedim> *fe0,
-                    FEFaceValuesBase<dim, spacedim> *fe1);
+  FEInterfaceValues(const FEValuesBase<dim, spacedim> &fe0,
+                    const FEValuesBase<dim, spacedim> &fe1);
 
   /**
    * Re-initialize this object to be used on a new interface given by two faces
@@ -1498,9 +1498,7 @@ public:
   template <class CellIteratorType, class CellNeighborIteratorType>
   void
   reinit(const CellIteratorType &        cell,
-         const unsigned int              face_no,
-         const CellNeighborIteratorType &cell_neighbor,
-         const unsigned int              face_no_neighbor);
+         const CellNeighborIteratorType &cell_neighbor);
 
   /**
    * Return a reference to the FEFaceValues or FESubfaceValues object
@@ -1509,7 +1507,7 @@ public:
    * The @p cell_index is either 0 or 1 and corresponds to the cell index
    * returned by interface_dof_to_cell_and_dof_index().
    */
-  const FEFaceValuesBase<dim, spacedim> &
+  const FEValuesBase<dim, spacedim> &
   get_fe_face_values(const unsigned int cell_index) const;
 
   /**
@@ -2155,14 +2153,14 @@ private:
    * Pointer to internal_fe_face_values or internal_fe_subface_values,
    * respectively as determined in reinit().
    */
-  FEFaceValuesBase<dim, spacedim> *fe_face_values;
+  FEValuesBase<dim, spacedim> *fe_face_values;
 
   /**
    * Pointer to internal_fe_face_values_neighbor,
    * internal_fe_subface_values_neighbor, or nullptr, respectively
    * as determined in reinit().
    */
-  FEFaceValuesBase<dim, spacedim> *fe_face_values_neighbor;
+  FEValuesBase<dim, spacedim> *fe_face_values_neighbor;
 
   /* Make the view classes friends of this class, since they access internal
    * data.
@@ -2250,32 +2248,42 @@ FEInterfaceValues<dim, spacedim>::FEInterfaceValues(
 
 template <int dim, int spacedim>
 FEInterfaceValues<dim, spacedim>::FEInterfaceValues(
-  FEFaceValuesBase<dim, spacedim> *fe0,
-  FEFaceValuesBase<dim, spacedim> *fe1)
-  : n_quadrature_points(fe0->max_n_quadrature_points)
-  , internal_fe_face_values(fe0->get_mapping(),
-                            fe0->get_fe(),
-                            fe0->get_quadrature(),
-                            fe0->get_update_flags())
-  , internal_fe_subface_values(fe0->get_mapping(),
-                               fe0->get_fe(),
-                               fe0->get_quadrature(),
-                               fe0->get_update_flags())
-  , internal_fe_face_values_neighbor(fe1->get_mapping(),
-                                     fe1->get_fe(),
-                                     fe1->get_quadrature(),
-                                     fe1->get_update_flags())
-  , internal_fe_subface_values_neighbor(fe1->get_mapping(),
-                                        fe1->get_fe(),
-                                        fe1->get_quadrature(),
-                                        fe1->get_update_flags())
+  const FEValuesBase<dim, spacedim> &fe0,
+  const FEValuesBase<dim, spacedim> &fe1)
+  : n_quadrature_points(fe0.max_n_quadrature_points)
+  , internal_fe_face_values(fe0.get_mapping(),
+                            fe0.get_fe(),
+                            Quadrature<dim - 1>(std::vector<Point<dim - 1>>{{}},
+                                                std::vector<double>{0.}),
+                            fe0.get_update_flags())
+  , internal_fe_subface_values(
+      fe0.get_mapping(),
+      fe0.get_fe(),
+      Quadrature<dim - 1>(std::vector<Point<dim - 1>>{{}},
+                          std::vector<double>{0.}),
+      fe0.get_update_flags())
+  , internal_fe_face_values_neighbor(
+      fe1.get_mapping(),
+      fe1.get_fe(),
+      Quadrature<dim - 1>(std::vector<Point<dim - 1>>{{}},
+                          std::vector<double>{0.}),
+      fe1.get_update_flags())
+  , internal_fe_subface_values_neighbor(
+      fe1.get_mapping(),
+      fe1.get_fe(),
+      Quadrature<dim - 1>(std::vector<Point<dim - 1>>{{}},
+                          std::vector<double>{0.}),
+      fe1.get_update_flags())
 
 {
-  AssertDimension(internal_fe_face_values.n_quadrature_points,
-                  internal_fe_face_values_neighbor.n_quadrature_points);
+  // Assert(
+  //   fe0 && fe1,
+  //   ExcMessage(
+  //     "At least one of the objects pointed to by the arguments is not
+  //     valid."));
 
-  fe_face_values          = fe0;
-  fe_face_values_neighbor = fe1;
+  fe_face_values          = &const_cast<FEValuesBase<dim, spacedim> &>(fe0);
+  fe_face_values_neighbor = &const_cast<FEValuesBase<dim, spacedim> &>(fe1);
 }
 
 
@@ -2285,9 +2293,7 @@ template <class CellIteratorType, class CellNeighborIteratorType>
 void
 FEInterfaceValues<dim, spacedim>::reinit(
   const CellIteratorType &        cell,
-  const unsigned int              face_no,
-  const CellNeighborIteratorType &cell_neighbor,
-  const unsigned int              face_no_neighbor)
+  const CellNeighborIteratorType &cell_neighbor)
 {
   Assert(fe_face_values,
          ExcMessage("This FEValues like object has not been reinited."));
@@ -2609,7 +2615,7 @@ FEInterfaceValues<dim, spacedim>::interface_dof_to_dof_indices(
 
 
 template <int dim, int spacedim>
-const FEFaceValuesBase<dim, spacedim> &
+const FEValuesBase<dim, spacedim> &
 FEInterfaceValues<dim, spacedim>::get_fe_face_values(
   const unsigned int cell_index) const
 {

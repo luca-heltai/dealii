@@ -27,6 +27,8 @@
 #include <deal.II/grid/grid_refinement.h>
 #include <deal.II/grid/tria.h>
 
+#include <deal.II/non_matching/fe_immersed_values.h>
+
 #include <fstream>
 #include <iostream>
 
@@ -132,6 +134,9 @@ test_fe_iv()
                    cell->neighbor_of_neighbor(f),
                    numbers::invalid_unsigned_int);
 
+        deallog << fiv.jump_in_shape_values(1, 1) << std::endl;
+        deallog << fiv.average_of_shape_gradients(1, 1) << std::endl;
+
         Assert(fiv.get_fe_face_values(0).get_cell() == cell,
                ExcInternalError());
         Assert(fiv.get_fe_face_values(1).get_cell() == cell->neighbor(f),
@@ -155,17 +160,6 @@ test_fe_iv()
       }
 
   deallog << "** boundary interface on cell 1 **" << std::endl;
-
-
-  // {
-  //   ++cell;
-  //   fiv.reinit(cell, 1);
-  //   Assert(fiv.get_fe_face_values(0).get_cell() == cell, ExcInternalError());
-  //   Assert(fiv.n_current_interface_dofs() == fe.n_dofs_per_cell(),
-  //          ExcInternalError());
-  //   Assert(fiv.at_boundary(), ExcInternalError());
-  //   inspect_fiv(fiv);
-  // }
 }
 
 
@@ -183,7 +177,8 @@ test_fe_fv()
 
   MappingQ<dim> mapping(1);
   UpdateFlags   update_flags = update_values | update_gradients |
-                             update_quadrature_points | update_JxW_values;
+                             update_quadrature_points | update_JxW_values |
+                             update_normal_vectors;
 
   FEFaceValues<dim> fe0(mapping,
                         fe,
@@ -195,6 +190,7 @@ test_fe_fv()
                         update_flags);
 
 
+
   auto cell = dofh.begin();
 
   deallog << "** interface between cell 0 and 1 **" << std::endl;
@@ -204,12 +200,35 @@ test_fe_fv()
       {
         fe0.reinit(cell, f);
         fe1.reinit(cell->neighbor(f), cell->neighbor_of_neighbor(f));
-        deallog << "Got here" << std::endl;
-        FEInterfaceValues<dim> fiv(&fe0, &fe1);
-        deallog << "Constructed" << std::endl;
-        fiv.reinit(cell, f, cell->neighbor(f), cell->neighbor_of_neighbor(f));
-        deallog << "Reinited" << std::endl;
 
+
+        NonMatching::ImmersedSurfaceQuadrature<dim> isq0(
+          fe0.get_quadrature_points(),
+          fe0.get_JxW_values(),
+          fe0.get_normal_vectors());
+        NonMatching::ImmersedSurfaceQuadrature<dim> isq1(
+          fe1.get_quadrature_points(),
+          fe1.get_JxW_values(),
+          fe1.get_normal_vectors());
+        NonMatching::FEImmersedSurfaceValues<dim> feisv0(mapping,
+                                                         fe,
+                                                         isq0,
+                                                         update_flags);
+        NonMatching::FEImmersedSurfaceValues<dim> feisv1(mapping,
+                                                         fe,
+                                                         isq1,
+                                                         update_flags);
+
+        feisv0.reinit(cell);
+        feisv1.reinit(cell->neighbor(f));
+
+
+        FEInterfaceValues<dim> fiv(feisv0, feisv1);
+        fiv.reinit(cell, 
+        cell->neighbor(f));
+
+        deallog << fiv.jump_in_shape_values(1, 1) << std::endl;
+        deallog << fiv.average_of_shape_gradients(1, 1) << std::endl;
 
         Assert(fiv.get_fe_face_values(0).get_cell() == cell,
                ExcInternalError());
