@@ -1421,6 +1421,15 @@ public:
                     const UpdateFlags                   update_flags);
 
   /**
+   * Same as above but taking a collection of finite elements that can be
+   * assigned on different sides of a facet.
+   */
+  FEInterfaceValues(const Mapping<dim, spacedim> &         mapping,
+                    const hp::FECollection<dim, spacedim> &fe,
+                    const hp::QCollection<dim - 1> &       quadrature,
+                    const UpdateFlags                      update_flags);
+
+  /**
    * Construct the FEInterfaceValues with a single FiniteElement and
    * a Q1 Mapping.
    *
@@ -1495,7 +1504,12 @@ public:
   void
   reinit(const CellIteratorType &cell, const unsigned int face_no);
 
-  template <class CellIteratorType, class CellNeighborIteratorType>
+
+  template <
+    class CellIteratorType,
+    class CellNeighborIteratorType,
+    class std::enable_if<!std::is_integral<CellNeighborIteratorType>::value,
+                         const unsigned int>::type = 0>
   void
   reinit(const CellIteratorType &        cell,
          const CellNeighborIteratorType &cell_neighbor);
@@ -2212,6 +2226,27 @@ FEInterfaceValues<dim, spacedim>::FEInterfaceValues(
   , fe_face_values_neighbor(nullptr)
 {}
 
+template <int dim, int spacedim>
+FEInterfaceValues<dim, spacedim>::FEInterfaceValues(
+  const Mapping<dim, spacedim> &         mapping,
+  const hp::FECollection<dim, spacedim> &fe,
+  const hp::QCollection<dim - 1> &       quadrature,
+  const UpdateFlags                      update_flags)
+  : n_quadrature_points(quadrature.max_n_quadrature_points())
+  , internal_fe_face_values(mapping, fe[0], quadrature, update_flags)
+  , internal_fe_subface_values(mapping, fe[0], quadrature, update_flags)
+  , internal_fe_face_values_neighbor(mapping,
+                                     fe[1],
+                                     quadrature[0],
+                                     update_flags)
+  , internal_fe_subface_values_neighbor(mapping,
+                                        fe[1],
+                                        quadrature[0],
+                                        update_flags)
+  , fe_face_values(nullptr)
+  , fe_face_values_neighbor(nullptr)
+{}
+
 
 
 template <int dim, int spacedim>
@@ -2276,11 +2311,10 @@ FEInterfaceValues<dim, spacedim>::FEInterfaceValues(
       fe1.get_update_flags())
 
 {
-  // Assert(
-  //   fe0 && fe1,
-  //   ExcMessage(
-  //     "At least one of the objects pointed to by the arguments is not
-  //     valid."));
+  Assert(
+    fe0.max_n_quadrature_points == fe1.max_n_quadrature_points,
+    ExcMessage(
+      "The two finite elements must have the same numbers of quadrature points from both sides."));
 
   fe_face_values          = &const_cast<FEValuesBase<dim, spacedim> &>(fe0);
   fe_face_values_neighbor = &const_cast<FEValuesBase<dim, spacedim> &>(fe1);
@@ -2289,7 +2323,11 @@ FEInterfaceValues<dim, spacedim>::FEInterfaceValues(
 
 
 template <int dim, int spacedim>
-template <class CellIteratorType, class CellNeighborIteratorType>
+template <
+  class CellIteratorType,
+  class CellNeighborIteratorType,
+  class std::enable_if<!std::is_integral<CellNeighborIteratorType>::value,
+                       const unsigned int>::type>
 void
 FEInterfaceValues<dim, spacedim>::reinit(
   const CellIteratorType &        cell,

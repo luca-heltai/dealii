@@ -222,10 +222,8 @@ test_fe_fv()
         feisv0.reinit(cell);
         feisv1.reinit(cell->neighbor(f));
 
-
         FEInterfaceValues<dim> fiv(feisv0, feisv1);
-        fiv.reinit(cell, 
-        cell->neighbor(f));
+        fiv.reinit(cell, cell->neighbor(f));
 
         deallog << fiv.jump_in_shape_values(1, 1) << std::endl;
         deallog << fiv.average_of_shape_gradients(1, 1) << std::endl;
