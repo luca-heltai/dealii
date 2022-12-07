@@ -185,7 +185,7 @@ test(const unsigned int p)
   deallog << "** boundary interface on cell 0 **\n" << std::endl;
 
   {
-    fiv.reinit(cell, 0);
+    fiv.reinit_hp(cell, 0);
     Assert(fiv.get_fe_face_values(0).get_cell() == cell, ExcInternalError());
     Assert(fiv.n_current_interface_dofs() == fe_collection[0].n_dofs_per_cell(),
            ExcInternalError());

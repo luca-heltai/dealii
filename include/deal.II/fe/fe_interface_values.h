@@ -1536,6 +1536,9 @@ public:
   void
   reinit(const CellIteratorType &cell, const unsigned int face_no);
 
+  template <class CellIteratorType>
+  void
+  reinit_hp(const CellIteratorType &cell, const unsigned int face_no);
 
   template <
     class CellIteratorType,
@@ -2730,6 +2733,35 @@ FEInterfaceValues<dim, spacedim>::reinit(const CellIteratorType &cell,
 {
   internal_fe_face_values.reinit(cell, face_no);
   fe_face_values          = &internal_fe_face_values;
+  fe_face_values_neighbor = nullptr;
+
+  interface_dof_indices.resize(fe_face_values->get_fe().n_dofs_per_cell());
+  cell->get_active_or_mg_dof_indices(interface_dof_indices);
+
+  dofmap.resize(interface_dof_indices.size());
+
+  for (unsigned int i = 0; i < interface_dof_indices.size(); ++i)
+    {
+      dofmap[i] = {{i, numbers::invalid_unsigned_int}};
+    }
+}
+
+
+
+template <int dim, int spacedim>
+template <class CellIteratorType>
+void
+FEInterfaceValues<dim, spacedim>::reinit_hp(const CellIteratorType &cell,
+                                            const unsigned int      face_no)
+{
+  // internal_fe_face_values.reinit(cell, face_no);
+  // fe_face_values          = &internal_fe_face_values;
+  // fe_face_values_neighbor = nullptr;
+
+  internal_hp_fe_face_values->reinit(cell, face_no);
+  local_hp_internal_fe_face_values = &const_cast<FEFaceValues<dim> &>(
+    internal_hp_fe_face_values->get_present_fe_values());
+  fe_face_values          = local_hp_internal_fe_face_values;
   fe_face_values_neighbor = nullptr;
 
   interface_dof_indices.resize(fe_face_values->get_fe().n_dofs_per_cell());
