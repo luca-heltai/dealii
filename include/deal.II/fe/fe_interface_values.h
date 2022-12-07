@@ -2233,18 +2233,19 @@ private:
    * The FEFaceValues object for the current cell if the cell
    * is refined.
    */
-  FESubfaceValues<dim, spacedim> internal_fe_subface_values;
+  std::unique_ptr<FESubfaceValues<dim, spacedim>> internal_fe_subface_values;
 
   /**
    * The FEFaceValues object for the neighboring cell.
    */
-  FEFaceValues<dim, spacedim> internal_fe_face_values_neighbor;
+  std::unique_ptr<FEFaceValues<dim, spacedim>> internal_fe_face_values_neighbor;
 
   /**
    * The FEFaceValues object for the neighboring cell if the
    * cell is refined.
    */
-  FESubfaceValues<dim, spacedim> internal_fe_subface_values_neighbor;
+  std::unique_ptr<FESubfaceValues<dim, spacedim>>
+    internal_fe_subface_values_neighbor;
 
   /**
    * Pointer to internal_fe_face_values or
@@ -2260,9 +2261,7 @@ private:
    */
   FEValuesBase<dim, spacedim> *fe_face_values_neighbor;
 
-  // Next members are needed to enable hp support for
-  // FEInterface.
-
+  // Next members are needed to enable hp support for FEInterface.
 
   /**
    * An hp::FEValues object for the FEFaceValues on the
@@ -2316,9 +2315,21 @@ FEInterfaceValues<dim, spacedim>::FEInterfaceValues(
                                                     fe,
                                                     quadrature,
                                                     update_flags))
-  , internal_fe_subface_values(mapping, fe, quadrature, update_flags)
-  , internal_fe_face_values_neighbor(mapping, fe, quadrature, update_flags)
-  , internal_fe_subface_values_neighbor(mapping, fe, quadrature, update_flags)
+  , internal_fe_subface_values(
+      std::make_unique<FESubfaceValues<dim, spacedim>>(mapping,
+                                                       fe,
+                                                       quadrature,
+                                                       update_flags))
+  , internal_fe_face_values_neighbor(
+      std::make_unique<FEFaceValues<dim, spacedim>>(mapping,
+                                                    fe,
+                                                    quadrature,
+                                                    update_flags))
+  , internal_fe_subface_values_neighbor(
+      std::make_unique<FESubfaceValues<dim, spacedim>>(mapping,
+                                                       fe,
+                                                       quadrature,
+                                                       update_flags))
   , fe_face_values(nullptr)
   , fe_face_values_neighbor(nullptr)
 {}
@@ -2332,17 +2343,27 @@ FEInterfaceValues<dim, spacedim>::FEInterfaceValues(
   const hp::QCollection<dim - 1> &    quadrature,
   const UpdateFlags                   update_flags)
   : n_quadrature_points(quadrature.max_n_quadrature_points())
+
   , internal_fe_face_values(
       std::make_unique<FEFaceValues<dim, spacedim>>(mapping,
                                                     fe,
                                                     quadrature,
                                                     update_flags))
-  , internal_fe_subface_values(mapping, fe, quadrature, update_flags)
-  , internal_fe_face_values_neighbor(mapping, fe, quadrature[0], update_flags)
-  , internal_fe_subface_values_neighbor(mapping,
-                                        fe,
-                                        quadrature[0],
-                                        update_flags)
+  , internal_fe_subface_values(
+      std::make_unique<FESubfaceValues<dim, spacedim>>(mapping,
+                                                       fe,
+                                                       quadrature,
+                                                       update_flags))
+  , internal_fe_face_values_neighbor(
+      std::make_unique<FEFaceValues<dim, spacedim>>(mapping,
+                                                    fe,
+                                                    quadrature[0],
+                                                    update_flags))
+  , internal_fe_subface_values_neighbor(
+      std::make_unique<FESubfaceValues<dim, spacedim>>(mapping,
+                                                       fe,
+                                                       quadrature[0],
+                                                       update_flags))
   , fe_face_values(nullptr)
   , fe_face_values_neighbor(nullptr)
 {}
@@ -2356,30 +2377,6 @@ FEInterfaceValues<dim, spacedim>::FEInterfaceValues(
   const hp::QCollection<dim - 1> &  quadrature,
   const UpdateFlags                 update_flags)
   : n_quadrature_points(quadrature.max_n_quadrature_points())
-  , internal_fe_face_values(std::make_unique<FEFaceValues<dim, spacedim>>(
-      mapping[0],
-      fe[0],
-      Quadrature<dim - 1>(std::vector<Point<dim - 1>>{{}},
-                          std::vector<double>{0.}),
-      update_flags))
-  , internal_fe_subface_values(
-      mapping[0],
-      fe[0],
-      Quadrature<dim - 1>(std::vector<Point<dim - 1>>{{}},
-                          std::vector<double>{0.}),
-      update_flags)
-  , internal_fe_face_values_neighbor(
-      mapping[0],
-      fe[1],
-      Quadrature<dim - 1>(std::vector<Point<dim - 1>>{{}},
-                          std::vector<double>{0.}),
-      update_flags)
-  , internal_fe_subface_values_neighbor(
-      mapping[0],
-      fe[1],
-      Quadrature<dim - 1>(std::vector<Point<dim - 1>>{{}},
-                          std::vector<double>{0.}),
-      update_flags)
   , fe_face_values(nullptr)
   , fe_face_values_neighbor(nullptr)
   , internal_hp_fe_face_values(
@@ -2420,66 +2417,71 @@ FEInterfaceValues<dim, spacedim>::FEInterfaceValues(
       fe,
       quadrature,
       update_flags))
-  , internal_fe_subface_values(
+  , internal_fe_subface_values(std::make_unique<FESubfaceValues<dim, spacedim>>(
       fe.reference_cell().template get_default_linear_mapping<dim, spacedim>(),
       fe,
       quadrature,
-      update_flags)
+      update_flags))
   , internal_fe_face_values_neighbor(
-      fe.reference_cell().template get_default_linear_mapping<dim, spacedim>(),
-      fe,
-      quadrature,
-      update_flags)
+      std::make_unique<FEFaceValues<dim, spacedim>>(
+        fe.reference_cell()
+          .template get_default_linear_mapping<dim, spacedim>(),
+        fe,
+        quadrature,
+        update_flags))
   , internal_fe_subface_values_neighbor(
-      fe.reference_cell().template get_default_linear_mapping<dim, spacedim>(),
-      fe,
-      quadrature,
-      update_flags)
+      std::make_unique<FESubfaceValues<dim, spacedim>>(
+        fe.reference_cell()
+          .template get_default_linear_mapping<dim, spacedim>(),
+        fe,
+        quadrature,
+        update_flags))
   , fe_face_values(nullptr)
   , fe_face_values_neighbor(nullptr)
 {}
 
 
 
-template <int dim, int spacedim>
-FEInterfaceValues<dim, spacedim>::FEInterfaceValues(
-  const FEValuesBase<dim, spacedim> &fe0,
-  const FEValuesBase<dim, spacedim> &fe1)
-  : n_quadrature_points(fe0.max_n_quadrature_points)
-  , internal_fe_face_values(std::make_unique<FEFaceValues<dim, spacedim>>(
-      fe0.get_mapping(),
-      fe0.get_fe(),
-      Quadrature<dim - 1>(std::vector<Point<dim - 1>>{{}},
-                          std::vector<double>{0.}),
-      fe0.get_update_flags()))
-  , internal_fe_subface_values(
-      fe0.get_mapping(),
-      fe0.get_fe(),
-      Quadrature<dim - 1>(std::vector<Point<dim - 1>>{{}},
-                          std::vector<double>{0.}),
-      fe0.get_update_flags())
-  , internal_fe_face_values_neighbor(
-      fe1.get_mapping(),
-      fe1.get_fe(),
-      Quadrature<dim - 1>(std::vector<Point<dim - 1>>{{}},
-                          std::vector<double>{0.}),
-      fe1.get_update_flags())
-  , internal_fe_subface_values_neighbor(
-      fe1.get_mapping(),
-      fe1.get_fe(),
-      Quadrature<dim - 1>(std::vector<Point<dim - 1>>{{}},
-                          std::vector<double>{0.}),
-      fe1.get_update_flags())
+// template <int dim, int spacedim>
+// FEInterfaceValues<dim, spacedim>::FEInterfaceValues(
+//   const FEValuesBase<dim, spacedim> &fe0,
+//   const FEValuesBase<dim, spacedim> &fe1)
+//   : n_quadrature_points(fe0.max_n_quadrature_points)
+//   , internal_fe_face_values(std::make_unique<FEFaceValues<dim, spacedim>>(
+//       fe0.get_mapping(),
+//       fe0.get_fe(),
+//       Quadrature<dim - 1>(std::vector<Point<dim - 1>>{{}},
+//                           std::vector<double>{0.}),
+//       fe0.get_update_flags()))
+//   , internal_fe_subface_values(
+//       fe0.get_mapping(),
+//       fe0.get_fe(),
+//       Quadrature<dim - 1>(std::vector<Point<dim - 1>>{{}},
+//                           std::vector<double>{0.}),
+//       fe0.get_update_flags())
+//   , internal_fe_face_values_neighbor(
+//       fe1.get_mapping(),
+//       fe1.get_fe(),
+//       Quadrature<dim - 1>(std::vector<Point<dim - 1>>{{}},
+//                           std::vector<double>{0.}),
+//       fe1.get_update_flags())
+//   , internal_fe_subface_values_neighbor(
+//       fe1.get_mapping(),
+//       fe1.get_fe(),
+//       Quadrature<dim - 1>(std::vector<Point<dim - 1>>{{}},
+//                           std::vector<double>{0.}),
+//       fe1.get_update_flags())
 
-{
-  Assert(
-    fe0.max_n_quadrature_points == fe1.max_n_quadrature_points,
-    ExcMessage(
-      "The two finite elements must have the same numbers of quadrature points from both sides."));
+// {
+//   Assert(
+//     fe0.max_n_quadrature_points == fe1.max_n_quadrature_points,
+//     ExcMessage(
+//       "The two finite elements must have the same numbers of quadrature
+//       points from both sides."));
 
-  fe_face_values          = &const_cast<FEValuesBase<dim, spacedim> &>(fe0);
-  fe_face_values_neighbor = &const_cast<FEValuesBase<dim, spacedim> &>(fe1);
-}
+//   fe_face_values          = &const_cast<FEValuesBase<dim, spacedim> &>(fe0);
+//   fe_face_values_neighbor = &const_cast<FEValuesBase<dim, spacedim> &>(fe1);
+// }
 
 
 
@@ -2563,20 +2565,20 @@ FEInterfaceValues<dim, spacedim>::reinit(
     }
   else
     {
-      internal_fe_subface_values.reinit(cell, face_no, sub_face_no);
-      fe_face_values = &internal_fe_subface_values;
+      internal_fe_subface_values->reinit(cell, face_no, sub_face_no);
+      fe_face_values = internal_fe_subface_values.get();
     }
   if (sub_face_no_neighbor == numbers::invalid_unsigned_int)
     {
-      internal_fe_face_values_neighbor.reinit(cell_neighbor, face_no_neighbor);
-      fe_face_values_neighbor = &internal_fe_face_values_neighbor;
+      internal_fe_face_values_neighbor->reinit(cell_neighbor, face_no_neighbor);
+      fe_face_values_neighbor = internal_fe_face_values_neighbor.get();
     }
   else
     {
-      internal_fe_subface_values_neighbor.reinit(cell_neighbor,
-                                                 face_no_neighbor,
-                                                 sub_face_no_neighbor);
-      fe_face_values_neighbor = &internal_fe_subface_values_neighbor;
+      internal_fe_subface_values_neighbor->reinit(cell_neighbor,
+                                                  face_no_neighbor,
+                                                  sub_face_no_neighbor);
+      fe_face_values_neighbor = internal_fe_subface_values_neighbor.get();
     }
 
   AssertDimension(fe_face_values->n_quadrature_points,
