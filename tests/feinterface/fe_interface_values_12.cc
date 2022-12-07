@@ -108,11 +108,14 @@ test(const unsigned int p)
   Triangulation<dim> tria;
   make_2_cells(tria);
 
-  DoFHandler<dim>          dofh(tria);
-  hp::FECollection<dim>    fe_collection;
-  hp::QCollection<dim - 1> q_collection;
+  DoFHandler<dim>            dofh(tria);
+  hp::MappingCollection<dim> mapping_collection;
+  hp::FECollection<dim>      fe_collection;
+  hp::QCollection<dim - 1>   q_collection;
+  mapping_collection.push_back(MappingQ<dim>(1));
   fe_collection.push_back(FE_DGQ<dim>(p));
   fe_collection.push_back(FE_DGQ<dim>(p + 1));
+
 
   q_collection.push_back(QGauss<dim - 1>(p + 1));
 
@@ -130,10 +133,11 @@ test(const unsigned int p)
   UpdateFlags   update_flags = update_values | update_gradients |
                              update_quadrature_points | update_JxW_values;
 
-  FEInterfaceValues<dim> fiv(mapping,
+  FEInterfaceValues<dim> fiv(mapping_collection,
                              fe_collection,
                              q_collection,
                              update_flags);
+  deallog << "After initialization" << std::endl;
 
 
   auto cell = dofh.begin();
@@ -143,12 +147,14 @@ test(const unsigned int p)
   for (const unsigned int f : GeometryInfo<dim>::face_indices())
     if (!cell->at_boundary(f))
       {
-        fiv.reinit(cell,
-                   f,
-                   numbers::invalid_unsigned_int,
-                   cell->neighbor(f),
-                   cell->neighbor_of_neighbor(f),
-                   numbers::invalid_unsigned_int);
+        deallog << "Before reiniting" << std::endl;
+        fiv.reinit_hp(cell,
+                      f,
+                      numbers::invalid_unsigned_int,
+                      cell->neighbor(f),
+                      cell->neighbor_of_neighbor(f),
+                      numbers::invalid_unsigned_int);
+        deallog << "After" << std::endl;
 
         Assert(fiv.get_fe_face_values(0).get_cell() == cell,
                ExcInternalError());
