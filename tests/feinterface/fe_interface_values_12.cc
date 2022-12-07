@@ -154,7 +154,10 @@ test(const unsigned int p)
                       cell->neighbor(f),
                       cell->neighbor_of_neighbor(f),
                       numbers::invalid_unsigned_int);
-        deallog << "After" << std::endl;
+
+        std::cout << "Salve" << std::endl;
+        
+        deallog << fiv.jump_in_shape_values(1, 1) << std::endl;
 
         Assert(fiv.get_fe_face_values(0).get_cell() == cell,
                ExcInternalError());
@@ -179,19 +182,20 @@ test(const unsigned int p)
             ++mycell;
           }
 
-        inspect_fiv(fiv);
+        // inspect_fiv(fiv);
       }
 
   deallog << "** boundary interface on cell 0 **\n" << std::endl;
 
-  {
-    fiv.reinit_hp(cell, 0);
-    Assert(fiv.get_fe_face_values(0).get_cell() == cell, ExcInternalError());
-    Assert(fiv.n_current_interface_dofs() == fe_collection[0].n_dofs_per_cell(),
-           ExcInternalError());
-    Assert(fiv.at_boundary(), ExcInternalError());
-    inspect_fiv(fiv);
-  }
+  // {
+  //   fiv.reinit_hp(cell, 0);
+  //   Assert(fiv.get_fe_face_values(0).get_cell() == cell, ExcInternalError());
+  //   Assert(fiv.n_current_interface_dofs() ==
+  //   fe_collection[0].n_dofs_per_cell(),
+  //          ExcInternalError());
+  //   Assert(fiv.at_boundary(), ExcInternalError());
+  //   inspect_fiv(fiv);
+  // }
 }
 
 
