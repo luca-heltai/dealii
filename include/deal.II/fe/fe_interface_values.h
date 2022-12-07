@@ -2384,23 +2384,24 @@ FEInterfaceValues<dim, spacedim>::FEInterfaceValues(
                                               fe,
                                               quadrature,
                                               update_flags))
+  , internal_hp_fe_subface_values(
+      std::make_unique<hp::FESubfaceValues<dim>>(mapping,
+                                                 fe,
+                                                 quadrature,
+                                                 update_flags))
 {
   Assert(dim == spacedim,
          ExcNotImplemented("Not implemented in co-dimension one case."));
 
-  // hp::QCollection<dim - 1> dummy_q(quadrature[0]);
+  hp::QCollection<dim - 1> dummy_q(quadrature[0]);
 
-
-  internal_hp_fe_subface_values = std::make_unique<hp::FESubfaceValues<dim>>(
-    mapping, fe, quadrature, update_flags);
-
-  internal_hp_fe_face_values_neighbor = std::make_unique<hp::FEFaceValues<dim>>(
-    mapping, fe, quadrature, update_flags);
+  internal_hp_fe_face_values_neighbor =
+    std::make_unique<hp::FEFaceValues<dim>>(mapping, fe, dummy_q, update_flags);
 
   internal_hp_fe_subface_values_neighbor =
     std::make_unique<hp::FESubfaceValues<dim>>(mapping,
                                                fe,
-                                               quadrature,
+                                               dummy_q,
                                                update_flags);
 }
 
