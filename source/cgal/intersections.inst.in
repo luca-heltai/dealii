@@ -17,7 +17,7 @@
 
 for (dim0 : DIMENSIONS; dim1 : DIMENSIONS; spacedim : SPACE_DIMENSIONS)
   {
-#if dim0 <= spacedim && dim0 >= dim1 && (dim0 + dim1) > 2
+#if dim0 <= spacedim && dim0 >= dim1
 
     template std::vector<std::array<Point<spacedim>, dim1 + 1>>
     compute_intersection_of_cells<dim0, dim1, spacedim>(
@@ -29,9 +29,9 @@ for (dim0 : DIMENSIONS; dim1 : DIMENSIONS; spacedim : SPACE_DIMENSIONS)
 
     template std::vector<std::array<Point<spacedim>, dim1 + 1>>
     compute_intersection_of_cells<dim0, dim1, spacedim>(
-      const ArrayView<Point<spacedim>> &vertices0,
-      const ArrayView<Point<spacedim>> &vertices1,
-      const double                      tol);
+      const ArrayView<const Point<spacedim>> &vertices0,
+      const ArrayView<const Point<spacedim>> &vertices1,
+      const double                            tol);
 
 #endif
   }

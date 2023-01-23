@@ -51,7 +51,6 @@
 #  include <CGAL/make_mesh_3.h>
 #  include <CGAL/make_surface_mesh.h>
 #  include <deal.II/cgal/surface_mesh.h>
-//#  include <CGAL/tetrahedral_remeshing.h> REQUIRES CGAL_VERSION>=5.1.5
 
 #  include <fstream>
 #  include <limits>
@@ -603,25 +602,27 @@ namespace CGALWrappers
    * @return  Array of vertices in CGAL order.
    */
   template <int dim, int spacedim>
-  void
+  std::vector<Point<spacedim>>
   get_vertices_in_cgal_order(
     const typename dealii::Triangulation<dim, spacedim>::cell_iterator &cell,
-    const Mapping<dim, spacedim> &                                      mapping,
-    std::vector<Point<spacedim>> &out_vertices)
+    const Mapping<dim, spacedim> &                                      mapping)
   {
     // Elements have to be rectangular or simplices
     const unsigned int n_vertices = cell->n_vertices();
-    Assert(n_vertices == std::pow(2, dim) || n_vertices == dim + 1,
+    Assert((n_vertices == ReferenceCells::get_hypercube<dim>().n_vertices()) ||
+             (n_vertices == ReferenceCells::get_simplex<dim>().n_vertices()),
            ExcNotImplemented());
-    AssertDimension(mapping.get_vertices(cell).size(), n_vertices);
 
+    std::vector<Point<spacedim>> ordered_vertices(n_vertices);
     std::copy_n(mapping.get_vertices(cell).begin(),
-                out_vertices.size(),
-                out_vertices.begin());
+                n_vertices,
+                ordered_vertices.begin());
 
     if (ReferenceCell::n_vertices_to_type(dim, n_vertices) ==
         ReferenceCells::Quadrilateral)
-      std::swap(out_vertices[2], out_vertices[3]);
+      std::swap(ordered_vertices[2], ordered_vertices[3]);
+
+    return ordered_vertices;
   }
 
 } // namespace CGALWrappers

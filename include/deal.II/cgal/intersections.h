@@ -34,7 +34,7 @@ namespace CGALWrappers
    * vector of simplices, each one identified by an array of deal.II Points. All
    * the simplices together are a subdivision of the intersection. If cells are
    * non-affine, a geometrical error is introduced. If the
-   * measure of one of the simplices is below a certain treshold which defaults
+   * measure of one of the simplices is below a certain threshold which defaults
    * to 1e-9, then it is discarded. In case the two cells are disjoint, an empty
    * array is returned.
    *
@@ -47,7 +47,7 @@ namespace CGALWrappers
    * @param cell1 Iterator to the second cell.
    * @param mapping0 Mapping for the first cell.
    * @param mapping1 Mapping for the second cell.
-   * @param tol Treshold to decide whether or not a simplex is included.
+   * @param tol Threshold to decide whether or not a simplex is included.
    * @return Vector of arrays, where each array identify a simplex by its vertices.
    */
   template <int dim0, int dim1, int spacedim>
@@ -66,13 +66,14 @@ namespace CGALWrappers
    * while the other vertices are from a Triangulation<dim1,spacedim>, with
    * @p dim0 > @p dim1.
    *
-   * @note the vertices have to be given in CGAL order
+   * @note The vertices have to be given in CGAL order.
    */
   template <int dim0, int dim1, int spacedim>
   std::vector<std::array<Point<spacedim>, dim1 + 1>>
-  compute_intersection_of_cells(const ArrayView<Point<spacedim>> &vertices0,
-                                const ArrayView<Point<spacedim>> &vertices1,
-                                const double                      tol = 1e-9);
+  compute_intersection_of_cells(
+    const ArrayView<const Point<spacedim>> &vertices0,
+    const ArrayView<const Point<spacedim>> &vertices1,
+    const double                            tol = 1e-9);
 
 } // namespace CGALWrappers
 

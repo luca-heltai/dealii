@@ -22,6 +22,8 @@
 #ifdef DEAL_II_WITH_CGAL
 
 #  include <deal.II/base/quadrature_lib.h>
+#  include <deal.II/base/std_cxx17/optional.h>
+#  include <deal.II/base/std_cxx17/variant.h>
 #  include <deal.II/base/utilities.h>
 
 #  include <deal.II/fe/mapping.h>
@@ -108,6 +110,54 @@ namespace CGALWrappers
 
   namespace internal
   {
+    namespace
+    {
+      /**
+       * Take a boost::variant object and convert it to a std::variant
+       * object by applying the visitor pattern.
+       */
+      template <typename TargetVariant>
+      struct Repackage : boost::static_visitor<TargetVariant>
+      {
+        template <typename T>
+        TargetVariant
+        operator()(const T &t) const
+        {
+          return TargetVariant(t);
+        }
+      };
+
+      /**
+       * Convert a boost::optional<std::variant<...>> to the
+       * corresponding C++ type using std::optional and
+       * std::variant. The former is what CGAL gives us, the latter is
+       * what we want to use because we like to use std data types.
+       */
+      template <typename... Types>
+      std_cxx17::optional<std_cxx17::variant<Types...>>
+      convert_boost_to_std(const boost::optional<boost::variant<Types...>> &x)
+      {
+        if (x)
+          {
+            // The boost::optional object contains an object of type
+            // boost::variant. We need to unpack which type the
+            // variant contains, and re-package that into a
+            // std::variant. This is easily done using a visitor
+            // object.
+            using std_variant = std::variant<Types...>;
+            return boost::apply_visitor(Repackage<std_variant>(), *x);
+          }
+        else
+          {
+            // The boost::optional object was empty. Return an empty
+            // std::optional object.
+            return {};
+          }
+      }
+    } // namespace
+
+
+
     void
     mark_domains(CDT &                 ct,
                  Face_handle           start,
@@ -168,52 +218,55 @@ namespace CGALWrappers
 
     // Collection of utilities that compute intersection between simplices
     // identified by array of points. The return type is the one of
-    // CGAL::intersection(), i.e. a boost::optional<boost::variant<>>.
+    // CGAL::intersection(), i.e. a std_cxx17::optional<std_cxx17::variant<>>.
     // Intersection between 2D and 3D objects and 1D/3D objects are available
-    // only with CGAL versions greater or equal than 5.1.5, hence the
+    // only with CGAL versions greater or equal than 5.5, hence the
     // corresponding functions are guarded by #ifdef directives. All the
     // signatures follow the convection that the first entity has an intrinsic
     // dimension higher than the second one.
 
-    template <int spacedim>
-    boost::optional<boost::variant<CGALPoint2,
-                                   CGALSegment2,
-                                   CGALTriangle2,
-                                   std::vector<CGALPoint2>>>
+    std_cxx17::optional<std_cxx17::variant<CGALPoint2,
+                                           CGALSegment2,
+                                           CGALTriangle2,
+                                           std::vector<CGALPoint2>>>
     compute_intersection_triangle_triangle(
-      const ArrayView<Point<spacedim>> &first_simplex,
-      const ArrayView<Point<spacedim>> &second_simplex)
+      const ArrayView<const Point<2>> &triangle0,
+      const ArrayView<const Point<2>> &triangle1)
     {
+      AssertDimension(triangle0.size(), 3);
+      AssertDimension(triangle0.size(), triangle1.size());
       std::array<CGALPoint2, 3> pts0, pts1;
       std::transform(
-        first_simplex.begin(),
-        first_simplex.end(),
+        triangle0.begin(),
+        triangle0.end(),
         pts0.begin(),
         [&](const Point<2> &p) {
           return CGALWrappers::dealii_point_to_cgal_point<CGALPoint2>(p);
         });
 
       std::transform(
-        second_simplex.begin(),
-        second_simplex.end(),
+        triangle1.begin(),
+        triangle1.end(),
         pts1.begin(),
         [&](const Point<2> &p) {
           return CGALWrappers::dealii_point_to_cgal_point<CGALPoint2>(p);
         });
 
-      CGALTriangle2 triangle1{pts0[0], pts0[1], pts0[2]};
-      CGALTriangle2 triangle2{pts1[0], pts1[1], pts1[2]};
-      return CGAL::intersection(triangle1, triangle2);
+      CGALTriangle2 cgal_triangle0{pts0[0], pts0[1], pts0[2]};
+      CGALTriangle2 cgal_triangle1{pts1[0], pts1[1], pts1[2]};
+      return convert_boost_to_std(
+        CGAL::intersection(cgal_triangle0, cgal_triangle1));
     }
 
 
-    template <int spacedim>
 
-    boost::optional<boost::variant<CGALPoint2, CGALSegment2>>
+    std_cxx17::optional<std_cxx17::variant<CGALPoint2, CGALSegment2>>
     compute_intersection_triangle_segment(
-      const ArrayView<Point<spacedim>> &triangle,
-      const ArrayView<Point<spacedim>> &segment)
+      const ArrayView<const Point<2>> &triangle,
+      const ArrayView<const Point<2>> &segment)
     {
+      AssertDimension(triangle.size(), 3);
+      AssertDimension(segment.size(), 2);
       std::array<CGALPoint2, 3> pts0;
       std::array<CGALPoint2, 2> pts1;
       std::transform(
@@ -226,83 +279,109 @@ namespace CGALWrappers
           return CGALWrappers::dealii_point_to_cgal_point<CGALPoint2>(p);
         });
 
-      CGALTriangle2 tria{pts0[0], pts0[1], pts0[2]};
-      CGALSegment2  segm{pts1[0], pts1[1]};
-      return CGAL::intersection(segm, triangle);
+      CGALTriangle2 cgal_triangle{pts0[0], pts0[1], pts0[2]};
+      CGALSegment2  cgal_segment{pts1[0], pts1[1]};
+      return convert_boost_to_std(
+        CGAL::intersection(cgal_segment, cgal_triangle));
     }
 
 
 
     // rectangle-rectangle
-    template <int spacedim>
     std::vector<Polygon_with_holes_2>
-    compute_intersection_rect_rect(const ArrayView<Point<spacedim>> &rect0,
-                                   const ArrayView<Point<spacedim>> &rect1)
+    compute_intersection_rect_rect(const ArrayView<const Point<2>> &rectangle0,
+                                   const ArrayView<const Point<2>> &rectangle1)
     {
+      AssertDimension(rectangle0.size(), 4);
+      AssertDimension(rectangle0.size(), rectangle1.size());
       std::array<CGALPoint2, 4> pts0, pts1;
       std::transform(
-        rect0.begin(), rect0.end(), pts0.begin(), [&](const Point<2> &p) {
+        rectangle0.begin(),
+        rectangle0.end(),
+        pts0.begin(),
+        [&](const Point<2> &p) {
           return CGALWrappers::dealii_point_to_cgal_point<CGALPoint2>(p);
         });
       std::transform(
-        rect1.begin(), rect1.end(), pts1.begin(), [&](const Point<2> &p) {
+        rectangle1.begin(),
+        rectangle1.end(),
+        pts1.begin(),
+        [&](const Point<2> &p) {
           return CGALWrappers::dealii_point_to_cgal_point<CGALPoint2>(p);
         });
-      const CGALPolygon first{pts0.begin(), pts0.end()};
-      const CGALPolygon second{pts1.begin(), pts1.end()};
+
+      const CGALPolygon first_poly{pts0.begin(), pts0.end()};
+      const CGALPolygon second_poly{pts1.begin(), pts1.end()};
 
       std::vector<Polygon_with_holes_2> poly_list;
-      CGAL::intersection(first, second, std::back_inserter(poly_list));
+      CGAL::intersection(first_poly,
+                         second_poly,
+                         std::back_inserter(poly_list));
       return poly_list;
     }
 
 
 
-    boost::optional<boost::variant<CGALPoint3, CGALSegment3>>
-    compute_intersection_tetra_segment(const std::array<Point<3>, 2> &tetra,
-                                       const std::array<Point<3>, 4> &segment)
+    std_cxx17::optional<std_cxx17::variant<CGALPoint3, CGALSegment3>>
+    compute_intersection_tetra_segment(
+      const ArrayView<const Point<3>> &tetrahedron,
+      const ArrayView<const Point<3>> &segment)
     {
-#  if DEAL_II_CGAL_VERSION_GTE(5, 1, 5)
+#  if DEAL_II_CGAL_VERSION_GTE(5, 5, 0)
+      AssertDimension(tetrahedron.size(), 4);
+      AssertDimension(segment.size(), 2);
       std::array<CGALPoint3, 4> pts0;
       std::array<CGALPoint3, 2> pts1;
+
       std::transform(
-        tetra.begin(), tetra.end(), pts0.begin(), [&](const Point<3> &p) {
+        tetrahedron.begin(),
+        tetrahedron.end(),
+        pts0.begin(),
+        [&](const Point<3> &p) {
           return CGALWrappers::dealii_point_to_cgal_point<CGALPoint3>(p);
         });
-
 
       std::transform(
         segment.begin(), segment.end(), pts1.begin(), [&](const Point<3> &p) {
           return CGALWrappers::dealii_point_to_cgal_point<CGALPoint3>(p);
         });
 
-      CGALTetra    tetrahedron{pts0[0], pts0[1], pts0[2], pts0[3]};
-      CGALSegment3 segm{pts1[0], pts1[1]};
-      return CGAL::intersection(segm, tetrahedron);
+      CGALTetra    cgal_tetrahedron{pts0[0], pts0[1], pts0[2], pts0[3]};
+      CGALSegment3 cgal_segment{pts1[0], pts1[1]};
+      return convert_boost_to_std(
+        CGAL::intersection(cgal_segment, cgal_tetrahedron));
 #  else
       Assert(
         false,
         ExcMessage(
-          "This function requires a version of CGAL greater or equal than 5.1.5."));
-      (void)tetra;
+          "This function requires a version of CGAL greater or equal than 5.5."));
+      (void)tetrahedron;
       (void)segment;
       return {};
 #  endif
     }
 
+
     // tetra, triangle
-    boost::optional<boost::variant<CGALPoint3,
-                                   CGALSegment3,
-                                   CGALTriangle3,
-                                   std::vector<CGALPoint3>>>
-    compute_intersection_tetra_triangle(const std::array<Point<3>, 3> &tetra,
-                                        const std::array<Point<3>, 4> &triangle)
+    std_cxx17::optional<std_cxx17::variant<CGALPoint3,
+                                           CGALSegment3,
+                                           CGALTriangle3,
+                                           std::vector<CGALPoint3>>>
+    compute_intersection_tetra_triangle(
+      const ArrayView<const Point<3>> &tetrahedron,
+      const ArrayView<const Point<3>> &triangle)
     {
-#  if DEAL_II_CGAL_VERSION_GTE(5, 1, 5)
+#  if DEAL_II_CGAL_VERSION_GTE(5, 5, 0)
+      AssertDimension(tetrahedron.size(), 4);
+      AssertDimension(triangle.size(), 3);
       std::array<CGALPoint3, 4> pts0;
       std::array<CGALPoint3, 3> pts1;
+
       std::transform(
-        tetra.begin(), tetra.end(), pts0.begin(), [&](const Point<3> &p) {
+        tetrahedron.begin(),
+        tetrahedron.end(),
+        pts0.begin(),
+        [&](const Point<3> &p) {
           return CGALWrappers::dealii_point_to_cgal_point<CGALPoint3>(p);
         });
 
@@ -310,31 +389,32 @@ namespace CGALWrappers
         triangle.begin(), triangle.end(), pts1.begin(), [&](const Point<3> &p) {
           return CGALWrappers::dealii_point_to_cgal_point<CGALPoint3>(p);
         });
-      CGALTetra     tetrahedron{pts0[0], pts0[1], pts0[2], pts0[3]};
-      CGALTriangle3 tria{pts1[0], pts1[1], pts1[2]};
-      return CGAL::intersection(tria, tetrahedron);
+      CGALTetra     cgal_tetrahedron{pts0[0], pts0[1], pts0[2], pts0[3]};
+      CGALTriangle3 cgal_triangle{pts1[0], pts1[1], pts1[2]};
+      return convert_boost_to_std(
+        CGAL::intersection(cgal_triangle, cgal_tetrahedron));
 #  else
 
       Assert(
         false,
         ExcMessage(
-          "This function requires a version of CGAL greater or equal than 5.1.5."));
-      (void)tetra;
+          "This function requires a version of CGAL greater or equal than 5.5."));
+      (void)tetrahedron;
       (void)triangle;
       return {};
 #  endif
     }
 
-
-
     // quad-quad
     std::vector<std::array<Point<2>, 3>>
-    compute_intersection_quad_quad(const ArrayView<Point<2>> &quad0,
-                                   const ArrayView<Point<2>> &quad1,
-                                   const double               tol)
+    compute_intersection_quad_quad(const ArrayView<const Point<2>> &quad0,
+                                   const ArrayView<const Point<2>> &quad1,
+                                   const double                     tol)
     {
+      AssertDimension(quad0.size(), 4);
+      AssertDimension(quad0.size(), quad1.size());
       const auto intersection_test =
-        compute_intersection_rect_rect(quad0, quad1);
+        internal::compute_intersection_rect_rect(quad0, quad1);
 
       if (!intersection_test.empty())
         {
@@ -363,7 +443,7 @@ namespace CGALWrappers
               internal::mark_domains(cdt);
               std::array<Point<2>, 3> vertices;
 
-              for (const Face_handle &f : cdt.finite_face_handles())
+              for (Face_handle f : cdt.finite_face_handles())
                 {
                   if (f->info().in_domain() &&
                       CGAL::to_double(cdt.triangle(f).area()) > tol)
@@ -391,14 +471,14 @@ namespace CGALWrappers
         }
     }
 
-
-
     // Specialization for quad \cap line
     std::vector<std::array<Point<2>, 2>>
-    compute_intersection_quad_line(const ArrayView<Point<2>> &quad,
-                                   const ArrayView<Point<2>> &line,
-                                   const double               tol)
+    compute_intersection_quad_line(const ArrayView<const Point<2>> &quad,
+                                   const ArrayView<const Point<2>> &line,
+                                   const double                     tol)
     {
+      AssertDimension(quad.size(), 4);
+      AssertDimension(line.size(), 2);
       std::array<CGALPoint2, 4> pts;
       std::transform(
         quad.begin(), quad.end(), pts.begin(), [&](const Point<2> &p) {
@@ -431,28 +511,23 @@ namespace CGALWrappers
                 }
             }
         }
+
       return vertices;
     }
 
-
-
     // specialization for hex \cap line
     std::vector<std::array<Point<3>, 2>>
-    compute_intersection_hexa_line(const ArrayView<Point<3>> &vertices0,
-                                   const ArrayView<Point<3>> &vertices1,
-                                   const double               tol)
+    compute_intersection_hexa_line(const ArrayView<const Point<3>> &hexa,
+                                   const ArrayView<const Point<3>> &line,
+                                   const double                     tol)
     {
-#  if DEAL_II_CGAL_VERSION_GTE(5, 1, 5)
+#  if DEAL_II_CGAL_VERSION_GTE(5, 5, 0)
+      AssertDimension(hexa.size(), 8);
+      AssertDimension(line.size(), 2);
       std::array<CGALPoint3_exact, 8> pts;
-      std::transform(
-        vertices0.begin(),
-        vertices0.end(),
-        pts.begin(),
-        [&](const Point<3> &p) {
-          return CGALWrappers::dealii_point_to_cgal_point<CGALPoint3_exact>(p);
-        });
+      std::transform(vertices0.begin(), vertices0.end(), pts.begin());
 
-      CGALSegment3_exact segm(
+      CGALSegment3_exact cgal_segment(
         CGALWrappers::dealii_point_to_cgal_point<CGALPoint3_exact>(
           vertices1[0]),
         CGALWrappers::dealii_point_to_cgal_point<CGALPoint3_exact>(
@@ -461,14 +536,15 @@ namespace CGALWrappers
       // Subdivide the hex into tetrahedrons, and intersect each one of them
       // with the line
       std::vector<std::array<Point<3>, 2>> vertices;
-      Triangulation3_exact                 tria;
-      tria.insert(pts.begin(), pts.end());
-      for (const auto &c : tria.finite_cell_handles())
+      Triangulation3_exact                 cgal_triangulation;
+      cgal_triangulation.insert(pts.begin(), pts.end());
+      for (const auto &c : cgal_triangulation.finite_cell_handles())
         {
-          const auto &tet = tria.tetrahedron(c);
-          if (CGAL::do_intersect(segm, tet))
+          const auto &cgal_tetrahedron = cgal_triangulation.tetrahedron(c);
+          if (CGAL::do_intersect(cgal_segment, cgal_tetrahedron))
             {
-              const auto intersection = CGAL::intersection(segm, tet);
+              const auto intersection =
+                CGAL::intersection(cgal_segment, cgal_tetrahedron);
               if (const CGALSegment3_exact *s =
                     boost::get<CGALSegment3_exact>(&*intersection))
                 {
@@ -483,65 +559,53 @@ namespace CGALWrappers
                 }
             }
         }
-
       return vertices;
 #  else
       Assert(
         false,
         ExcMessage(
-          "This function requires a version of CGAL greater or equal than 5.1.5."));
-      (void)vertices0;
-      (void)vertices1;
+          "This function requires a version of CGAL greater or equal than 5.5."));
+      (void)hexa;
+      (void)line;
       (void)tol;
       return {};
 #  endif
     }
 
-
-
     std::vector<std::array<Point<3>, 3>>
-    compute_intersection_hexa_quad(const ArrayView<Point<3>> &vertices0,
-                                   const ArrayView<Point<3>> &vertices1,
-                                   const double               tol)
+    compute_intersection_hexa_quad(const ArrayView<const Point<3>> &hexa,
+                                   const ArrayView<const Point<3>> &quad,
+                                   const double                     tol)
     {
-#  if DEAL_II_CGAL_VERSION_GTE(5, 1, 5)
+#  if DEAL_II_CGAL_VERSION_GTE(5, 5, 0)
+      AssertDimension(hexa.size(), 8);
+      AssertDimension(quad.size(), 4);
+
       std::array<CGALPoint3_exact, 8> pts_hex;
       std::array<CGALPoint3_exact, 4> pts_quad;
-      std::transform(
-        vertices0.begin(),
-        vertices0.end(),
-        pts_hex.begin(),
-        [&](const Point<3> &p) {
-          return CGALWrappers::dealii_point_to_cgal_point<CGALPoint3_exact>(p);
-        });
+      std::transform(vertices0.begin(), vertices0.end(), pts_hex.begin());
 
-      std::transform(
-        vertices1.begin(),
-        vertices1.end(),
-        pts_quad.begin(),
-        [&](const Point<3> &p) {
-          return CGALWrappers::dealii_point_to_cgal_point<CGALPoint3_exact>(p);
-        });
+      std::transform(vertices1.begin(), vertices1.end(), pts_quad.begin());
 
       // Subdivide hex into tetrahedrons
       std::vector<std::array<Point<3>, 3>> vertices;
-      Triangulation3_exact                 tria;
-      tria.insert(pts_hex.begin(), pts_hex.end());
+      Triangulation3_exact                 triangulation_hexa;
+      triangulation_hexa.insert(pts_hex.begin(), pts_hex.end());
 
       // Subdivide quad into triangles
-      Triangulation3_exact tria_quad;
-      tria_quad.insert(pts_quad.begin(), pts_quad.end());
+      Triangulation3_exact triangulation_quad;
+      triangulation_quad.insert(pts_quad.begin(), pts_quad.end());
 
-      for (const auto &c : tria.finite_cell_handles())
+      for (const auto &c : triangulation_hexa.finite_cell_handles())
         {
-          const auto &tet = tria.tetrahedron(c);
+          const auto &tet = triangulation_hexa.tetrahedron(c);
 
-          for (const auto &f : tria_quad.finite_facets())
+          for (const auto &f : triangulation_quad.finite_facets())
             {
-              if (CGAL::do_intersect(tet, tria_quad.triangle(f)))
+              if (CGAL::do_intersect(tet, triangulation_quad.triangle(f)))
                 {
                   const auto intersection =
-                    CGAL::intersection(tria_quad.triangle(f), tet);
+                    CGAL::intersection(triangulation_quad.triangle(f), tet);
 
                   if (const CGALTriangle3_exact *t =
                         boost::get<CGALTriangle3_exact>(&*intersection))
@@ -591,9 +655,9 @@ namespace CGALWrappers
       Assert(
         false,
         ExcMessage(
-          "This function requires a version of CGAL greater or equal than 5.1.5."));
-      (void)vertices0;
-      (void)vertices1;
+          "This function requires a version of CGAL greater or equal than 5.5."));
+      (void)hexa;
+      (void)quad;
       (void)tol;
       return {};
 #  endif
@@ -602,10 +666,13 @@ namespace CGALWrappers
 
 
     std::vector<std::array<Point<3>, 4>>
-    compute_intersection_hexa_hexa(const ArrayView<Point<3>> &hexa0,
-                                   const ArrayView<Point<3>> &hexa1,
-                                   const double               tol)
+    compute_intersection_hexa_hexa(const ArrayView<const Point<3>> &hexa0,
+                                   const ArrayView<const Point<3>> &hexa1,
+                                   const double                     tol)
     {
+      AssertDimension(hexa0.size(), 8);
+      AssertDimension(hexa0.size(), hexa1.size());
+
       std::array<CGALPoint3_inexact, 8> pts_hex0;
       std::array<CGALPoint3_inexact, 8> pts_hex1;
       std::transform(
@@ -631,33 +698,32 @@ namespace CGALWrappers
 
       for (const auto &c0 : tria0.finite_cell_handles())
         {
-          const auto &                 tet0 = tria1.tetrahedron(c0);
-          [[maybe_unused]] const auto &tetg0 =
-            CGAL::make_tetrahedron(tet0.vertex(0),
-                                   tet0.vertex(1),
-                                   tet0.vertex(2),
-                                   tet0.vertex(3),
-                                   surf0);
+          const auto &tet0 = tria1.tetrahedron(c0);
+          CGAL::make_tetrahedron(tet0.vertex(0),
+                                 tet0.vertex(1),
+                                 tet0.vertex(2),
+                                 tet0.vertex(3),
+                                 surf0);
           for (const auto &c1 : tria1.finite_cell_handles())
             {
-              const auto &                 tet1 = tria1.tetrahedron(c1);
-              [[maybe_unused]] const auto &tetg1 =
-                CGAL::make_tetrahedron(tet1.vertex(0),
-                                       tet1.vertex(1),
-                                       tet1.vertex(2),
-                                       tet1.vertex(3),
-                                       surf1);
+              const auto &tet1 = tria1.tetrahedron(c1);
+              CGAL::make_tetrahedron(tet1.vertex(0),
+                                     tet1.vertex(1),
+                                     tet1.vertex(2),
+                                     tet1.vertex(3),
+                                     surf1);
               namespace PMP = CGAL::Polygon_mesh_processing;
               const bool test_intersection =
                 PMP::corefine_and_compute_intersection(surf0, surf1, sm);
               if (PMP::volume(sm) > tol && test_intersection)
                 {
                   // Collect tetrahedrons
-                  Triangulation3_inexact tria;
-                  tria.insert(sm.points().begin(), sm.points().end());
-                  for (const auto &c : tria.finite_cell_handles())
+                  Triangulation3_inexact triangulation_hexa;
+                  triangulation_hexa.insert(sm.points().begin(),
+                                            sm.points().end());
+                  for (const auto &c : triangulation_hexa.finite_cell_handles())
                     {
-                      const auto &tet = tria.tetrahedron(c);
+                      const auto &tet = triangulation_hexa.tetrahedron(c);
                       vertices.push_back(
                         {{CGALWrappers::cgal_point_to_dealii_point<3>(
                             tet.vertex(0)),
@@ -676,18 +742,24 @@ namespace CGALWrappers
         }
       return vertices;
     }
+
   } // namespace internal
 
 
 
   template <int dim0, int dim1, int spacedim>
   std::vector<std::array<Point<spacedim>, dim1 + 1>>
-  compute_intersection_of_cells(const ArrayView<Point<spacedim>> &vertices0,
-                                const ArrayView<Point<spacedim>> &vertices1,
-                                const double                      tol)
+  compute_intersection_of_cells(
+    const ArrayView<const Point<spacedim>> &vertices0,
+    const ArrayView<const Point<spacedim>> &vertices1,
+    const double                            tol)
   {
     const unsigned int n_vertices0 = vertices0.size();
     const unsigned int n_vertices1 = vertices1.size();
+    Assert(
+      n_vertices0 > 0 || n_vertices1 > 0,
+      ExcMessage(
+        "The intersection cannot be computed as at least one of the two cells has no vertices."));
 
     if constexpr (dim0 == 2 && dim1 == 2 && spacedim == 2)
       {
@@ -754,16 +826,17 @@ namespace CGALWrappers
     const Mapping<dim1, spacedim> &                              mapping1,
     const double                                                 tol)
   {
-    Assert(mapping0.get_vertices(cell0).size() == std::pow(2, dim0),
+    Assert(mapping0.get_vertices(cell0).size() ==
+             ReferenceCells::get_hypercube<dim0>().n_vertices(),
            ExcNotImplemented());
-    Assert(mapping1.get_vertices(cell1).size() == std::pow(2, dim1),
+    Assert(mapping1.get_vertices(cell1).size() ==
+             ReferenceCells::get_hypercube<dim1>().n_vertices(),
            ExcNotImplemented());
 
-
-    std::vector<Point<spacedim>> vertices0(mapping0.get_vertices(cell0).size()),
-      vertices1(mapping1.get_vertices(cell1).size());
-    CGALWrappers::get_vertices_in_cgal_order(cell0, mapping0, vertices0);
-    CGALWrappers::get_vertices_in_cgal_order(cell1, mapping1, vertices1);
+    const auto &vertices0 =
+      CGALWrappers::get_vertices_in_cgal_order(cell0, mapping0);
+    const auto &vertices1 =
+      CGALWrappers::get_vertices_in_cgal_order(cell1, mapping1);
 
     return compute_intersection_of_cells<dim0, dim1, spacedim>(vertices0,
                                                                vertices1,
