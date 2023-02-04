@@ -54,6 +54,7 @@ namespace NonMatching
     const Mapping<2, 2> &                              mapping0,
     const Mapping<1, 2> &                              mapping1)
   {
+    // dynamic cast in case I have a MappingFEField as second mapping
     const std::vector<std::array<Point<2>, 2>> &vec_of_simplices =
       CGALWrappers::compute_intersection_of_cells(cell0,
                                                   cell1,

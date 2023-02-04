@@ -1511,6 +1511,31 @@ namespace NonMatching
         // else
         //   {
         // std::cout << "dynamic cast NON passato" << std::endl;
+        for (unsigned int i = 0; i < 2; ++i)
+          {
+            std::cout << "cella number: " << embedded_cell->active_cell_index()
+                      << " has vertex " << embedded_cell->vertex(i)
+                      << std::endl;
+          }
+
+        for (const auto &cell_test :
+             immersed_dh.get_triangulation().active_cell_iterators())
+          {
+            std::cout << "Cella number: " << cell_test->active_cell_index()
+                      << std::endl;
+            for (const auto &x : immersed_mapping.get_vertices(cell_test))
+              {
+                std::cout << "Mapped vertex: " << x << std::endl;
+
+                std::cout
+                  << "Mapped BACK vertex: "
+                  << immersed_mapping.transform_real_to_unit_cell(cell_test, x)
+                  << std::endl;
+              }
+          }
+
+
+
         for (unsigned int q = 0; q < n_quad_pts; ++q)
           {
             ref_pts_immersed[q] =
