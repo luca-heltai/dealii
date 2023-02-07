@@ -63,10 +63,10 @@
 namespace Step85
 {
   using namespace dealii;
-  class ImplicitFunction : public Function<2>
+  class ImplicitFunction : public Function<3>
   {
   public:
-    virtual double value(const Point<2> &   p,
+    virtual double value(const Point<3> &   p,
                          const unsigned int component = 0) const override
     {
       // const double xc = 0.2 / std::sqrt(20.);
@@ -76,19 +76,15 @@ namespace Step85
       const double r = .1;
       const double x = p[0];
       const double y = p[1];
+      const double z = p[2];
       const double oscillating_term =
         (1. - 2. * (y * y) / (x * x + y * y)) *
         (1. - 16. * (x * x * y * y) / ((x * x + y * y) * (x * x + y * y)));
       // return std::sqrt(p[0]*p[0] + p[1]*p[1]) - r*(p[0]*p[0]*p[0]
       // - 3.*p[0]*p[1]*p[1])*std::pow(p[0]*p[0] + p[1]*p[1],-3./2.) - R;
-      return std::sqrt(x * x + y * y) - r * oscillating_term - R;
-      // return std::sqrt((p[0] * p[0] - xc) * (p[0] * p[0] - xc) +
-      //                  (p[1] * p[1] - yc) * (p[1] * p[1] - yc)) -
-      //        .5 - 0.2 * std::sin(w * std::atan2(p[1] - yc, p[0] - xc));
-      // return std::pow(p[0] * p[0] + p[1] * p[1], 2) -
-      //        .1 * std::pow(std::cos(6. * M_PI * std::atan2(p[1], p[0])),
-      // 2) -
-      //        .5;
+      // return std::sqrt(x * x + y * y) - r * oscillating_term - R;
+
+      return std::sqrt(x * x + y * y + z * z) - R;
     }
   };
   template <int dim>
@@ -184,7 +180,7 @@ namespace Step85
     std::cout << "Creating background mesh" << std::endl;
 
     GridGenerator::hyper_cube(triangulation, -1., 1.);
-    triangulation.refine_global(2);
+    triangulation.refine_global(1);
   }
 
   template <int dim>
@@ -198,7 +194,7 @@ namespace Step85
     const Functions::SignedDistance::Sphere<dim> signed_distance_sphere({}, R);
     ImplicitFunction                             implicit_function;
     VectorTools::interpolate(level_set_dof_handler,
-                             implicit_function,
+                             signed_distance_sphere,
                              level_set);
   }
 
@@ -220,8 +216,19 @@ namespace Step85
     AssertIndexRange(component, this->n_components);
     (void)component;
 
-    return std::sin(2. * numbers::PI * point[0]) *
-           std::sin(2. * numbers::PI * point[1]);
+    switch (dim)
+      {
+        case 2:
+          return std::sin(2. * numbers::PI * point[0]) *
+                 std::sin(2. * numbers::PI * point[1]);
+        case 3:
+          return std::sin(2. * numbers::PI * point[0]) *
+                 std::sin(2. * numbers::PI * point[1]) *
+                 std::sin(2. * numbers::PI * point[2]);
+        default:
+          Assert(false, ExcNotImplemented());
+      }
+
     // 1. - 2. / dim * (point.norm_square() - 1.);
   }
 
@@ -232,14 +239,31 @@ namespace Step85
   {
     AssertIndexRange(component, this->n_components);
     (void)component;
-    Assert(dim == 2, ExcMessage("Tested so far for 1d2d"));
-    Tensor<1, dim> grad;
-    grad[0] = 2. * M_PI * std::cos(2. * M_PI * point[0]) *
-              std::sin(2. * M_PI * point[1]);
-    grad[1] = 2. * M_PI * std::cos(2. * M_PI * point[1]) *
-              std::sin(2. * M_PI * point[0]);
 
-    return grad;
+
+    Tensor<1, dim> grad;
+    switch (dim)
+      {
+        case 2:
+          grad[0] = 2. * M_PI * std::cos(2. * M_PI * point[0]) *
+                    std::sin(2. * M_PI * point[1]);
+          grad[1] = 2. * M_PI * std::cos(2. * M_PI * point[1]) *
+                    std::sin(2. * M_PI * point[0]);
+          return grad;
+        case 3:
+          grad[0] = 2. * M_PI * std::cos(2. * M_PI * point[0]) *
+                    std::sin(2. * M_PI * point[1]) *
+                    std::sin(2. * M_PI * point[2]);
+          grad[1] = 2. * M_PI * std::sin(2. * M_PI * point[0]) *
+                    std::cos(2. * M_PI * point[1]) *
+                    std::sin(2. * M_PI * point[2]);
+          grad[2] = 2. * M_PI * std::sin(2. * M_PI * point[0]) *
+                    std::sin(2. * M_PI * point[1]) *
+                    std::cos(2. * M_PI * point[2]);
+          return grad;
+        default:
+          Assert(false, ExcNotImplemented());
+      }
   }
 
 
@@ -272,7 +296,7 @@ namespace Step85
           case 2:
             return AnalyticalSolution<dim>().value(p);
           case 3:
-            return std::sin(numbers::PI * p[0]) * std::sin(numbers::PI * p[1]);
+            return AnalyticalSolution<dim>().value(p);
           default:
             Assert(false, ExcNotImplemented());
         }
@@ -304,8 +328,20 @@ namespace Step85
                                  const unsigned int component) const
   {
     (void)component;
-    return 8. * numbers::PI * numbers::PI * std::sin(2. * numbers::PI * p[0]) *
-           std::sin(2. * numbers::PI * p[1]);
+    switch (dim)
+      {
+        case 2:
+          return 8. * numbers::PI * numbers::PI *
+                 std::sin(2. * numbers::PI * p[0]) *
+                 std::sin(2. * numbers::PI * p[1]);
+        case 3:
+          return 12. * numbers::PI * numbers::PI *
+                 std::sin(2. * numbers::PI * p[0]) *
+                 std::sin(2. * numbers::PI * p[1]) *
+                 std::sin(2. * numbers::PI * p[2]);
+        default:
+          Assert(false, ExcMessage("Nonsense"));
+      };
   }
 
   enum ActiveFEIndex
@@ -459,8 +495,8 @@ namespace Step85
     //   {
     //     std::cout << "4 DoFS cell1" << std::endl;
     //   }
-    Assert(!(fe_face0.dofs_per_cell == 4 && fe_face1.dofs_per_cell == 4),
-           ExcMessage("They cannot have both 4 DoFs."));
+    Assert(!(fe_face0.dofs_per_cell == 8 && fe_face1.dofs_per_cell == 8),
+           ExcMessage("They cannot have both 8 DoFs."));
 
     std::vector<types::global_dof_index> local_dofs0_indices(
       fe_face0.dofs_per_cell);
@@ -485,7 +521,7 @@ namespace Step85
             {
               for (unsigned int j = 0; j < fe_face0.dofs_per_cell; ++j)
                 {
-                  if (fe_face0.dofs_per_cell == 8)
+                  if (fe_face0.dofs_per_cell == 8 * 2)
                     {
                       if (i % 2 == reminder && j % 2 == reminder)
                         {
@@ -516,8 +552,16 @@ namespace Step85
             {
               for (unsigned int j = 0; j < fe_face1.dofs_per_cell; ++j)
                 {
-                  if (fe_face1.dofs_per_cell == 8 &&
-                      fe_face0.dofs_per_cell == 4)
+                  // std::cout
+                  //   << "fe_face0.dofs_per_cell = " << fe_face0.dofs_per_cell
+                  //   << std::endl;
+
+                  // std::cout
+                  //   << "fe_face1.dofs_per_cell = " << fe_face1.dofs_per_cell
+                  //   << std::endl;
+
+                  if (fe_face1.dofs_per_cell == 8 * 2 &&
+                      fe_face0.dofs_per_cell == 4 * 2)
                     {
                       if (j % 2 == reminder)
                         {
@@ -527,8 +571,8 @@ namespace Step85
                             fe_face1.shape_grad(j, q) * interface_JxW;
                         }
                     }
-                  else if (fe_face1.dofs_per_cell == 4 &&
-                           fe_face0.dofs_per_cell == 8)
+                  else if (fe_face1.dofs_per_cell == 4 * 2 &&
+                           fe_face0.dofs_per_cell == 8 * 2)
                     {
                       if (i % 2 == reminder)
                         {
@@ -538,8 +582,8 @@ namespace Step85
                             fe_face1.shape_grad(j, q) * interface_JxW;
                         }
                     }
-                  else if (fe_face1.dofs_per_cell == 8 &&
-                           fe_face0.dofs_per_cell == 8)
+                  else if (fe_face1.dofs_per_cell == 8 * 2 &&
+                           fe_face0.dofs_per_cell == 8 * 2)
                     {
                       if (i % 2 == reminder && j % 2 == reminder)
                         {
@@ -563,8 +607,8 @@ namespace Step85
             {
               for (unsigned int j = 0; j < fe_face0.dofs_per_cell; ++j)
                 {
-                  if (fe_face1.dofs_per_cell == 8 &&
-                      fe_face0.dofs_per_cell == 4)
+                  if (fe_face1.dofs_per_cell == 8 * 2 &&
+                      fe_face0.dofs_per_cell == 4 * 2)
                     {
                       if (i % 2 == reminder)
                         {
@@ -574,8 +618,8 @@ namespace Step85
                             fe_face0.shape_grad(j, q) * interface_JxW;
                         }
                     }
-                  else if (fe_face1.dofs_per_cell == 4 &&
-                           fe_face0.dofs_per_cell == 8)
+                  else if (fe_face1.dofs_per_cell == 4 * 2 &&
+                           fe_face0.dofs_per_cell == 8 * 2)
                     {
                       if (j % 2 == reminder)
                         {
@@ -585,8 +629,8 @@ namespace Step85
                             fe_face0.shape_grad(j, q) * interface_JxW;
                         }
                     }
-                  else if (fe_face1.dofs_per_cell == 8 &&
-                           fe_face0.dofs_per_cell == 8)
+                  else if (fe_face1.dofs_per_cell == 8 * 2 &&
+                           fe_face0.dofs_per_cell == 8 * 2)
                     {
                       if (i % 2 == reminder && j % 2 == reminder)
                         {
@@ -610,7 +654,7 @@ namespace Step85
             {
               for (unsigned int j = 0; j < fe_face1.dofs_per_cell; ++j)
                 {
-                  if (fe_face1.dofs_per_cell == 8)
+                  if (fe_face1.dofs_per_cell == 8 * 2)
                     {
                       if (i % 2 == reminder && j % 2 == reminder)
                         {
@@ -1049,7 +1093,7 @@ namespace Step85
     std::cout << "Writing vtu file" << std::endl;
 
     DataOut<dim> data_out;
-    data_out.add_data_vector(dof_handler, solution, "solution");
+    data_out.add_data_vector(dof_handler, solution, "solution_sphere_3D");
     data_out.add_data_vector(level_set_dof_handler, level_set, "level_set");
 
     data_out.set_cell_selection(
@@ -1404,7 +1448,7 @@ namespace Step85
   void LaplaceSolver<dim>::run()
   {
     ConvergenceTable   convergence_table;
-    const unsigned int n_refinements = 7;
+    const unsigned int n_refinements = 5;
 
     make_grid();
     for (unsigned int cycle = 0; cycle <= n_refinements; cycle++)
@@ -1450,7 +1494,7 @@ namespace Step85
 
 int main()
 {
-  const int dim = 2;
+  const int dim = 3;
 
   Step85::LaplaceSolver<dim> laplace_solver;
   laplace_solver.run();

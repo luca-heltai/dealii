@@ -157,8 +157,10 @@ private:
   AffineConstraints<double> space_constraints;
   AffineConstraints<double> embedded_constraints;
   SparsityPattern           stiffness_sparsity_pattern;
+  SparsityPattern           mass_sparsity_pattern;
   SparsityPattern           coupling_sparsity_pattern;
   SparseMatrix<double>      stiffness_matrix;
+  SparseMatrix<double>      mass_matrix;
   SparseMatrix<double>      coupling_matrix;
   Vector<double>            space_rhs;
   Vector<double>            embedded_rhs;
@@ -283,12 +285,10 @@ void PoissonDLM<dim, spacedim>::setup_grids_and_dofs()
         }
       else if constexpr (dim == 2 && spacedim == 3)
         {
-          GridGenerator::hyper_cube(embedded_triangulation, -0.45, 0.45);
+          // GridGenerator::hyper_cube(embedded_triangulation, -0.45, 0.45);
           // GridGenerator::hyper_cube(embedded_triangulation, -0.42, 0.56);
-          // GridTools::rotate(Tensor<1, 3>({1. / sqrt(2.), 1. / sqrt(2.), 0.}),
-          //                   numbers::PI_4,
-          //                   embedded_triangulation);
-          // GridGenerator::hyper_sphere(embedded_triangulation, {}, R);
+
+          GridGenerator::hyper_sphere(embedded_triangulation, {}, R);
           // GridGenerator::hyper_cross(embedded_triangulation, {0, 0, 1, 0});
           space_triangulation.refine_global(
             parameters.space_initial_global_refinements); // 4
@@ -480,6 +480,12 @@ void PoissonDLM<dim, spacedim>::setup_space_dofs()
   stiffness_matrix.reinit(stiffness_sparsity_pattern);
   solution.reinit(space_dh->n_dofs());
   space_rhs.reinit(space_dh->n_dofs());
+
+  // Mass matrix for the preconditioner
+  DynamicSparsityPattern mass_dsp(embedded_dh->n_dofs(), embedded_dh->n_dofs());
+  DoFTools::make_sparsity_pattern(*embedded_dh, mass_dsp, embedded_constraints);
+  mass_sparsity_pattern.copy_from(mass_dsp);
+  mass_matrix.reinit(mass_sparsity_pattern);
 }
 
 
@@ -548,6 +554,8 @@ void PoissonDLM<dim, spacedim>::assemble_system()
     std::cout << "Assemble system" << std::endl;
 
     QGauss<spacedim> quadrature_formula(2 * parameters.fe_space_degree + 1);
+    QGauss<dim> quadrature_formula_gamma(2 * parameters.fe_embedded_degree + 1);
+
     FEValues<spacedim, spacedim> fe_values(space_mapping,
                                            *space_fe,
                                            quadrature_formula,
@@ -555,10 +563,46 @@ void PoissonDLM<dim, spacedim>::assemble_system()
                                              update_quadrature_points |
                                              update_JxW_values);
 
+    FEValues<dim, spacedim> fe_values_gamma(embedded_mapping,
+                                            *embedded_fe,
+                                            quadrature_formula_gamma,
+                                            update_values |
+                                              update_quadrature_points |
+                                              update_JxW_values);
+
+    const unsigned int dofs_per_gamma_cell = embedded_fe->n_dofs_per_cell();
+    FullMatrix<double> cell_mass_matrix(dofs_per_gamma_cell,
+                                        dofs_per_gamma_cell);
+
+
+    std::vector<types::global_dof_index> local_dof_gamma_indices(
+      dofs_per_gamma_cell);
+    for (const auto &cell : embedded_dh->active_cell_iterators())
+      {
+        fe_values_gamma.reinit(cell);
+        cell_mass_matrix = 0;
+        for (const unsigned int q_index :
+             fe_values_gamma.quadrature_point_indices())
+          {
+            for (const unsigned int i : fe_values_gamma.dof_indices())
+              for (const unsigned int j : fe_values_gamma.dof_indices())
+                cell_mass_matrix(i, j) +=
+                  fe_values_gamma.shape_value(i, q_index) * //  q_i(x_q)
+                  fe_values_gamma.shape_value(j, q_index) * //  q_j(x_q)
+                  fe_values_gamma.JxW(q_index);             // dx
+          }
+
+        cell->get_dof_indices(local_dof_gamma_indices);
+        embedded_constraints.distribute_local_to_global(cell_mass_matrix,
+                                                        local_dof_gamma_indices,
+                                                        mass_matrix);
+      }
+
+
+
     const unsigned int dofs_per_cell = space_fe->n_dofs_per_cell();
     FullMatrix<double> cell_matrix(dofs_per_cell, dofs_per_cell);
     Vector<double>     cell_rhs(dofs_per_cell);
-
     std::vector<types::global_dof_index> local_dof_indices(dofs_per_cell);
     for (const auto &cell : space_dh->active_cell_iterators())
       {
@@ -577,8 +621,8 @@ void PoissonDLM<dim, spacedim>::assemble_system()
             for (const unsigned int i : fe_values.dof_indices())
               cell_rhs(i) +=
                 (fe_values.shape_value(i, q_index) * // phi_i(x_q)
-                                                     /*  forcing_term.value(
-                                                         fe_values.quadrature_point(q_index)) * // f(x_q)*/
+                 /*  forcing_term.value(
+                     fe_values.quadrature_point(q_index)) * // f(x_q)*/
                  rhs_function.value(q_points[q_index]) *
                  fe_values.JxW(q_index)); // dx
           }
@@ -645,19 +689,33 @@ void PoissonDLM<dim, spacedim>::solve()
   // TimerOutput::Scope timer_section(timer, "Solve system");
   std::cout << "Solve system" << std::endl;
 
-  SparseDirectUMFPACK K_inv_umfpack;
-  K_inv_umfpack.initialize(stiffness_matrix);
+  auto K = linear_operator(stiffness_matrix);
 
-  auto K  = linear_operator(stiffness_matrix);
+
+  // SparseDirectUMFPACK K_inv_umfpack;
+  // K_inv_umfpack.initialize(stiffness_matrix);
+  // auto K_inv = linear_operator(K, K_inv_umfpack);
+
+  ReductionControl         reduction_control_K(200, 1.0e-9, 1.0e-2);
+  SolverCG<Vector<double>> solver_cg_K(reduction_control_K);
+  auto                     K_inv = inverse_operator(K, solver_cg_K);
+  std::cout << "Got the inverse FOR CYCLE = " << cycle << std::endl;
+
   auto Ct = linear_operator(coupling_matrix);
+  auto M  = linear_operator(mass_matrix);
   auto C  = transpose_operator(Ct);
 
-  auto K_inv = linear_operator(K, K_inv_umfpack);
 
-  auto                     S = C * K_inv * Ct;
-  ReductionControl         reduction_control(2000, 1.0e-12, 1.0e-10);
-  SolverCG<Vector<double>> solver_cg(reduction_control);
-  auto S_inv = inverse_operator(S, solver_cg, PreconditionIdentity());
+  auto S = C * K_inv * Ct;
+  // ReductionControl reduction_control(2000, 1.0e-12, 1.0e-10);
+  ReductionControl reduction_control(2000, 1.0e-5, 1.0e-2);
+  // SolverCG<Vector<double>> solver_cg(reduction_control);
+  SolverGMRES<Vector<double>> solver_cg(reduction_control);
+  // auto S_inv = inverse_operator(S, solver_cg, PreconditionIdentity());
+
+  auto preconditioner = C * K * Ct + M;
+
+  auto S_inv = inverse_operator(S, solver_cg, preconditioner);
 
   lambda   = S_inv * (C * K_inv * space_rhs - embedded_rhs);
   solution = K_inv * (space_rhs - Ct * lambda);
@@ -678,12 +736,15 @@ void PoissonDLM<dim, spacedim>::output_results(const unsigned cycle) const
   // TimerOutput::Scope timer_section(timer, "Output results");
   std::cout << "Output results" << std::endl;
 
-  data_out.clear();
-  std::ofstream data_out_file("space_solution.vtu");
-  data_out.attach_dof_handler(*space_dh);
-  data_out.add_data_vector(solution, "solution");
-  data_out.build_patches();
-  data_out.write_vtu(data_out_file);
+  if (cycle < 3)
+    {
+      data_out.clear();
+      std::ofstream data_out_file("space_solution.vtu");
+      data_out.attach_dof_handler(*space_dh);
+      data_out.add_data_vector(solution, "solution");
+      data_out.build_patches();
+      data_out.write_vtu(data_out_file);
+    }
 
   {
     Vector<double> difference_per_cell(space_triangulation.n_active_cells());
@@ -805,6 +866,7 @@ void PoissonDLM<dim, spacedim>::run()
         solve();
       }
       output_results(cycle);
+
       if (cycle < parameters.n_refinement_cycles - 1)
         {
           space_triangulation.refine_global(1);
@@ -818,9 +880,9 @@ void PoissonDLM<dim, spacedim>::run()
   convergence_table.set_scientific("L2", true);
   convergence_table.set_scientific("H1", true);
   convergence_table.evaluate_convergence_rates(
-    "L2", ConvergenceTable::reduction_rate_log2);
+    "L2", "dofs", ConvergenceTable::reduction_rate_log2, spacedim);
   convergence_table.evaluate_convergence_rates(
-    "H1", ConvergenceTable::reduction_rate_log2);
+    "H1", "dofs", ConvergenceTable::reduction_rate_log2, spacedim);
   // convergence_table.set_precision("L2_multiplier", 3);
   // convergence_table.set_scientific("L2_multiplier", true);
   // convergence_table.evaluate_convergence_rates(
@@ -835,9 +897,25 @@ int main(int argc, char **argv)
   try
     {
       {
-        std::cout << "Solving in 1D/2D" << std::endl;
-        PoissonDLM<1, 2>::Parameters parameters;
-        PoissonDLM<1, 2>             problem(parameters);
+        // std::cout << "Solving in 1D/2D" << std::endl;
+        // PoissonDLM<1, 2>::Parameters parameters;
+        // PoissonDLM<1, 2>             problem(parameters);
+        // std::string                  parameter_file;
+        // if (argc > 1)
+        //   parameter_file = argv[1];
+        // else
+        //   parameter_file = "parameters.prm";
+
+        // ParameterAcceptor::initialize(parameter_file,
+        // "used_parameters.prm"); problem.run();
+      } {
+        // std::cout << "Solving in 2D/2D" << std::endl;
+        // PoissonDLM<2> problem;
+        // problem.run();
+        // // } {
+        std::cout << "Solving in 2D/3D" << std::endl;
+        PoissonDLM<2, 3>::Parameters parameters;
+        PoissonDLM<2, 3>             problem(parameters);
         std::string                  parameter_file;
         if (argc > 1)
           parameter_file = argv[1];
@@ -848,22 +926,6 @@ int main(int argc, char **argv)
         problem.run();
       }
       {
-        // std::cout << "Solving in 2D/2D" << std::endl;
-        // PoissonDLM<2> problem;
-        // problem.run();
-        // // } {
-        // std::cout << "Solving in 2D/3D" << std::endl;
-        // PoissonDLM<2, 3>::Parameters parameters;
-        // PoissonDLM<2, 3>             problem(parameters);
-        // std::string                  parameter_file;
-        // if (argc > 1)
-        //   parameter_file = argv[1];
-        // else
-        //   parameter_file = "parameters.prm";
-
-        // ParameterAcceptor::initialize(parameter_file, "used_parameters.prm");
-        // problem.run();
-      } {
         // std::cout << "Solving in 3D/3D" << std::endl;
         // PoissonDLM<3> problem;
         // problem.run();

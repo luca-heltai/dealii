@@ -335,17 +335,52 @@ void PoissonDLM<dim, spacedim>::setup_grids_and_dofs()
         }
       else if constexpr (dim == 2 && spacedim == 3)
         {
-          GridGenerator::hyper_cube(embedded_triangulation, -0.45, 0.45);
-          // GridGenerator::hyper_cube(embedded_triangulation, -0.42, 0.56);
-          // GridTools::rotate(Tensor<1, 3>({1. / sqrt(2.), 1. / sqrt(2.), 0.}),
-          //                   numbers::PI_4,
-          //                   embedded_triangulation);
-          // GridGenerator::hyper_sphere(embedded_triangulation, {}, R);
-          // GridGenerator::hyper_cross(embedded_triangulation, {0, 0, 1, 0});
+          GridGenerator::hyper_sphere(embedded_triangulation, {}, R);
+
           space_triangulation.refine_global(
             parameters.space_initial_global_refinements); // 4
           embedded_triangulation.refine_global(
             parameters.embedded_initial_global_refinements); // 2
+
+          // space_triangulation.refine_global(
+          //   parameters.space_initial_global_refinements); // 4
+
+          // // Use a level set to generate the actual domain.
+          // GridGenerator::hyper_cube(embedded_triangulation,
+          //                           0.,
+          //                           1.); // parametric space for the curve
+          // embedded_triangulation.refine_global(
+          //   parameters.embedded_initial_global_refinements); // 2
+
+
+          // embedded_configuration_fe = std::make_unique<FESystem<dim,
+          // spacedim>>(
+          //   FE_Q<dim, spacedim>(
+          //     parameters.embedded_configuration_finite_element_degree),
+          //   spacedim);
+
+          // embedded_configuration_dh =
+          //   std::make_unique<DoFHandler<dim,
+          //   spacedim>>(embedded_triangulation);
+
+          // embedded_configuration_dh->distribute_dofs(
+          //   *embedded_configuration_fe);
+
+          // embedded_configuration.reinit(embedded_configuration_dh->n_dofs());
+
+          // VectorTools::interpolate(*embedded_configuration_dh,
+          //                          embedded_configuration_function,
+          //                          embedded_configuration);
+
+          // embedded_mapping =
+          //   std::make_unique<MappingFEField<dim, spacedim, Vector<double>>>(
+          //     *embedded_configuration_dh, embedded_configuration);
+
+          {
+            std::ofstream out_emb("griglia_emb" + std::to_string(dim) + "_" +
+                                  std::to_string(spacedim) + ".vtk");
+            GridOut().write_vtk(embedded_triangulation, out_emb);
+          }
         }
     }
 
@@ -907,9 +942,9 @@ void PoissonDLM<dim, spacedim>::run()
   convergence_table.set_scientific("L2", true);
   convergence_table.set_scientific("H1", true);
   convergence_table.evaluate_convergence_rates(
-    "L2", ConvergenceTable::reduction_rate_log2);
+    "L2", "dofs", ConvergenceTable::reduction_rate_log2, spacedim);
   convergence_table.evaluate_convergence_rates(
-    "H1", ConvergenceTable::reduction_rate_log2);
+    "H1", "dofs", ConvergenceTable::reduction_rate_log2, spacedim);
   // convergence_table.set_precision("L2_multiplier", 3);
   // convergence_table.set_scientific("L2_multiplier", true);
   // convergence_table.evaluate_convergence_rates(
@@ -937,22 +972,6 @@ int main(int argc, char **argv)
         problem.run();
       }
       {
-        // std::cout << "Solving in 2D/2D" << std::endl;
-        // PoissonDLM<2> problem;
-        // problem.run();
-        // // } {
-        // std::cout << "Solving in 2D/3D" << std::endl;
-        // PoissonDLM<2, 3>::Parameters parameters;
-        // PoissonDLM<2, 3>             problem(parameters);
-        // std::string                  parameter_file;
-        // if (argc > 1)
-        //   parameter_file = argv[1];
-        // else
-        //   parameter_file = "parameters.prm";
-
-        // ParameterAcceptor::initialize(parameter_file, "used_parameters.prm");
-        // problem.run();
-      } {
         // std::cout << "Solving in 3D/3D" << std::endl;
         // PoissonDLM<3> problem;
         // problem.run();

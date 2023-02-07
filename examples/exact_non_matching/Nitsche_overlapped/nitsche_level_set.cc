@@ -21,11 +21,13 @@
 
 #include <deal.II/base/convergence_table.h>
 #include <deal.II/non_matching/quadrature_overlapped_grids.h>
+#include <deal.II/fe/mapping_fe_field.h>
 #include <deal.II/numerics/error_estimator.h>
 #include <deal.II/base/function.h>
 #include <deal.II/base/parameter_acceptor.h>
 #include <deal.II/base/quadrature_lib.h>
 #include <deal.II/base/timer.h>
+#include <deal.II/fe/fe_system.h>
 
 #include <deal.II/dofs/dof_handler.h>
 #include <deal.II/dofs/dof_tools.h>
@@ -57,9 +59,36 @@
 
 
 using namespace dealii;
-
-
 const double R = .45;
+const double r = .1;
+const double w = 12.;
+
+template <int dim>
+class EmbeddedConfigurationFunction : public Function<dim>
+{
+public:
+  EmbeddedConfigurationFunction()
+    : Function<dim>(dim)
+  {}
+
+  virtual void vector_value(const Point<dim> &p,
+                            Vector<double> &  values) const override;
+};
+
+
+template <int dim>
+void EmbeddedConfigurationFunction<dim>::vector_value(
+  const Point<dim> &p,
+  Vector<double> &  values) const
+{
+  // values(0) = R * std::cos(2. * M_PI * p[0]);
+  // values(1) = R * std::sin(2. * M_PI * p[0]);
+
+  values(0) = (R + r * std::cos(w * M_PI * p[0])) * std::cos(2 * M_PI * p[0]);
+  values(1) = (R + r * std::cos(w * M_PI * p[0])) * std::sin(2 * M_PI * p[0]);
+}
+
+
 // Functors-like classes to describe boundary values, right hand side,
 // analytical solution, if any.
 template <int dim>
@@ -93,10 +122,10 @@ double RightHandSide<2>::value(const Point<2> &   p,
 {
   // (void)p;
   (void)component;
-  return 0.;
-  // return 8. * numbers::PI * numbers::PI *
-  //        (std::sin(2. * numbers::PI * p[0]) *
-  //         std::sin(2. * numbers::PI * p[1]));
+  // return 0.;
+  return 8. * numbers::PI * numbers::PI *
+         (std::sin(2. * numbers::PI * p[0]) *
+          std::sin(2. * numbers::PI * p[1]));
 }
 
 
@@ -150,10 +179,10 @@ template <>
 double Solution<2>::value(const Point<2> &p, const unsigned int component) const
 {
   (void)component;
-  const double r = p.norm();
-  return (r <= R) ? p[0] : ((R * R) / (r * r)) * p[0];
-  // return std::sin(2. * numbers::PI * p[0]) * std::sin(2. * numbers::PI *
-  // p[1]);
+  // const double r = p.norm();
+  // return (r <= R) ? p[0] : ((R * R) / (r * r)) * p[0];
+  return std::sin(2. * numbers::PI * p[0]) * std::sin(2. * numbers::PI * p[1]);
+  // return 1.;
 }
 
 
@@ -185,21 +214,21 @@ Tensor<1, 2> Solution<2>::gradient(const Point<2> &   p,
                                    const unsigned int component) const
 {
   (void)component;
-  const double r = p.norm();
+  // const double r = p.norm();
 
   Tensor<1, 2> gradient;
-  gradient[0] =
-    (r <= R) ? 1. : -(R * R * (p[0] * p[0] - p[1] * p[1])) / (r * r * r * r);
-
-  gradient[1] = (r <= R) ? 0. : -(2. * R * R * p[0] * p[1]) / (r * r * r * r);
-  return gradient;
   // gradient[0] =
-  //   std::cos(2. * numbers ::PI * p[0]) * std::sin(2. * numbers::PI * p[1]);
+  //   (r <= R) ? 1. : -(R * R * (p[0] * p[0] - p[1] * p[1])) / (r * r * r * r);
 
-  // gradient[1] =
-  //   std::sin(2. * numbers ::PI * p[0]) * std::cos(2. * numbers::PI * p[1]);
+  // gradient[1] = (r <= R) ? 0. : -(2. * R * R * p[0] * p[1]) / (r * r * r *
+  // r); return gradient;
+  gradient[0] =
+    std::cos(2. * numbers ::PI * p[0]) * std::sin(2. * numbers::PI * p[1]);
 
-  // return 2. * numbers::PI * gradient;
+  gradient[1] =
+    std::sin(2. * numbers ::PI * p[0]) * std::cos(2. * numbers::PI * p[1]);
+
+  return 2. * numbers::PI * gradient;
 }
 
 
@@ -248,6 +277,18 @@ private:
   DoFHandler<spacedim> space_dh;
 
   MappingQ1<spacedim> mapping;
+
+
+
+  // Members needed to deescribe parametric surfaces
+  std::unique_ptr<FiniteElement<dim, spacedim>> embedded_configuration_fe;
+  std::unique_ptr<DoFHandler<dim, spacedim>>    embedded_configuration_dh;
+  Vector<double>                                embedded_configuration;
+  std::unique_ptr<Mapping<dim, spacedim>>       embedded_mapping;
+
+  unsigned int embedded_configuration_finite_element_degree = 1;
+  unsigned int embedded_initial_global_refinements          = 2;
+
 
   AffineConstraints<double> space_constraints;
   SparsityPattern           sparsity_pattern;
@@ -299,7 +340,7 @@ private:
 
   double penalty = 10.0;
 
-  unsigned int n_refinement_cycles = 6;
+  unsigned int n_refinement_cycles = 8;
 };
 
 
@@ -328,9 +369,43 @@ void PoissonNitscheInterface<dim, spacedim>::generate_grids()
     }
   else if constexpr (dim == 1 && spacedim == 2)
     {
-      GridGenerator::hyper_sphere(embedded_triangulation, {}, R);
-      embedded_triangulation.refine_global(5); // 5
-      space_triangulation.refine_global(2);    // 2
+      space_triangulation.refine_global(1); // 2
+      // Use a level set to generate the actual domain.
+      GridGenerator::hyper_cube(embedded_triangulation,
+                                0.,
+                                1.);           // parametric space for the curve
+      embedded_triangulation.refine_global(5); // 2
+
+
+      embedded_configuration_fe = std::make_unique<FESystem<dim, spacedim>>(
+        FE_Q<dim, spacedim>(embedded_configuration_finite_element_degree),
+        spacedim);
+
+      embedded_configuration_dh =
+        std::make_unique<DoFHandler<dim, spacedim>>(embedded_triangulation);
+
+      embedded_configuration_dh->distribute_dofs(*embedded_configuration_fe);
+
+      embedded_configuration.reinit(embedded_configuration_dh->n_dofs());
+
+      EmbeddedConfigurationFunction<2> embedded_configuration_function;
+
+      VectorTools::interpolate(*embedded_configuration_dh,
+                               embedded_configuration_function,
+                               embedded_configuration);
+
+      embedded_mapping = std::make_unique<MappingFEField<1, 2, Vector<double>>>(
+        *embedded_configuration_dh, embedded_configuration);
+
+      {
+        std::ofstream          out_emb("grid_embedded_nitsche.vtu");
+        DataOut<dim, spacedim> embedding_out;
+        embedding_out.attach_dof_handler(*embedded_configuration_dh);
+        embedding_out.build_patches(
+          *embedded_mapping, embedded_configuration_finite_element_degree);
+        embedding_out.write_vtu(out_emb);
+        std::cout << "griglia_emb written" << std::endl;
+      }
     }
   else if constexpr (dim == 2 && spacedim == 2)
     {
@@ -491,7 +566,7 @@ void PoissonNitscheInterface<dim, spacedim>::assemble_system()
                                                      system_rhs,
                                                      Solution<spacedim>(),
                                                      mapping,
-                                                     MappingQ1<dim, spacedim>(),
+                                                     *embedded_mapping,
                                                      space_constraints);
   }
 }
@@ -649,19 +724,19 @@ int main()
   try
     {
       {
-        // std::cout << "Solving in 1D/2D" << std::endl;
-        // PoissonNitscheInterface<1, 2> problem;
-        // problem.run();
-      } {
+        std::cout << "Solving in 1D/2D" << std::endl;
+        PoissonNitscheInterface<1, 2> problem;
+        problem.run();
+      }
+      {
         // std::cout << "Solving in 2D/2D" << std::endl;
         // PoissonNitscheInterface<2> problem;
         // problem.run();
       } {
-        std::cout << "Solving in 2D/3D" << std::endl;
-        PoissonNitscheInterface<2, 3> problem;
-        problem.run();
-      }
-      {
+        // std::cout << "Solving in 2D/3D" << std::endl;
+        // PoissonNitscheInterface<2, 3> problem;
+        // problem.run();
+      } {
         // std::cout << "Solving in 3D/3D" << std::endl;
         // PoissonNitscheInterface<3> problem;
         // problem.run();
