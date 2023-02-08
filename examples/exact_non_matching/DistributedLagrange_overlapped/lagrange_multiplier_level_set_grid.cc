@@ -64,7 +64,6 @@
 #include <fstream>
 #include <iostream>
 
-const double R = .45;
 
 using namespace dealii;
 
@@ -169,8 +168,10 @@ private:
   AffineConstraints<double> space_constraints;
   AffineConstraints<double> embedded_constraints;
   SparsityPattern           stiffness_sparsity_pattern;
+  SparsityPattern           mass_sparsity_pattern;
   SparsityPattern           coupling_sparsity_pattern;
   SparseMatrix<double>      stiffness_matrix;
+  SparseMatrix<double>      mass_matrix;
   SparseMatrix<double>      coupling_matrix;
   Vector<double>            space_rhs;
   Vector<double>            embedded_rhs;
@@ -288,53 +289,66 @@ void PoissonDLM<dim, spacedim>::setup_grids_and_dofs()
         {
           space_triangulation.refine_global(
             parameters.space_initial_global_refinements); // 4
+          if (parameters.coupling_strategy == "inexact")
+            {
+              // Use a level set to generate the actual domain.
+              GridGenerator::hyper_cube(embedded_triangulation,
+                                        0.,
+                                        1.); // parametric space for the curve
+              embedded_triangulation.refine_global(
+                parameters.embedded_initial_global_refinements); // 2
 
-          // Use a level set to generate the actual domain.
-          GridGenerator::hyper_cube(embedded_triangulation,
-                                    0.,
-                                    1.); // parametric space for the curve
-          embedded_triangulation.refine_global(
-            parameters.embedded_initial_global_refinements); // 2
 
+              embedded_configuration_fe =
+                std::make_unique<FESystem<dim, spacedim>>(
+                  FE_Q<dim, spacedim>(
+                    parameters.embedded_configuration_finite_element_degree),
+                  spacedim);
 
-          embedded_configuration_fe = std::make_unique<FESystem<dim, spacedim>>(
-            FE_Q<dim, spacedim>(
-              parameters.embedded_configuration_finite_element_degree),
-            spacedim);
+              embedded_configuration_dh =
+                std::make_unique<DoFHandler<dim, spacedim>>(
+                  embedded_triangulation);
 
-          embedded_configuration_dh =
-            std::make_unique<DoFHandler<dim, spacedim>>(embedded_triangulation);
+              embedded_configuration_dh->distribute_dofs(
+                *embedded_configuration_fe);
 
-          embedded_configuration_dh->distribute_dofs(
-            *embedded_configuration_fe);
+              embedded_configuration.reinit(
+                embedded_configuration_dh->n_dofs());
 
-          embedded_configuration.reinit(embedded_configuration_dh->n_dofs());
+              VectorTools::interpolate(*embedded_configuration_dh,
+                                       embedded_configuration_function,
+                                       embedded_configuration);
 
-          VectorTools::interpolate(*embedded_configuration_dh,
-                                   embedded_configuration_function,
-                                   embedded_configuration);
+              embedded_mapping =
+                std::make_unique<MappingFEField<dim, spacedim, Vector<double>>>(
+                  *embedded_configuration_dh, embedded_configuration);
 
-          embedded_mapping =
-            std::make_unique<MappingFEField<dim, spacedim, Vector<double>>>(
-              *embedded_configuration_dh, embedded_configuration);
+              {
+                std::ofstream          out_emb("griglia_emb.vtu");
+                DataOut<dim, spacedim> embedding_out;
+                embedding_out.attach_dof_handler(*embedded_configuration_dh);
+                embedding_out.build_patches(
+                  *embedded_mapping,
+                  parameters.embedded_configuration_finite_element_degree);
+                embedding_out.write_vtu(out_emb);
+                std::cout << "griglia_emb written" << std::endl;
+              }
+            }
+          else
+            {
+              const double Cx = .5;
+              const double Cy = .5;
+              const double R  = .3;
+              GridGenerator::hyper_sphere(embedded_triangulation, {Cx, Cy}, R);
+              embedded_triangulation.refine_global(
+                parameters.embedded_initial_global_refinements); // 2
 
-          {
-            std::ofstream          out_emb("griglia_emb.vtu");
-            DataOut<dim, spacedim> embedding_out;
-            embedding_out.attach_dof_handler(*embedded_configuration_dh);
-            embedding_out.build_patches(
-              *embedded_mapping,
-              parameters.embedded_configuration_finite_element_degree);
-            embedding_out.write_vtu(out_emb);
-            std::cout << "griglia_emb written" << std::endl;
-          }
-          // GridGenerator::hyper_sphere(embedded_triangulation, {}, R);
-
-          // embedded_triangulation.refine_global(
-          //   parameters.embedded_initial_global_refinements); // 2
+              embedded_mapping = std::make_unique<MappingQ<dim, spacedim>>(1);
+            }
         }
       else if constexpr (dim == 2 && spacedim == 3)
         {
+          const double R = .45;
           GridGenerator::hyper_sphere(embedded_triangulation, {}, R);
 
           space_triangulation.refine_global(
@@ -396,7 +410,8 @@ void PoissonDLM<dim, spacedim>::setup_grids_and_dofs()
   // Embedded DoFs can be already distributed
   setup_embedded_dofs();
 
-  if (parameters.adjust_grids_ratio == true)
+  // Adjust the grid during for the first cycle
+  if (parameters.adjust_grids_ratio == true && cycle < 2)
     {
       adjust_grids();
     }
@@ -601,6 +616,12 @@ void PoissonDLM<dim, spacedim>::setup_space_dofs()
   stiffness_matrix.reinit(stiffness_sparsity_pattern);
   solution.reinit(space_dh->n_dofs());
   space_rhs.reinit(space_dh->n_dofs());
+
+  // Mass matrix for the preconditioner
+  DynamicSparsityPattern mass_dsp(embedded_dh->n_dofs(), embedded_dh->n_dofs());
+  DoFTools::make_sparsity_pattern(*embedded_dh, mass_dsp, embedded_constraints);
+  mass_sparsity_pattern.copy_from(mass_dsp);
+  mass_matrix.reinit(mass_sparsity_pattern);
 }
 
 
@@ -668,6 +689,43 @@ void PoissonDLM<dim, spacedim>::assemble_system()
   {
     TimerOutput::Scope timer_section(timer, "Assemble system");
     std::cout << "Assemble system" << std::endl;
+
+    QGauss<dim> quadrature_formula_gamma(2 * parameters.fe_embedded_degree + 1);
+
+    FEValues<dim, spacedim> fe_values_gamma(*embedded_mapping,
+                                            *embedded_fe,
+                                            quadrature_formula_gamma,
+                                            update_values |
+                                              update_quadrature_points |
+                                              update_JxW_values);
+
+    const unsigned int dofs_per_gamma_cell = embedded_fe->n_dofs_per_cell();
+    FullMatrix<double> cell_mass_matrix(dofs_per_gamma_cell,
+                                        dofs_per_gamma_cell);
+
+
+    std::vector<types::global_dof_index> local_dof_gamma_indices(
+      dofs_per_gamma_cell);
+    for (const auto &cell : embedded_dh->active_cell_iterators())
+      {
+        fe_values_gamma.reinit(cell);
+        cell_mass_matrix = 0;
+        for (const unsigned int q_index :
+             fe_values_gamma.quadrature_point_indices())
+          {
+            for (const unsigned int i : fe_values_gamma.dof_indices())
+              for (const unsigned int j : fe_values_gamma.dof_indices())
+                cell_mass_matrix(i, j) +=
+                  fe_values_gamma.shape_value(i, q_index) * //  q_i(x_q)
+                  fe_values_gamma.shape_value(j, q_index) * //  q_j(x_q)
+                  fe_values_gamma.JxW(q_index);             // dx
+          }
+
+        cell->get_dof_indices(local_dof_gamma_indices);
+        embedded_constraints.distribute_local_to_global(cell_mass_matrix,
+                                                        local_dof_gamma_indices,
+                                                        mass_matrix);
+      }
 
     QGauss<spacedim> quadrature_formula(2 * parameters.fe_space_degree + 1);
     FEValues<spacedim, spacedim> fe_values(space_mapping,
@@ -771,14 +829,20 @@ void PoissonDLM<dim, spacedim>::solve()
   K_inv_umfpack.initialize(stiffness_matrix);
 
   auto K  = linear_operator(stiffness_matrix);
+  auto M  = linear_operator(mass_matrix);
   auto Ct = linear_operator(coupling_matrix);
   auto C  = transpose_operator(Ct);
 
   auto K_inv = linear_operator(K, K_inv_umfpack);
 
-  auto                     S = C * K_inv * Ct;
-  ReductionControl         reduction_control(2000, 1.0e-12, 1.0e-10);
+  auto preconditioner = C * K * Ct + M;
+
+  auto             S = C * K_inv * Ct;
+  ReductionControl reduction_control(2000, 1.0e-12, 1.0e-10);
+  // ReductionControl         reduction_control(2000, 1.0e-7, 1.0e-2);
   SolverCG<Vector<double>> solver_cg(reduction_control);
+
+  // auto S_inv = inverse_operator(S, solver_cg, preconditioner);
   auto S_inv = inverse_operator(S, solver_cg, PreconditionIdentity());
 
   lambda   = S_inv * (C * K_inv * space_rhs - embedded_rhs);
