@@ -287,8 +287,10 @@ void PoissonDLM<dim, spacedim>::setup_grids_and_dofs()
         {
           // GridGenerator::hyper_cube(embedded_triangulation, -0.45, 0.45);
           // GridGenerator::hyper_cube(embedded_triangulation, -0.42, 0.56);
-
-          GridGenerator::hyper_sphere(embedded_triangulation, {}, R);
+          const double Cx = .5;
+          const double Cy = .5;
+          const double Cz = .5;
+          GridGenerator::hyper_sphere(embedded_triangulation, {Cx, Cy, Cz}, R);
           // GridGenerator::hyper_cross(embedded_triangulation, {0, 0, 1, 0});
           space_triangulation.refine_global(
             parameters.space_initial_global_refinements); // 4
@@ -297,9 +299,8 @@ void PoissonDLM<dim, spacedim>::setup_grids_and_dofs()
         }
     }
 
-  space_fe = std::make_unique<FE_Q<spacedim>>(parameters.fe_space_degree);
-  embedded_fe =
-    std::make_unique<FE_Q<dim, spacedim>>(parameters.fe_embedded_degree);
+  space_fe    = std::make_unique<FE_Q<spacedim>>(parameters.fe_space_degree);
+  embedded_fe = std::make_unique<FE_Q<dim, spacedim>>(1);
 
   space_cache =
     std::make_unique<GridTools::Cache<spacedim, spacedim>>(space_triangulation);
@@ -307,7 +308,7 @@ void PoissonDLM<dim, spacedim>::setup_grids_and_dofs()
     std::make_unique<GridTools::Cache<dim, spacedim>>(embedded_triangulation);
 
 
-  if (parameters.adjust_grids_ratio == true)
+  if (parameters.adjust_grids_ratio == true && cycle < 2)
     {
       adjust_grids();
     }
@@ -554,7 +555,7 @@ void PoissonDLM<dim, spacedim>::assemble_system()
     std::cout << "Assemble system" << std::endl;
 
     QGauss<spacedim> quadrature_formula(2 * parameters.fe_space_degree + 1);
-    QGauss<dim> quadrature_formula_gamma(2 * parameters.fe_embedded_degree + 1);
+    QGauss<dim>      quadrature_formula_gamma(2 * 1 + 1);
 
     FEValues<spacedim, spacedim> fe_values(space_mapping,
                                            *space_fe,
@@ -635,12 +636,11 @@ void PoissonDLM<dim, spacedim>::assemble_system()
                                                      space_rhs);
       }
 
-    VectorTools::create_right_hand_side(
-      embedded_mapping,
-      *embedded_dh,
-      QGauss<dim>(2 * parameters.fe_embedded_degree + 1),
-      solution_function,
-      embedded_rhs);
+    VectorTools::create_right_hand_side(embedded_mapping,
+                                        *embedded_dh,
+                                        QGauss<dim>(2 * 1 + 1),
+                                        solution_function,
+                                        embedded_rhs);
   }
 
 
@@ -708,10 +708,9 @@ void PoissonDLM<dim, spacedim>::solve()
 
   auto S = C * K_inv * Ct;
   // ReductionControl reduction_control(2000, 1.0e-12, 1.0e-10);
-  ReductionControl reduction_control(2000, 1.0e-5, 1.0e-2);
+  ReductionControl reduction_control(2000, 1.0e-6, 1.0e-2, true);
   // SolverCG<Vector<double>> solver_cg(reduction_control);
   SolverGMRES<Vector<double>> solver_cg(reduction_control);
-  // auto S_inv = inverse_operator(S, solver_cg, PreconditionIdentity());
 
   auto preconditioner = C * K * Ct + M;
 
@@ -791,7 +790,7 @@ void PoissonDLM<dim, spacedim>::output_results(const unsigned cycle) const
         lambda,
         multiplier_function,
         difference_per_cell_multiplier,
-        QGauss<dim>(2 * parameters.fe_embedded_degree + 1),
+        QGauss<dim>(2 * parameters.fe_embedded_degree + 2),
         VectorTools::L2_norm);
       const double L2_error_multiplier =
         VectorTools::compute_global_error(embedded_triangulation,
