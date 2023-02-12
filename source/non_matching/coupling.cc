@@ -629,15 +629,15 @@ namespace NonMatching
 
 
 
-  template <int dim0, int dim1, int spacedim>
+  template <int dim0, int dim1, int spacedim, typename Matrix, typename Vector>
   void
   create_coupling_mass_matrix_nitsche(
     const GridTools::Cache<dim0, spacedim> &cache,
     const DoFHandler<dim0, spacedim> &      space_dh,
     const DoFHandler<dim1, spacedim> &      immersed_dh,
     const Quadrature<dim1> &                quad,
-    SparseMatrix<double> &                  matrix,
-    Vector<double> &                        rhs_vector,
+    Matrix &                                matrix,
+    Vector &                                rhs_vector,
     const Function<spacedim, double> &      rhs_function,
     const Mapping<dim0, spacedim> &         space_mapping,
     const Mapping<dim1, spacedim> &         immersed_mapping,
@@ -691,9 +691,9 @@ namespace NonMatching
       if (immersed_c[i])
         immersed_gtl[i] = j++;
 
-    FullMatrix<double> cell_matrix(space_dh.get_fe().n_dofs_per_cell(),
+    FullMatrix<double>     cell_matrix(space_dh.get_fe().n_dofs_per_cell(),
                                    space_dh.get_fe().n_dofs_per_cell());
-    Vector<double>     local_rhs(space_dh.get_fe().n_dofs_per_cell());
+    dealii::Vector<double> local_rhs(space_dh.get_fe().n_dofs_per_cell());
 
 
     // FE_Q<dim1, spacedim>     my_fe(1);
@@ -1511,28 +1511,30 @@ namespace NonMatching
         // else
         //   {
         // std::cout << "dynamic cast NON passato" << std::endl;
-        for (unsigned int i = 0; i < 2; ++i)
-          {
-            std::cout << "cella number: " << embedded_cell->active_cell_index()
-                      << " has vertex " << embedded_cell->vertex(i)
-                      << std::endl;
-          }
+        // for (unsigned int i = 0; i < 2; ++i)
+        //   {
+        //     std::cout << "cella number: " <<
+        //     embedded_cell->active_cell_index()
+        //               << " has vertex " << embedded_cell->vertex(i)
+        //               << std::endl;
+        //   }
 
-        for (const auto &cell_test :
-             immersed_dh.get_triangulation().active_cell_iterators())
-          {
-            std::cout << "Cella number: " << cell_test->active_cell_index()
-                      << std::endl;
-            for (const auto &x : immersed_mapping.get_vertices(cell_test))
-              {
-                std::cout << "Mapped vertex: " << x << std::endl;
+        // for (const auto &cell_test :
+        //      immersed_dh.get_triangulation().active_cell_iterators())
+        //   {
+        //     std::cout << "Cella number: " << cell_test->active_cell_index()
+        //               << std::endl;
+        //     for (const auto &x : immersed_mapping.get_vertices(cell_test))
+        //       {
+        //         std::cout << "Mapped vertex: " << x << std::endl;
 
-                std::cout
-                  << "Mapped BACK vertex: "
-                  << immersed_mapping.transform_real_to_unit_cell(cell_test, x)
-                  << std::endl;
-              }
-          }
+        //         std::cout
+        //           << "Mapped BACK vertex: "
+        //           << immersed_mapping.transform_real_to_unit_cell(cell_test,
+        //           x)
+        //           << std::endl;
+        //       }
+        //   }
 
 
 
@@ -1666,7 +1668,7 @@ namespace NonMatching
     for (const auto &infos : cells_and_quads)
       {
         const auto &[space_cell, embedded_cell, quad_formula] = infos;
-        if (space_cell->is_active())
+        if (space_cell->is_active() && space_cell->is_locally_owned())
           {
             local_cell_matrix = typename Matrix::value_type();
 
@@ -1735,7 +1737,7 @@ namespace NonMatching
 
 
 
-  template <int dim0, int dim1, int spacedim>
+  template <int dim0, int dim1, int spacedim, typename Vector>
   void
   create_nitsche_rhs_with_exact_intersections(
     const DoFHandler<dim0, spacedim> &space_dh,
@@ -1743,7 +1745,7 @@ namespace NonMatching
       std::tuple<typename dealii::Triangulation<dim0, spacedim>::cell_iterator,
                  typename dealii::Triangulation<dim1, spacedim>::cell_iterator,
                  dealii::Quadrature<spacedim>>> &cells_and_quads,
-    Vector<double> &                             rhs_vector,
+    Vector &                                     rhs_vector,
     const AffineConstraints<double> &            space_constraints,
     const Mapping<dim0, spacedim> &              space_mapping,
     const Function<spacedim, double> &           rhs_function,
@@ -1755,9 +1757,9 @@ namespace NonMatching
     Assert(dim1 <= dim0,
            ExcMessage("This function can only work if dim1<=dim0"));
 
-    const auto &       space_fe              = space_dh.get_fe();
-    const unsigned int n_dofs_per_space_cell = space_fe.n_dofs_per_cell();
-    Vector<double>     local_rhs(n_dofs_per_space_cell);
+    const auto &           space_fe              = space_dh.get_fe();
+    const unsigned int     n_dofs_per_space_cell = space_fe.n_dofs_per_cell();
+    dealii::Vector<double> local_rhs(n_dofs_per_space_cell);
     // DoF indices
     std::vector<types::global_dof_index> local_space_dof_indices(
       n_dofs_per_space_cell);
@@ -1839,6 +1841,48 @@ namespace NonMatching
     const Mapping<1, 2> &            immersed_mapping,
     const AffineConstraints<double> &constraints,
     const ComponentMask &            space_comps);
+
+  template void
+  create_coupling_mass_matrix_nitsche<3, 2, 3>(
+    const GridTools::Cache<3, 3> &   cache,
+    const DoFHandler<3, 3> &         space_dh,
+    const DoFHandler<2, 3> &         immersed_dh,
+    const Quadrature<2> &            quad,
+    SparseMatrix<double> &           matrix,
+    Vector<double> &                 rhs_vector,
+    const Function<3, double> &      rhs_function,
+    const Mapping<3, 3> &            space_mapping,
+    const Mapping<2, 3> &            immersed_mapping,
+    const AffineConstraints<double> &constraints,
+    const ComponentMask &            space_comps);
+
+  template void
+  create_coupling_mass_matrix_nitsche<2, 1, 2>(
+    const GridTools::Cache<2, 2> &    cache,
+    const DoFHandler<2, 2> &          space_dh,
+    const DoFHandler<1, 2> &          immersed_dh,
+    const Quadrature<1> &             quad,
+    PETScWrappers::MPI::SparseMatrix &matrix,
+    PETScWrappers::MPI::Vector &      rhs_vector,
+    const Function<2, double> &       rhs_function,
+    const Mapping<2, 2> &             space_mapping,
+    const Mapping<1, 2> &             immersed_mapping,
+    const AffineConstraints<double> & constraints,
+    const ComponentMask &             space_comps);
+
+  template void
+  create_coupling_mass_matrix_nitsche<3, 2, 3>(
+    const GridTools::Cache<3, 3> &    cache,
+    const DoFHandler<3, 3> &          space_dh,
+    const DoFHandler<2, 3> &          immersed_dh,
+    const Quadrature<2> &             quad,
+    PETScWrappers::MPI::SparseMatrix &matrix,
+    PETScWrappers::MPI::Vector &      rhs_vector,
+    const Function<3, double> &       rhs_function,
+    const Mapping<3, 3> &             space_mapping,
+    const Mapping<2, 3> &             immersed_mapping,
+    const AffineConstraints<double> & constraints,
+    const ComponentMask &             space_comps);
 #endif
 } // namespace NonMatching
 

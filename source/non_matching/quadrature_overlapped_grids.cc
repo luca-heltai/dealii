@@ -15,8 +15,9 @@
 
 #include <deal.II/base/config.h>
 
-#include <deal.II/grid/grid_tools_cache.h>
+#include <deal.II/fe/mapping_fe_field.h>
 
+#include <deal.II/grid/grid_tools_cache.h>
 
 #ifdef DEAL_II_WITH_CGAL
 #  include <deal.II/non_matching/quadrature_overlapped_grids.h>
@@ -55,6 +56,7 @@ namespace NonMatching
     const Mapping<1, 2> &                              mapping1)
   {
     // dynamic cast in case I have a MappingFEField as second mapping
+
     const std::vector<std::array<Point<2>, 2>> &vec_of_simplices =
       CGALWrappers::compute_intersection_of_cells(cell0,
                                                   cell1,

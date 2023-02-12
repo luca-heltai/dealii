@@ -224,15 +224,15 @@ namespace NonMatching
     const AffineConstraints<typename Matrix::value_type> &immersed_constraints =
       AffineConstraints<typename Matrix::value_type>());
 
-  template <int dim0, int dim1, int spacedim>
+  template <int dim0, int dim1, int spacedim, typename Matrix, typename Vector>
   void
   create_coupling_mass_matrix_nitsche(
     const GridTools::Cache<dim0, spacedim> &cache,
     const DoFHandler<dim0, spacedim> &      space_dh,
     const DoFHandler<dim1, spacedim> &      immersed_dh,
     const Quadrature<dim1> &                quad,
-    SparseMatrix<double> &                  matrix,
-    Vector<double> &                        rhs_vector,
+    Matrix &                                matrix,
+    Vector &                                rhs_vector,
     const Function<spacedim, double> &      rhs_function,
     const Mapping<dim0, spacedim> &         space_mapping,
     const Mapping<dim1, spacedim> &         immersed_mapping,
@@ -486,7 +486,7 @@ namespace NonMatching
    * @param vector
    * @param penalty
    */
-  template <int dim0, int dim1, int spacedim>
+  template <int dim0, int dim1, int spacedim, typename Vector>
   void
   create_nitsche_rhs_with_exact_intersections(
     const DoFHandler<dim0, spacedim> &space_dh,
@@ -494,7 +494,7 @@ namespace NonMatching
       std::tuple<typename Triangulation<dim0, spacedim>::cell_iterator,
                  typename Triangulation<dim1, spacedim>::cell_iterator,
                  Quadrature<spacedim>>> &cells_and_quads,
-    Vector<double> &                     rhs_vector,
+    Vector &                             rhs_vector,
     const AffineConstraints<double> &,
     const Mapping<dim0, spacedim> &   space_mapping,
     const Function<spacedim, double> &rhs_function,
