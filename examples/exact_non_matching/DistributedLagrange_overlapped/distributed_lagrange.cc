@@ -28,6 +28,7 @@
 #include <deal.II/base/parameter_acceptor.h>
 #include <deal.II/base/quadrature_lib.h>
 #include <deal.II/lac/solver_gmres.h>
+#include <deal.II/lac/solver_minres.h>
 #include <deal.II/base/timer.h>
 #include <deal.II/lac/sparse_direct.h>
 
@@ -61,7 +62,7 @@
 #include <fstream>
 #include <iostream>
 
-const double R = .45;
+const double R = .3;
 
 using namespace dealii;
 
@@ -308,7 +309,7 @@ void PoissonDLM<dim, spacedim>::setup_grids_and_dofs()
     std::make_unique<GridTools::Cache<dim, spacedim>>(embedded_triangulation);
 
 
-  if (parameters.adjust_grids_ratio == true && cycle < 2)
+  if (parameters.adjust_grids_ratio == true && cycle < 1)
     {
       adjust_grids();
     }
@@ -696,7 +697,7 @@ void PoissonDLM<dim, spacedim>::solve()
   // K_inv_umfpack.initialize(stiffness_matrix);
   // auto K_inv = linear_operator(K, K_inv_umfpack);
 
-  ReductionControl         reduction_control_K(200, 1.0e-9, 1.0e-2);
+  ReductionControl         reduction_control_K(200, 1.0e-12, 1.0e-2);
   SolverCG<Vector<double>> solver_cg_K(reduction_control_K);
   auto                     K_inv = inverse_operator(K, solver_cg_K);
   std::cout << "Got the inverse FOR CYCLE = " << cycle << std::endl;
@@ -715,6 +716,10 @@ void PoissonDLM<dim, spacedim>::solve()
   auto preconditioner = C * K * Ct + M;
 
   auto S_inv = inverse_operator(S, solver_cg, preconditioner);
+  {
+    Vector<double> lambda0 = C * K_inv * space_rhs - embedded_rhs;
+    std::cout << "Norm first term = " << lambda0.norm_sqr() << std::endl;
+  }
 
   lambda   = S_inv * (C * K_inv * space_rhs - embedded_rhs);
   solution = K_inv * (space_rhs - Ct * lambda);
@@ -735,7 +740,7 @@ void PoissonDLM<dim, spacedim>::output_results(const unsigned cycle) const
   // TimerOutput::Scope timer_section(timer, "Output results");
   std::cout << "Output results" << std::endl;
 
-  if (cycle < 3)
+  if (cycle < 2)
     {
       data_out.clear();
       std::ofstream data_out_file("space_solution.vtu");
@@ -743,6 +748,12 @@ void PoissonDLM<dim, spacedim>::output_results(const unsigned cycle) const
       data_out.add_data_vector(solution, "solution");
       data_out.build_patches();
       data_out.write_vtu(data_out_file);
+
+
+      std::ofstream output_test_space("space_grid.vtk");
+      GridOut().write_vtk(space_triangulation, output_test_space);
+      std::ofstream output_test_embedded("embedded_grid.vtk");
+      GridOut().write_vtk(embedded_triangulation, output_test_embedded);
     }
 
   {
@@ -803,13 +814,6 @@ void PoissonDLM<dim, spacedim>::output_results(const unsigned cycle) const
       // convergence_table.add_value("dofs_embedded", embedded_dh->n_dofs());
       // convergence_table.add_value("L2_multiplier", L2_error_multiplier);
     }
-  }
-
-  {
-    std::ofstream output_test_space("space_grid.vtk");
-    GridOut().write_vtk(space_triangulation, output_test_space);
-    std::ofstream output_test_embedded("embedded_grid.vtk");
-    GridOut().write_vtk(embedded_triangulation, output_test_embedded);
   }
 }
 
