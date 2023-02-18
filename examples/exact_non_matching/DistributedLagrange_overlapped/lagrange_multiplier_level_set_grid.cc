@@ -348,8 +348,10 @@ void PoissonDLM<dim, spacedim>::setup_grids_and_dofs()
         }
       else if constexpr (dim == 2 && spacedim == 3)
         {
-          const double R = .45;
-          GridGenerator::hyper_sphere(embedded_triangulation, {}, R);
+          const double Cx = .5;
+          const double Cy = .5;
+          const double R  = .45;
+          GridGenerator::hyper_sphere(embedded_triangulation, {Cx, Cy}, R);
 
           space_triangulation.refine_global(
             parameters.space_initial_global_refinements); // 4
@@ -407,14 +409,17 @@ void PoissonDLM<dim, spacedim>::setup_grids_and_dofs()
   embedded_cache =
     std::make_unique<GridTools::Cache<dim, spacedim>>(embedded_triangulation);
 
-  // Embedded DoFs can be already distributed
-  setup_embedded_dofs();
 
   // Adjust the grid during for the first cycle
-  if (parameters.adjust_grids_ratio == true && cycle < 2)
+  if (parameters.adjust_grids_ratio == true && cycle == 0)
     {
       adjust_grids();
     }
+
+  setup_space_dofs();
+  // Embedded DoFs can be already distributed
+  setup_embedded_dofs();
+
   const double embedded_space_maximal_diameter =
     GridTools::maximal_cell_diameter(embedded_triangulation, *embedded_mapping);
   double embedding_space_minimal_diameter =
@@ -426,9 +431,6 @@ void PoissonDLM<dim, spacedim>::setup_grids_and_dofs()
             << embedded_space_maximal_diameter /
                  embedding_space_minimal_diameter
             << std::endl;
-
-
-  setup_space_dofs();
 }
 
 
@@ -616,12 +618,6 @@ void PoissonDLM<dim, spacedim>::setup_space_dofs()
   stiffness_matrix.reinit(stiffness_sparsity_pattern);
   solution.reinit(space_dh->n_dofs());
   space_rhs.reinit(space_dh->n_dofs());
-
-  // Mass matrix for the preconditioner
-  DynamicSparsityPattern mass_dsp(embedded_dh->n_dofs(), embedded_dh->n_dofs());
-  DoFTools::make_sparsity_pattern(*embedded_dh, mass_dsp, embedded_constraints);
-  mass_sparsity_pattern.copy_from(mass_dsp);
-  mass_matrix.reinit(mass_sparsity_pattern);
 }
 
 
@@ -632,6 +628,13 @@ void PoissonDLM<dim, spacedim>::setup_embedded_dofs()
   embedded_dh =
     std::make_unique<DoFHandler<dim, spacedim>>(embedded_triangulation);
   embedded_dh->distribute_dofs(*embedded_fe);
+
+  // Mass matrix for the preconditioner
+  DynamicSparsityPattern mass_dsp(embedded_dh->n_dofs(), embedded_dh->n_dofs());
+  DoFTools::make_sparsity_pattern(*embedded_dh, mass_dsp, embedded_constraints);
+  mass_sparsity_pattern.copy_from(mass_dsp);
+  mass_matrix.reinit(mass_sparsity_pattern);
+
   embedded_rhs.reinit(embedded_dh->n_dofs());
   lambda.reinit(embedded_dh->n_dofs());
 }
@@ -839,11 +842,11 @@ void PoissonDLM<dim, spacedim>::solve()
 
   auto             S = C * K_inv * Ct;
   ReductionControl reduction_control(2000, 1.0e-12, 1.0e-10);
-  // ReductionControl         reduction_control(2000, 1.0e-7, 1.0e-2);
+  // ReductionControl         reduction_control(2000, 1.0e-10, 1.0e-2);
   SolverCG<Vector<double>> solver_cg(reduction_control);
 
-  // auto S_inv = inverse_operator(S, solver_cg, preconditioner);
-  auto S_inv = inverse_operator(S, solver_cg, PreconditionIdentity());
+  auto S_inv = inverse_operator(S, solver_cg, preconditioner);
+  // auto S_inv = inverse_operator(S, solver_cg, PreconditionIdentity());
 
   lambda   = S_inv * (C * K_inv * space_rhs - embedded_rhs);
   solution = K_inv * (space_rhs - Ct * lambda);
@@ -996,7 +999,7 @@ void PoissonDLM<dim, spacedim>::run()
       if (cycle < parameters.n_refinement_cycles - 1)
         {
           space_triangulation.refine_global(1);
-          // embedded_triangulation.refine_global(1);
+          embedded_triangulation.refine_global(1);
         }
     }
   cells_and_quads.clear();
