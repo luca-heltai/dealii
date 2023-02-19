@@ -14,9 +14,6 @@
 // ---------------------------------------------------------------------
 
 
-
-#include <deal.II/lac/linear_operator_tools.h>
-
 #include <deal.II/base/parsed_function.h>
 #include <deal.II/base/function_lib.h>
 #include <deal.II/base/parameter_acceptor.h>
@@ -27,6 +24,14 @@
 #include <deal.II/numerics/error_estimator.h>
 #include <deal.II/base/function.h>
 #include <deal.II/base/parameter_acceptor.h>
+#include <deal.II/lac/linear_operator_tools.h>
+#include <deal.II/base/conditional_ostream.h>
+#include <deal.II/base/mpi.h>
+#include <deal.II/lac/trilinos_linear_operator.h>
+#include <deal.II/lac/trilinos_precondition.h>
+#include <deal.II/lac/trilinos_solver.h>
+#include <deal.II/lac/trilinos_sparse_matrix.h>
+#include <deal.II/lac/trilinos_vector.h>
 #include <deal.II/base/quadrature_lib.h>
 #include <deal.II/numerics/data_out.h>
 #include <deal.II/lac/solver_gmres.h>
@@ -130,8 +135,8 @@ private:
   void output_results(const unsigned cycle) const;
 
 
-  Triangulation<spacedim>      space_triangulation;
-  Triangulation<dim, spacedim> embedded_triangulation;
+  parallel::shared::Triangulation<spacedim> space_triangulation;
+  Triangulation<dim, spacedim>              embedded_triangulation;
 
   std::unique_ptr<GridTools::Cache<spacedim, spacedim>> space_cache;
   std::unique_ptr<GridTools::Cache<dim, spacedim>>      embedded_cache;
@@ -170,15 +175,20 @@ private:
   SparsityPattern           stiffness_sparsity_pattern;
   SparsityPattern           mass_sparsity_pattern;
   SparsityPattern           coupling_sparsity_pattern;
-  SparseMatrix<double>      stiffness_matrix;
-  SparseMatrix<double>      mass_matrix;
-  SparseMatrix<double>      coupling_matrix;
-  Vector<double>            space_rhs;
-  Vector<double>            embedded_rhs;
+
+  MPI_Comm           mpi_communicator;
+  const unsigned int n_mpi_processes;
+  const unsigned int this_mpi_process;
+
+  TrilinosWrappers::SparseMatrix stiffness_matrix;
+  TrilinosWrappers::SparseMatrix mass_matrix;
+  TrilinosWrappers::SparseMatrix coupling_matrix;
+  TrilinosWrappers::MPI::Vector  space_rhs;
+  TrilinosWrappers::MPI::Vector  embedded_rhs;
 
 
-  Vector<double> solution;
-  Vector<double> lambda;
+  TrilinosWrappers::MPI::Vector solution;
+  TrilinosWrappers::MPI::Vector lambda;
 
 
   ParameterAcceptorProxy<Functions::ParsedFunction<spacedim>> rhs_function;
@@ -246,6 +256,10 @@ PoissonDLM<dim, spacedim>::Parameters::Parameters()
 template <int dim, int spacedim>
 PoissonDLM<dim, spacedim>::PoissonDLM(const Parameters &parameters)
   : parameters(parameters)
+  , space_triangulation(MPI_COMM_WORLD)
+  , mpi_communicator(MPI_COMM_WORLD)
+  , n_mpi_processes(Utilities::MPI::n_mpi_processes(mpi_communicator))
+  , this_mpi_process(Utilities::MPI::this_mpi_process(mpi_communicator))
   , rhs_function("Right hand side")
   , solution_function("Solution")
   , multiplier_function("Solution multiplier")
@@ -615,9 +629,20 @@ void PoissonDLM<dim, spacedim>::setup_space_dofs()
   DynamicSparsityPattern dsp(space_dh->n_dofs(), space_dh->n_dofs());
   DoFTools::make_sparsity_pattern(*space_dh, dsp, space_constraints);
   stiffness_sparsity_pattern.copy_from(dsp);
-  stiffness_matrix.reinit(stiffness_sparsity_pattern);
-  solution.reinit(space_dh->n_dofs());
-  space_rhs.reinit(space_dh->n_dofs());
+
+
+  const std::vector<IndexSet> locally_owned_dofs_per_proc =
+    DoFTools::locally_owned_dofs_per_subdomain(*space_dh);
+  const IndexSet locally_owned_dofs =
+    locally_owned_dofs_per_proc[this_mpi_process];
+
+  stiffness_matrix.reinit(locally_owned_dofs,
+                          locally_owned_dofs,
+                          dsp,
+                          mpi_communicator);
+
+  solution.reinit(locally_owned_dofs, mpi_communicator);
+  space_rhs.reinit(locally_owned_dofs, mpi_communicator);
 }
 
 
@@ -633,10 +658,26 @@ void PoissonDLM<dim, spacedim>::setup_embedded_dofs()
   DynamicSparsityPattern mass_dsp(embedded_dh->n_dofs(), embedded_dh->n_dofs());
   DoFTools::make_sparsity_pattern(*embedded_dh, mass_dsp, embedded_constraints);
   mass_sparsity_pattern.copy_from(mass_dsp);
-  mass_matrix.reinit(mass_sparsity_pattern);
 
-  embedded_rhs.reinit(embedded_dh->n_dofs());
-  lambda.reinit(embedded_dh->n_dofs());
+
+  const std::vector<IndexSet> locally_owned_dofs_per_proc =
+    DoFTools::locally_owned_dofs_per_subdomain(*embedded_dh);
+  const IndexSet locally_owned_dofs =
+    locally_owned_dofs_per_proc[this_mpi_process];
+
+  mass_matrix.reinit(locally_owned_dofs,
+                     locally_owned_dofs,
+                     mass_dsp,
+                     mpi_communicator);
+
+  embedded_rhs.reinit(locally_owned_dofs, mpi_communicator);
+  lambda.reinit(locally_owned_dofs, mpi_communicator);
+
+
+  // mass_matrix.reinit(mass_sparsity_pattern);
+
+  // embedded_rhs.reinit(embedded_dh->n_dofs());
+  // lambda.reinit(embedded_dh->n_dofs());
 }
 
 
@@ -680,8 +721,24 @@ void PoissonDLM<dim, spacedim>::setup_coupling()
         Assert(false, ExcMessage("Please select a valid strategy."));
       }
   }
+
   coupling_sparsity_pattern.copy_from(dsp);
-  coupling_matrix.reinit(coupling_sparsity_pattern);
+  // coupling_matrix.reinit(coupling_sparsity_pattern);
+
+  const std::vector<IndexSet> locally_owned_dofs_per_proc_space =
+    DoFTools::locally_owned_dofs_per_subdomain(*space_dh);
+  const IndexSet locally_owned_dofs_space =
+    locally_owned_dofs_per_proc_space[this_mpi_process];
+
+  const std::vector<IndexSet> locally_owned_dofs_per_proc_emb =
+    DoFTools::locally_owned_dofs_per_subdomain(*embedded_dh);
+  const IndexSet locally_owned_dofs_emb =
+    locally_owned_dofs_per_proc_emb[this_mpi_process];
+
+  coupling_matrix.reinit(locally_owned_dofs_space,
+                         locally_owned_dofs_emb,
+                         coupling_sparsity_pattern,
+                         mpi_communicator);
 }
 
 
@@ -817,6 +874,12 @@ void PoissonDLM<dim, spacedim>::assemble_system()
           embedded_constraints);
       }
   }
+
+  stiffness_matrix.compress(VectorOperation::add);
+  coupling_matrix.compress(VectorOperation::add);
+  mass_matrix.compress(VectorOperation::add);
+  space_rhs.compress(VectorOperation::add);
+  embedded_rhs.compress(VectorOperation::add);
 }
 
 
@@ -828,22 +891,33 @@ void PoissonDLM<dim, spacedim>::solve()
   // TimerOutput::Scope timer_section(timer, "Solve system");
   std::cout << "Solve system" << std::endl;
 
-  SparseDirectUMFPACK K_inv_umfpack;
-  K_inv_umfpack.initialize(stiffness_matrix);
+  // SparseDirectUMFPACK K_inv_umfpack;
+  // K_inv_umfpack.initialize(stiffness_matrix);
 
-  auto K  = linear_operator(stiffness_matrix);
-  auto M  = linear_operator(mass_matrix);
-  auto Ct = linear_operator(coupling_matrix);
-  auto C  = transpose_operator(Ct);
+  TrilinosWrappers::PreconditionAMG prec_stiffness;
+  prec_stiffness.initialize(stiffness_matrix);
 
-  auto K_inv = linear_operator(K, K_inv_umfpack);
+  auto K = linear_operator<TrilinosWrappers::MPI::Vector>(stiffness_matrix);
+
+  ReductionControl reduction_control_K(solution.size(), 1.0e-14, 1e-12);
+  SolverCG<TrilinosWrappers::MPI::Vector> solver_cg_K(reduction_control_K);
+  auto K_inv = inverse_operator(K, solver_cg_K, prec_stiffness);
+
+  auto M  = linear_operator<TrilinosWrappers::MPI::Vector>(mass_matrix);
+  auto Ct = linear_operator<TrilinosWrappers::MPI::Vector>(coupling_matrix);
+  auto C  = transpose_operator<TrilinosWrappers::MPI::Vector>(Ct);
+
+  // auto K_inv = linear_operator<TrilinosWrappers::MPI::Vector>(K, K_inv);
 
   auto preconditioner = C * K * Ct + M;
 
-  auto             S = C * K_inv * Ct;
-  ReductionControl reduction_control(2000, 1.0e-12, 1.0e-10);
-  // ReductionControl         reduction_control(2000, 1.0e-10, 1.0e-2);
-  SolverCG<Vector<double>> solver_cg(reduction_control);
+  auto S = C * K_inv * Ct;
+  // ReductionControl reduction_control(2000, 1.0e-12, 1.0e-10);
+
+  //
+  ReductionControl reduction_control(2000, 1.0e-12, 1.0e-2);
+  // SolverCG<Vector<double>> solver_cg(reduction_control);
+  SolverCG<TrilinosWrappers::MPI::Vector> solver_cg(reduction_control);
 
   auto S_inv = inverse_operator(S, solver_cg, preconditioner);
   // auto S_inv = inverse_operator(S, solver_cg, PreconditionIdentity());
@@ -852,7 +926,14 @@ void PoissonDLM<dim, spacedim>::solve()
   solution = K_inv * (space_rhs - Ct * lambda);
   std::cout << "Norm of the multiplier: " << lambda.norm_sqr() << std::endl;
 
-  std::cout << "Solved in : " << reduction_control.last_step() << "iterations."
+  std::cout << "Solved with Schur in : " << reduction_control.last_step()
+            << "iterations." << std::endl;
+
+  std::cout << "Solved with CG in : " << reduction_control_K.last_step()
+            << "iterations." << std::endl;
+
+  std::cout << "Total number of iterations: "
+            << reduction_control.last_step() + reduction_control_K.last_step()
             << std::endl;
 
   space_constraints.distribute(solution);
@@ -1027,9 +1108,10 @@ int main(int argc, char **argv)
     {
       {
         std::cout << "Solving in 1D/2D" << std::endl;
-        PoissonDLM<1, 2>::Parameters parameters;
-        PoissonDLM<1, 2>             problem(parameters);
-        std::string                  parameter_file;
+        Utilities::MPI::MPI_InitFinalize mpi_initialization(argc, argv, 1);
+        PoissonDLM<1, 2>::Parameters     parameters;
+        PoissonDLM<1, 2>                 problem(parameters);
+        std::string                      parameter_file;
         if (argc > 1)
           parameter_file = argv[1];
         else
