@@ -46,7 +46,6 @@
 
 #include <deal.II/grid/filtered_iterator.h>
 #include <deal.II/grid/grid_generator.h>
-#include <deal.II/grid/grid_tools_cache.h>
 #include <deal.II/grid/tria.h>
 
 #include <deal.II/hp/fe_collection.h>
@@ -73,12 +72,97 @@
 #include <deal.II/non_matching/fe_immersed_values.h>
 #include <deal.II/non_matching/fe_values.h>
 #include <deal.II/non_matching/mesh_classifier.h>
-#include "../exact_non_matching/NonMatching_utilities.h"
 
 
 const double Cx = .5;
 const double Cy = .5;
 const double R  = .3;
+
+
+#include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
+#include <CGAL/Constrained_Delaunay_triangulation_2.h>
+#include <CGAL/Triangulation_face_base_with_info_2.h>
+#include <CGAL/Polygon_2.h>
+#include <iostream>
+struct FaceInfo2
+{
+  FaceInfo2()
+  {}
+  int  nesting_level;
+  bool in_domain()
+  {
+    return nesting_level % 2 == 1;
+  }
+};
+
+typedef CGAL::Exact_predicates_inexact_constructions_kernel      K;
+typedef CGAL::Triangulation_vertex_base_2<K>                     Vb;
+typedef CGAL::Triangulation_face_base_with_info_2<FaceInfo2, K>  Fbb;
+typedef CGAL::Constrained_triangulation_face_base_2<K, Fbb>      Fb;
+typedef CGAL::Triangulation_data_structure_2<Vb, Fb>             TDS;
+typedef CGAL::Exact_predicates_tag                               Itag;
+typedef CGAL::Constrained_Delaunay_triangulation_2<K, TDS, Itag> CDT;
+typedef CDT::Point                                               Point2;
+typedef CGAL::Polygon_2<K>                                       Polygon_2;
+typedef CDT::Face_handle                                         Face_handle;
+void mark_domains(CDT &                 ct,
+                  Face_handle           start,
+                  int                   index,
+                  std::list<CDT::Edge> &border)
+{
+  if (start->info().nesting_level != -1)
+    {
+      return;
+    }
+  std::list<Face_handle> queue;
+  queue.push_back(start);
+  while (!queue.empty())
+    {
+      Face_handle fh = queue.front();
+      queue.pop_front();
+      if (fh->info().nesting_level == -1)
+        {
+          fh->info().nesting_level = index;
+          for (int i = 0; i < 3; i++)
+            {
+              CDT::Edge   e(fh, i);
+              Face_handle n = fh->neighbor(i);
+              if (n->info().nesting_level == -1)
+                {
+                  if (ct.is_constrained(e))
+                    border.push_back(e);
+                  else
+                    queue.push_back(n);
+                }
+            }
+        }
+    }
+}
+// explore set of facets connected with non constrained edges,
+// and attribute to each such set a nesting level.
+// We start from facets incident to the infinite vertex, with a nesting
+// level of 0. Then we recursively consider the non-explored facets incident
+// to constrained edges bounding the former set and increase the nesting level
+// by 1. Facets in the domain are those with an odd nesting level.
+void mark_domains(CDT &cdt)
+{
+  for (CDT::Face_handle f : cdt.all_face_handles())
+    {
+      f->info().nesting_level = -1;
+    }
+  std::list<CDT::Edge> border;
+  mark_domains(cdt, cdt.infinite_face(), 0, border);
+  while (!border.empty())
+    {
+      CDT::Edge e = border.front();
+      border.pop_front();
+      Face_handle n = e.first->neighbor(e.second);
+      if (n->info().nesting_level == -1)
+        {
+          mark_domains(cdt, n, e.first->info().nesting_level + 1, border);
+        }
+    }
+}
 
 
 namespace Step85
@@ -90,7 +174,6 @@ namespace Step85
     virtual double value(const Point<2> &   p,
                          const unsigned int component = 0) const override
     {
-      (void)component;
       // const double xc = 0.2 / std::sqrt(20.);
       // const double yc = 0.2 / std::sqrt(20.);
       // const double w  = 12.;
@@ -101,14 +184,54 @@ namespace Step85
       // const double oscillating_term =
       //   (1. - 2. * (y * y) / (x * x + y * y)) *
       //   (1. - 16. * (x * x * y * y) / ((x * x + y * y) * (x * x + y * y)));
-      // return std::sqrt(p[0]*p[0] + p[1]*p[1]) - r*(p[0]*p[0]*p[0]
-      // - 3.*p[0]*p[1]*p[1])*std::pow(p[0]*p[0] + p[1]*p[1],-3./2.) - R;
+      // // return std::sqrt(p[0]*p[0] + p[1]*p[1]) - r*(p[0]*p[0]*p[0]
+      // // - 3.*p[0]*p[1]*p[1])*std::pow(p[0]*p[0] + p[1]*p[1],-3./2.) - R;
       // return std::sqrt(x * x + y * y) - r * oscillating_term - R;
       return std::sqrt((x - Cx) * (x - Cx) + (y - Cy) * (y - Cy)) - R;
     }
   };
 
 
+  class Discrete_signed_distance : public Function<2>
+  {
+  public:
+    Discrete_signed_distance(CDT &tr)
+      : tria(tr)
+    {}
+
+    virtual double value(const Point<2> &   p,
+                         const unsigned int component = 0) const override
+    {
+      typename CDT::Face_handle fh =
+        tria.locate(CGALWrappers::dealii_point_to_cgal_point<Point2, 2>(p));
+      const double x = p[0];
+      const double y = p[1];
+      // const double w = 12.;
+      // const double r = .1;
+      // const double oscillating_term =
+      //   (1. - 2. * (y * y) / (x * x + y * y)) *
+      //   (1. - 16. * (x * x * y * y) / ((x * x + y * y) * (x * x + y * y)));
+      // return std::sqrt(p[0]*p[0] + p[1]*p[1]) - r*(p[0]*p[0]*p[0]
+      // - 3.*p[0]*p[1]*p[1])*std::pow(p[0]*p[0] + p[1]*p[1],-3./2.) - R;
+
+      if (std::abs(std::sqrt((x - Cx) * (x - Cx) + (y - Cy) * (y - Cy)) - R) <
+          1e-3)
+        {
+          // if (std::abs(std::sqrt(x * x + y * y) - r * oscillating_term - R) <
+          // 1e-3)
+          //   {
+          // std::cout << "Sto sulla surface zio" << std::endl;
+          return 0.;
+        }
+      else
+        {
+          return fh->info().in_domain() ? -1 : +1;
+        }
+    }
+
+
+    CDT tria;
+  };
 
   template <int dim>
   class LaplaceSolver
@@ -223,18 +346,27 @@ namespace Step85
     level_set_dof_handler.distribute_dofs(fe_level_set);
     level_set.reinit(level_set_dof_handler.n_dofs());
 
-    const Functions::SignedDistance::Sphere<dim> signed_distance_sphere({Cx,
-                                                                         Cy},
-                                                                        R);
+    // const Functions::SignedDistance::Sphere<dim> signed_distance_sphere({Cx,
+    //                                                                      Cy},
+    //                                                                     R);
     // ImplicitFunction                             implicit_function;
     // VectorTools::interpolate(level_set_dof_handler,
     //                          implicit_function,
     //                          level_set);
-    GridGenerator::hyper_sphere(embedded_tria, {Cx, Cy}, R);
-    embedded_tria.refine_global(11);
 
-    NonMatchingUtilities::CDT tr;
-    using Point2 = NonMatchingUtilities::Point2;
+
+    if (cycle == 0)
+      {
+        // GridGenerator::hyper_ball(embedded_tria, {Cx, Cy}, R);
+        GridGenerator::hyper_sphere(embedded_tria, {Cx, Cy}, R);
+        embedded_tria.refine_global(8);
+      }
+    else
+      {
+        embedded_tria.refine_global(1);
+      }
+    CDT tr;
+
     Point<dim> center{Cx, Cy};
     for (const auto &cell : embedded_tria.active_cell_iterators())
       {
@@ -251,35 +383,31 @@ namespace Step85
           CGALWrappers::dealii_point_to_cgal_point<Point2>(cell->vertex(0)));
       }
 
-    NonMatchingUtilities::mark_domains(tr);
+    // Triangulation<dim - 1, dim> surface_triangulation;
+    // GridGenerator::extract_boundary_mesh(embedded_tria,
+    // surface_triangulation);
+    // std::vector<Point2> cgal_points(embedded_tria.get_vertices().size());
 
-    GridTools::Cache<dim - 1, dim> cache(embedded_tria);
-    auto                           tree = cache.get_cell_bounding_boxes_rtree();
+    // std::transform(embedded_tria.get_vertices().begin(),
+    //                embedded_tria.get_vertices().end(),
+    //                cgal_points.begin(),
+    //                [](const auto &p) {
+    //                  return
+    //                  CGALWrappers::dealii_point_to_cgal_point<Point2>(p);
+    //                });
 
-    NonMatchingUtilities::DiscreteLevelSet<dim, decltype(tree)>
-      discrete_level_set(&tree, tr);
+    // tr.insert_constraint(cgal_points.begin(), cgal_points.end(), true);
+    mark_domains(tr);
 
-    { // Sanity checks
-      std::cout << signed_distance_sphere.value(Point<2>{}) << " and "
-                << discrete_level_set.value(Point<2>{}) << std::endl;
-
-      std::cout << discrete_level_set.value(Point<2>{1.1, 1.1}) << " and "
-                << signed_distance_sphere.value(Point<2>{1.1, 1.1})
-                << std::endl;
-
-      std::cout << discrete_level_set.value(Point<2>{1.2, 1.2}) << " and "
-                << signed_distance_sphere.value(Point<2>{1.2, 1.2})
-                << std::endl;
-
-      std::cout << discrete_level_set.value(Point<2>{0.5, 0.5}) << " and "
-                << signed_distance_sphere.value(Point<2>{0.5, 0.5})
-                << std::endl;
-
-      std::cout << discrete_level_set.value(Point<2>{0.8, 0.8}) << " and "
-                << signed_distance_sphere.value(Point<2>{0.8, 0.8})
-                << std::endl;
+    {
+      Triangulation<2> tria_out;
+      CGALWrappers::cgal_triangulation_to_dealii_triangulation(tr, tria_out);
+      GridOut       go;
+      std::ofstream out_name("hyper_sphere_test2d.vtk");
+      go.write_vtk(tria_out, out_name);
     }
 
+    Discrete_signed_distance discrete_level_set(tr);
     VectorTools::interpolate(level_set_dof_handler,
                              discrete_level_set,
                              level_set);
@@ -302,13 +430,13 @@ namespace Step85
   {
     AssertIndexRange(component, this->n_components);
     (void)component;
-    const Point<2> xc{Cx, Cy};
-    const double   r = (point - xc).norm();
-    return r <= R ? -std::log(R) : -std::log(r);
+    // const Point<2> xc{Cx, Cy};
+    // const double   r = (point - xc).norm();
+    // return r <= R ? -std::log(R) : -std::log(r);
 
 
-    // return std::sin(2. * numbers::PI * point[0]) *
-    //        std::sin(2. * numbers::PI * point[1]);
+    return std::sin(2. * numbers::PI * point[0]) *
+           std::sin(2. * numbers::PI * point[1]);
     // 1. - 2. / dim * (point.norm_square() - 1.);
   }
 
@@ -320,20 +448,20 @@ namespace Step85
     AssertIndexRange(component, this->n_components);
     (void)component;
     Assert(dim == 2, ExcMessage("Tested so far for 1d2d"));
-    // Tensor<1, dim> grad;
-    // grad[0] = 2. * M_PI * std::cos(2. * M_PI * point[0]) *
-    //           std::sin(2. * M_PI * point[1]);
-    // grad[1] = 2. * M_PI * std::cos(2. * M_PI * point[1]) *
-    //           std::sin(2. * M_PI * point[0]);
+    Tensor<1, dim> grad;
+    grad[0] = 2. * M_PI * std::cos(2. * M_PI * point[0]) *
+              std::sin(2. * M_PI * point[1]);
+    grad[1] = 2. * M_PI * std::cos(2. * M_PI * point[1]) *
+              std::sin(2. * M_PI * point[0]);
 
-    const Point<2> xc{Cx, Cy};
-    const double   r = (point - xc).norm();
+    // const Point<2> xc{Cx, Cy};
+    // const double   r = (point - xc).norm();
 
-    Tensor<1, 2> gradient;
-    gradient[0] = (r <= R) ? 0. : -(point[0] - Cx) / (r * r);
-    gradient[1] = (r <= R) ? 0. : -(point[1] - Cy) / (r * r);
+    // Tensor<1, 2> gradient;
+    // gradient[0] = (r <= R) ? 0. : -(point[0] - Cx) / (r * r);
+    // gradient[1] = (r <= R) ? 0. : -(point[1] - Cy) / (r * r);
 
-    return gradient;
+    return grad;
   }
 
 
@@ -398,10 +526,9 @@ namespace Step85
                                  const unsigned int component) const
   {
     (void)component;
-    return 0.;
-    // return 8. * numbers::PI * numbers::PI * std::sin(2. * numbers::PI * p[0])
-    // *
-    //        std::sin(2. * numbers::PI * p[1]);
+    // return 0.;
+    return 8. * numbers::PI * numbers::PI * std::sin(2. * numbers::PI * p[0]) *
+           std::sin(2. * numbers::PI * p[1]);
   }
 
   enum ActiveFEIndex
@@ -1566,12 +1693,7 @@ namespace Step85
         const double error_L2 = std::sqrt(error_L2_outside * error_L2_outside +
                                           error_L2_inside * error_L2_inside);
 
-        const double error_H1_inside  = compute_H1_error_from_outside();
-        const double error_H1_outside = compute_H1_error_from_outside();
-        const double error_H1 = std::sqrt(error_H1_outside * error_H1_outside +
-                                          error_H1_inside * error_H1_inside);
-
-        // const double error_H1 = compute_H1_error_from_outside();
+        const double error_H1 = compute_H1_error_from_outside();
         const double cell_side_length =
           triangulation.begin_active()->minimum_vertex_distance();
 

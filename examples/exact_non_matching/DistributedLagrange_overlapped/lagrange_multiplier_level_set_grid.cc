@@ -65,6 +65,7 @@
 #include <deal.II/numerics/data_out.h>
 #include <deal.II/numerics/matrix_tools.h>
 #include <deal.II/numerics/vector_tools.h>
+#include "/workspace/dealii/examples/exact_non_matching/NonMatching_utilities.h"
 
 #include <fstream>
 #include <iostream>
@@ -149,8 +150,8 @@ private:
     cells_and_quads;
 
 
-  std::unique_ptr<FE_Q<spacedim>>      space_fe;
-  std::unique_ptr<FE_Q<dim, spacedim>> embedded_fe;
+  std::unique_ptr<FE_Q<spacedim>>        space_fe;
+  std::unique_ptr<FE_DGQ<dim, spacedim>> embedded_fe;
 
   /**
    * The actual DoFHandler class.
@@ -312,41 +313,11 @@ void PoissonDLM<dim, spacedim>::setup_grids_and_dofs()
               embedded_triangulation.refine_global(
                 parameters.embedded_initial_global_refinements); // 2
 
-
               embedded_configuration_fe =
                 std::make_unique<FESystem<dim, spacedim>>(
                   FE_Q<dim, spacedim>(
                     parameters.embedded_configuration_finite_element_degree),
                   spacedim);
-
-              embedded_configuration_dh =
-                std::make_unique<DoFHandler<dim, spacedim>>(
-                  embedded_triangulation);
-
-              embedded_configuration_dh->distribute_dofs(
-                *embedded_configuration_fe);
-
-              embedded_configuration.reinit(
-                embedded_configuration_dh->n_dofs());
-
-              VectorTools::interpolate(*embedded_configuration_dh,
-                                       embedded_configuration_function,
-                                       embedded_configuration);
-
-              embedded_mapping =
-                std::make_unique<MappingFEField<dim, spacedim, Vector<double>>>(
-                  *embedded_configuration_dh, embedded_configuration);
-
-              {
-                std::ofstream          out_emb("griglia_emb.vtu");
-                DataOut<dim, spacedim> embedding_out;
-                embedding_out.attach_dof_handler(*embedded_configuration_dh);
-                embedding_out.build_patches(
-                  *embedded_mapping,
-                  parameters.embedded_configuration_finite_element_degree);
-                embedding_out.write_vtu(out_emb);
-                std::cout << "griglia_emb written" << std::endl;
-              }
             }
           else
             {
@@ -416,13 +387,45 @@ void PoissonDLM<dim, spacedim>::setup_grids_and_dofs()
 
   space_fe = std::make_unique<FE_Q<spacedim>>(parameters.fe_space_degree);
   embedded_fe =
-    std::make_unique<FE_Q<dim, spacedim>>(parameters.fe_embedded_degree);
+    std::make_unique<FE_DGQ<dim, spacedim>>(parameters.fe_embedded_degree);
+
+  if (parameters.coupling_strategy == "inexact")
+    {
+      embedded_configuration_dh =
+        std::make_unique<DoFHandler<dim, spacedim>>(embedded_triangulation);
+
+      embedded_configuration_dh->distribute_dofs(*embedded_configuration_fe);
+
+      embedded_configuration.reinit(embedded_configuration_dh->n_dofs());
+
+      VectorTools::interpolate(*embedded_configuration_dh,
+                               embedded_configuration_function,
+                               embedded_configuration);
+
+      embedded_mapping =
+        std::make_unique<MappingFEField<dim, spacedim, Vector<double>>>(
+          *embedded_configuration_dh, embedded_configuration);
+    }
+
+  // {
+  //   std::ofstream          out_emb("griglia_emb.vtu");
+  //   DataOut<dim, spacedim> embedding_out;
+  //   embedding_out.attach_dof_handler(*embedded_configuration_dh);
+  //   embedding_out.build_patches(
+  //     *embedded_mapping,
+  //     parameters.embedded_configuration_finite_element_degree);
+  //   embedding_out.write_vtu(out_emb);
+  //   std::cout << "griglia_emb written" << std::endl;
+  // }
 
   space_cache =
     std::make_unique<GridTools::Cache<spacedim, spacedim>>(space_triangulation);
   embedded_cache =
-    std::make_unique<GridTools::Cache<dim, spacedim>>(embedded_triangulation);
+    std::make_unique<GridTools::Cache<dim, spacedim>>(embedded_triangulation,
+                                                      *embedded_mapping);
 
+  // Embedded DoFs can be already distributed
+  setup_embedded_dofs();
 
   // Adjust the grid during for the first cycle
   if (parameters.adjust_grids_ratio == true && cycle == 0)
@@ -431,8 +434,7 @@ void PoissonDLM<dim, spacedim>::setup_grids_and_dofs()
     }
 
   setup_space_dofs();
-  // Embedded DoFs can be already distributed
-  setup_embedded_dofs();
+
 
   const double embedded_space_maximal_diameter =
     GridTools::maximal_cell_diameter(embedded_triangulation, *embedded_mapping);
@@ -453,156 +455,153 @@ template <int dim, int spacedim>
 void PoissonDLM<dim, spacedim>::adjust_grids()
 {
   // Adjust grid diameters to satisfy ratio suggested by the theory.
-  if ((dynamic_cast<MappingFEField<dim, spacedim, Vector<double>> *>(
-        embedded_mapping.get())) &&
-      parameters.apply_delta_refinements)
-    {
-      std::vector<Point<spacedim>> support_points(embedded_dh->n_dofs());
-      std::cout << "Adjusting the grids (with eulerian mapping)" << std::endl;
-      DoFTools::map_dofs_to_support_points(*embedded_mapping,
-                                           *embedded_dh,
-                                           support_points);
+  // if ((dynamic_cast<MappingFEField<dim, spacedim, Vector<double>> *>(
+  //       embedded_mapping.get())) &&
+  //     parameters.apply_delta_refinements)
+  //   {
+  //     std::cout << "Adjusting the grids (with eulerian mapping)" <<
+  //     std::endl; std::vector<Point<spacedim>>
+  //     support_points(embedded_dh->n_dofs());
+  //     DoFTools::map_dofs_to_support_points(*embedded_mapping,
+  //                                          *embedded_dh,
+  //                                          support_points);
 
-      for (unsigned int i = 0; i < parameters.space_pre_refinement_cycles; ++i)
-        {
-          const auto point_locations =
-            GridTools::compute_point_locations(*space_cache, support_points);
-          const auto &cells = std::get<0>(point_locations);
-          for (auto &cell : cells)
-            {
-              cell->set_refine_flag();
-              for (const auto face_no : cell->face_indices())
-                if (!cell->at_boundary(face_no))
-                  cell->neighbor(face_no)->set_refine_flag();
-            }
-          space_triangulation.execute_coarsening_and_refinement();
-        }
-    }
-  else
-    {
-      std::cout << "Adjusting the grids..." << std::endl;
-      namespace bgi = boost::geometry::index;
+  //     for (unsigned int i = 0; i < parameters.space_pre_refinement_cycles;
+  //     ++i)
+  //       {
+  //         const auto point_locations =
+  //           GridTools::compute_point_locations(*space_cache, support_points);
+  //         const auto &cells = std::get<0>(point_locations);
+  //         for (auto &cell : cells)
+  //           {
+  //             cell->set_refine_flag();
+  //             for (const auto face_no : cell->face_indices())
+  //               if (!cell->at_boundary(face_no))
+  //                 cell->neighbor(face_no)->set_refine_flag();
+  //           }
+  //         space_triangulation.execute_coarsening_and_refinement();
+  //       }
+  //   }
+  // else
+  // {
+  std::cout << "Adjusting the grids..." << std::endl;
+  namespace bgi = boost::geometry::index;
 
-      auto refine = [&]() {
-        bool done = false;
+  auto refine = [&]() {
+    bool done = false;
 
-        double min_embedded = 1e10;
-        double max_embedded = 0;
-        double min_space    = 1e10;
-        double max_space    = 0;
+    double min_embedded = 1e10;
+    double max_embedded = 0;
+    double min_space    = 1e10;
+    double max_space    = 0;
 
-        while (done == false)
+    while (done == false)
+      {
+        // Bounding boxes of the space grid
+        const auto &tree =
+          space_cache->get_locally_owned_cell_bounding_boxes_rtree();
+
+        // Bounding boxes of the embedded grid
+        const auto &embedded_tree =
+          embedded_cache->get_cell_bounding_boxes_rtree();
+
+        // Let's check all cells whose bounding box contains an embedded
+        // bounding box
+        done = true;
+
+        const bool use_space = parameters.use_space;
+
+        const bool use_embedded = parameters.use_embedded;
+
+        AssertThrow(!(use_embedded && use_space),
+                    ExcMessage("You can't refine both the embedded and "
+                               "the space grid at the same time."));
+
+        for (const auto &[embedded_box, embedded_cell] : embedded_tree)
           {
-            // Bounding boxes of the space grid
-            const auto &tree =
-              space_cache->get_locally_owned_cell_bounding_boxes_rtree();
+            const auto &[p1, p2] = embedded_box.get_boundary_points();
+            const auto diameter  = p1.distance(p2);
+            min_embedded         = std::min(min_embedded, diameter);
+            max_embedded         = std::max(max_embedded, diameter);
 
-            // Bounding boxes of the embedded grid
-            const auto &embedded_tree =
-              embedded_cache->get_cell_bounding_boxes_rtree();
-
-            // Let's check all cells whose bounding box contains an embedded
-            // bounding box
-            done = true;
-
-            const bool use_space = parameters.use_space;
-
-            const bool use_embedded = parameters.use_embedded;
-
-            AssertThrow(!(use_embedded && use_space),
-                        ExcMessage("You can't refine both the embedded and "
-                                   "the space grid at the same time."));
-
-            for (const auto &[embedded_box, embedded_cell] : embedded_tree)
+            for (const auto &[space_box, space_cell] :
+                 tree | bgi::adaptors::queried(bgi::intersects(embedded_box)))
               {
-                const auto &[p1, p2] = embedded_box.get_boundary_points();
-                const auto diameter  = p1.distance(p2);
-                min_embedded         = std::min(min_embedded, diameter);
-                max_embedded         = std::max(max_embedded, diameter);
+                const auto &[sp1, sp2]    = space_box.get_boundary_points();
+                const auto space_diameter = sp1.distance(sp2);
+                min_space                 = std::min(min_space, space_diameter);
+                max_space                 = std::max(max_space, space_diameter);
 
-                for (const auto &[space_box, space_cell] :
-                     tree |
-                       bgi::adaptors::queried(bgi::intersects(embedded_box)))
+                if (use_embedded && space_diameter < diameter)
                   {
-                    const auto &[sp1, sp2]    = space_box.get_boundary_points();
-                    const auto space_diameter = sp1.distance(sp2);
-                    min_space = std::min(min_space, space_diameter);
-                    max_space = std::max(max_space, space_diameter);
-
-                    if (use_embedded && space_diameter < diameter)
-                      {
-                        embedded_cell->set_refine_flag();
-                        done = false;
-                      }
-                    if (use_space && diameter < space_diameter)
-                      {
-                        space_cell->set_refine_flag();
-                        done = false;
-                      }
+                    embedded_cell->set_refine_flag();
+                    done = false;
                   }
-              }
-            if (done == false)
-              {
-                if (use_embedded)
+                if (use_space && diameter < space_diameter)
                   {
-                    // Compute again the embedded displacement grid
-                    embedded_triangulation.execute_coarsening_and_refinement();
-                  }
-                if (use_space)
-                  {
-                    // Compute again the embedded displacement grid
-                    space_triangulation.execute_coarsening_and_refinement();
+                    space_cell->set_refine_flag();
+                    done = false;
                   }
               }
           }
-        return std::make_tuple(min_space,
-                               max_space,
-                               min_embedded,
-                               max_embedded);
-      };
-
-      // Do the refinement loop once, to make sure we satisfy our criterions
-      refine();
-
-      // Pre refine the space grid according to the delta refinement
-      if (parameters.apply_delta_refinements &&
-          parameters.space_pre_refinement_cycles != 0)
-        for (unsigned int i = 0; i < parameters.space_pre_refinement_cycles;
-             ++i)
+        if (done == false)
           {
-            const auto &tree =
-              space_cache->get_locally_owned_cell_bounding_boxes_rtree();
-
-            const auto &embedded_tree =
-              embedded_cache->get_cell_bounding_boxes_rtree();
-
-            for (const auto &[embedded_box, embedded_cell] : embedded_tree)
-              for (const auto &[space_box, space_cell] :
-                   tree | bgi::adaptors::queried(bgi::intersects(embedded_box)))
-                space_cell->set_refine_flag();
-            space_triangulation.execute_coarsening_and_refinement();
-
-            // Make sure again we satisfy our criterion after the space
-            // refinement
-            refine();
+            if (use_embedded)
+              {
+                // Compute again the embedded displacement grid
+                embedded_triangulation.execute_coarsening_and_refinement();
+              }
+            if (use_space)
+              {
+                // Compute again the embedded displacement grid
+                space_triangulation.execute_coarsening_and_refinement();
+              }
           }
+      }
+    return std::make_tuple(min_space, max_space, min_embedded, max_embedded);
+  };
 
-      // Post refinement on embedded grid is easy
-      if (parameters.apply_delta_refinements &&
-          parameters.embedded_post_refinement_cycles != 0)
-        {
-          embedded_triangulation.refine_global(
-            parameters.embedded_post_refinement_cycles);
-        }
+  // Do the refinement loop once, to make sure we satisfy our criterions
+  refine();
 
-      // Check once again we satisfy our criterion, and record min/max
-      const auto [sm, sM, em, eM] = refine();
+  // Pre refine the space grid according to the delta refinement
+  if (parameters.apply_delta_refinements &&
+      parameters.space_pre_refinement_cycles != 0)
+    for (unsigned int i = 0; i < parameters.space_pre_refinement_cycles; ++i)
+      {
+        const auto &tree =
+          space_cache->get_locally_owned_cell_bounding_boxes_rtree();
 
-      std::cout << "Space local min/max diameters   : " << sm << "/" << sM
-                << std::endl
-                << "Embedded space min/max diameters: " << em << "/" << eM
-                << std::endl;
+        const auto &embedded_tree =
+          embedded_cache->get_cell_bounding_boxes_rtree();
+
+        for (const auto &[embedded_box, embedded_cell] : embedded_tree)
+          for (const auto &[space_box, space_cell] :
+               tree | bgi::adaptors::queried(bgi::intersects(embedded_box)))
+            space_cell->set_refine_flag();
+        space_triangulation.execute_coarsening_and_refinement();
+
+        // Make sure again we satisfy our criterion after the space
+        // refinement
+        refine();
+      }
+
+  // Post refinement on embedded grid is easy
+  if (parameters.apply_delta_refinements &&
+      parameters.embedded_post_refinement_cycles != 0)
+    {
+      embedded_triangulation.refine_global(
+        parameters.embedded_post_refinement_cycles);
     }
+
+  // Check once again we satisfy our criterion, and record min/max
+  const auto [sm, sM, em, eM] = refine();
+
+  std::cout << "Space local min/max diameters   : " << sm << "/" << sM
+            << std::endl
+            << "Embedded space min/max diameters: " << em << "/" << eM
+            << std::endl;
+  // }
 }
 
 
@@ -653,6 +652,7 @@ void PoissonDLM<dim, spacedim>::setup_embedded_dofs()
   embedded_dh =
     std::make_unique<DoFHandler<dim, spacedim>>(embedded_triangulation);
   embedded_dh->distribute_dofs(*embedded_fe);
+  std::cout << "Embedded_DOFs: " << embedded_dh->n_dofs() << std::endl;
 
   // Mass matrix for the preconditioner
   DynamicSparsityPattern mass_dsp(embedded_dh->n_dofs(), embedded_dh->n_dofs());
@@ -915,9 +915,12 @@ void PoissonDLM<dim, spacedim>::solve()
   // ReductionControl reduction_control(2000, 1.0e-12, 1.0e-10);
 
   //
-  ReductionControl reduction_control(2000, 1.0e-12, 1.0e-2);
+  ReductionControl reduction_control(2000, 1.0e-10, 1.0e-2);
+  // ReductionControl reduction_control(2000, 1.0e-12, 1.0e-2);
   // SolverCG<Vector<double>> solver_cg(reduction_control);
-  SolverCG<TrilinosWrappers::MPI::Vector> solver_cg(reduction_control);
+  // SolverFGMRES<TrilinosWrappers::MPI::Vector> solver_cg(reduction_control);
+  SolverGMRES<TrilinosWrappers::MPI::Vector> solver_cg(reduction_control);
+  // SolverCG<TrilinosWrappers::MPI::Vector> solver_cg(reduction_control);
 
   auto S_inv = inverse_operator(S, solver_cg, preconditioner);
   // auto S_inv = inverse_operator(S, solver_cg, PreconditionIdentity());
@@ -947,13 +950,15 @@ void PoissonDLM<dim, spacedim>::output_results(const unsigned cycle) const
 {
   // TimerOutput::Scope timer_section(timer, "Output results");
   std::cout << "Output results" << std::endl;
-
   data_out.clear();
-  std::ofstream data_out_file("space_solution.vtu");
-  data_out.attach_dof_handler(*space_dh);
-  data_out.add_data_vector(solution, "solution");
-  data_out.build_patches();
-  data_out.write_vtu(data_out_file);
+  if (cycle < 3)
+    {
+      std::ofstream data_out_file("space_solution.vtu");
+      data_out.attach_dof_handler(*space_dh);
+      data_out.add_data_vector(solution, "solution");
+      data_out.build_patches();
+      data_out.write_vtu(data_out_file);
+    }
 
   {
     Vector<double> difference_per_cell(space_triangulation.n_active_cells());
@@ -987,41 +992,53 @@ void PoissonDLM<dim, spacedim>::output_results(const unsigned cycle) const
     convergence_table.add_value("cycle", cycle);
     convergence_table.add_value("cells", space_triangulation.n_active_cells());
     convergence_table.add_value("dofs", space_dh->n_dofs());
+    convergence_table.add_value("dofs_emb", embedded_dh->n_dofs());
     convergence_table.add_value("L2", L2_error);
     convergence_table.add_value("H1", H1_error);
 
     // Multiplier rate
 
-    {
-      Vector<double> difference_per_cell_multiplier(
-        embedded_triangulation.n_active_cells());
-      VectorTools::integrate_difference(
+
+    Vector<double> difference_per_cell_multiplier(
+      embedded_triangulation.n_active_cells());
+
+    VectorTools::integrate_difference(*embedded_mapping,
+                                      *embedded_dh,
+                                      lambda,
+                                      multiplier_function,
+                                      difference_per_cell_multiplier,
+                                      QGauss<dim>(
+                                        2 * parameters.fe_embedded_degree + 1),
+                                      VectorTools::L2_norm);
+
+    const double L2_error_multiplier =
+      VectorTools::compute_global_error(embedded_triangulation,
+                                        difference_per_cell_multiplier,
+                                        VectorTools::L2_norm);
+    std::cout << "L2 error multiplier:\n" << std::scientific;
+    std::cout << L2_error_multiplier << std::endl;
+    convergence_table.add_value("L2_multiplier", L2_error_multiplier);
+
+
+    const double H12error_multiplier =
+      NonMatchingUtilities::LM::compute_H_12_norm(
+        *embedded_cache,
         *embedded_dh,
-        lambda,
+        *embedded_fe,
         multiplier_function,
-        difference_per_cell_multiplier,
-        QGauss<dim>(2 * parameters.fe_embedded_degree + 1),
-        VectorTools::L2_norm);
-      const double L2_error_multiplier =
-        VectorTools::compute_global_error(embedded_triangulation,
-                                          difference_per_cell_multiplier,
-                                          VectorTools::L2_norm);
-      std::cout << "L2 error multiplier:\n" << std::scientific;
-      std::cout << L2_error_multiplier << std::endl;
-
-      // convergence_table.add_value("cells_embedded",
-      //                             embedded_triangulation.n_active_cells());
-      // convergence_table.add_value("dofs_embedded", embedded_dh->n_dofs());
-      // convergence_table.add_value("L2_multiplier", L2_error_multiplier);
-    }
+        lambda,
+        QGauss<dim>(2 * parameters.fe_embedded_degree + 1));
+    std::cout << "H^1/2 error multiplier: " << std::scientific;
+    std::cout << H12error_multiplier << std::endl;
+    convergence_table.add_value("H12_multiplier", H12error_multiplier);
   }
 
-  {
-    std::ofstream output_test_space("space_grid.vtk");
-    GridOut().write_vtk(space_triangulation, output_test_space);
-    std::ofstream output_test_embedded("embedded_grid.vtk");
-    GridOut().write_vtk(embedded_triangulation, output_test_embedded);
-  }
+  // {
+  //   std::ofstream output_test_space("space_grid.vtk");
+  //   GridOut().write_vtk(space_triangulation, output_test_space);
+  //   std::ofstream output_test_embedded("embedded_grid.vtk");
+  //   GridOut().write_vtk(embedded_triangulation, output_test_embedded);
+  // }
 }
 
 
@@ -1065,12 +1082,12 @@ void PoissonDLM<dim, spacedim>::run()
                                          0.);
                 }
               std::cout << "Area: " << sum << std::endl;
-              std::cout << "Area expected: "
-                        << GridTools::volume(embedded_triangulation,
-                                             *embedded_mapping)
-                        << std::endl;
             }
           }
+        std::cout << "Area expected: "
+                  << GridTools::volume(embedded_triangulation,
+                                       *embedded_mapping)
+                  << std::endl;
 
         setup_coupling();
         assemble_system();
@@ -1087,16 +1104,20 @@ void PoissonDLM<dim, spacedim>::run()
 
   convergence_table.set_precision("L2", 3);
   convergence_table.set_precision("H1", 3);
+  convergence_table.set_precision("L2_multiplier", 3);
+  convergence_table.set_precision("H12_multiplier", 3);
   convergence_table.set_scientific("L2", true);
   convergence_table.set_scientific("H1", true);
+  convergence_table.set_scientific("L2_multiplier", true);
+  convergence_table.set_scientific("H12_multiplier", true);
   convergence_table.evaluate_convergence_rates(
     "L2", "dofs", ConvergenceTable::reduction_rate_log2, spacedim);
   convergence_table.evaluate_convergence_rates(
     "H1", "dofs", ConvergenceTable::reduction_rate_log2, spacedim);
-  // convergence_table.set_precision("L2_multiplier", 3);
-  // convergence_table.set_scientific("L2_multiplier", true);
-  // convergence_table.evaluate_convergence_rates(
-  //   "L2_multiplier", ConvergenceTable::reduction_rate_log2);
+  convergence_table.evaluate_convergence_rates(
+    "L2_multiplier", "dofs_emb", ConvergenceTable::reduction_rate_log2, dim);
+  convergence_table.evaluate_convergence_rates(
+    "H12_multiplier", "dofs_emb", ConvergenceTable::reduction_rate_log2, dim);
   convergence_table.write_text(std::cout);
 }
 
