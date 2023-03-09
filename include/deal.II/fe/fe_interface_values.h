@@ -1450,6 +1450,14 @@ public:
                     const UpdateFlags               update_flags);
 
   /**
+   * Construct a new FEInterfaceValues on top of two already initialized
+   * FEValuesBase like objects. This may occur when one has
+   *
+   */
+  FEInterfaceValues(FEValuesBase<dim, spacedim> *const fe_values0,
+                    FEValuesBase<dim, spacedim> *const fe_values1);
+
+  /**
    * Re-initialize this object to be used on a new interface given by two faces
    * of two neighboring cells. The `cell` and `cell_neighbor` cells will be
    * referred to through `cell_index` zero and one after this call in all places
@@ -1546,13 +1554,13 @@ public:
          const unsigned int      fe_index      = numbers::invalid_unsigned_int);
 
   /**
-   * Return a reference to the FEFaceValues or FESubfaceValues object
+   * Return a reference to the FEValuesBase object
    * of the specified cell of the interface.
    *
    * The @p cell_index is either 0 or 1 and corresponds to the cell index
    * returned by interface_dof_to_cell_and_dof_index().
    */
-  const FEFaceValuesBase<dim, spacedim> &
+  const FEValuesBase<dim, spacedim> &
   get_fe_face_values(const unsigned int cell_index) const;
 
   /**
@@ -2203,14 +2211,14 @@ private:
    * Pointer to internal_fe_face_values or internal_fe_subface_values,
    * respectively as determined in reinit().
    */
-  FEFaceValuesBase<dim, spacedim> *fe_face_values;
+  FEValuesBase<dim, spacedim> *fe_face_values;
 
   /**
    * Pointer to internal_fe_face_values_neighbor,
    * internal_fe_subface_values_neighbor, or nullptr, respectively
    * as determined in reinit().
    */
-  FEFaceValuesBase<dim, spacedim> *fe_face_values_neighbor;
+  FEValuesBase<dim, spacedim> *fe_face_values_neighbor;
 
   /**
    * @name Data that supports the standard FE implementation
@@ -2441,6 +2449,33 @@ FEInterfaceValues<dim, spacedim>::FEInterfaceValues(
 
 
 template <int dim, int spacedim>
+FEInterfaceValues<dim, spacedim>::FEInterfaceValues(
+  FEValuesBase<dim, spacedim> *const fe_values0,
+  FEValuesBase<dim, spacedim> *const fe_values1)
+  : n_quadrature_points(fe_values0->get_quadrature_points().size())
+  , fe_face_values(fe_values0)
+  , fe_face_values_neighbor(fe_values1)
+  , internal_fe_face_values(nullptr)
+  , internal_fe_subface_values(nullptr)
+  , internal_fe_face_values_neighbor(nullptr)
+  , internal_fe_subface_values_neighbor(nullptr)
+{
+  
+  Assert(
+    !(dynamic_cast<FEFaceValuesBase<dim, spacedim> *const>(fe_values0) &&
+      dynamic_cast<FEFaceValuesBase<dim, spacedim> *const>(fe_values1)),
+    ExcMessage(
+      "This constructor should not be used with FEFaceValues like objects, use the standard constructor instead."));
+  Assert(
+    (fe_values0->get_quadrature_points().size() ==
+     fe_values1->get_quadrature_points().size()),
+    ExcMessage(
+      "The number of quadrature points from the two sides is not the same."));
+}
+
+
+
+template <int dim, int spacedim>
 template <class CellIteratorType, class CellNeighborIteratorType>
 void
 FEInterfaceValues<dim, spacedim>::reinit(
@@ -2454,7 +2489,8 @@ FEInterfaceValues<dim, spacedim>::reinit(
   const unsigned int              mapping_index,
   const unsigned int              fe_index)
 {
-  Assert(internal_fe_face_values || internal_hp_fe_face_values,
+  Assert(internal_fe_face_values || internal_hp_fe_face_values ||
+           fe_face_values || fe_face_values_neighbor,
          ExcNotInitialized());
 
   if (internal_fe_face_values)
@@ -2466,6 +2502,11 @@ FEInterfaceValues<dim, spacedim>::reinit(
         }
       else
         {
+          Assert(
+            internal_fe_subface_values,
+            ExcMessage(
+              "You provided a subface index, but this doesn't make sense for the kind of FEValues you passed."));
+
           internal_fe_subface_values->reinit(cell, face_no, sub_face_no);
           fe_face_values = internal_fe_subface_values.get();
         }
@@ -2477,6 +2518,10 @@ FEInterfaceValues<dim, spacedim>::reinit(
         }
       else
         {
+          Assert(
+            internal_fe_subface_values_neighbor,
+            ExcMessage(
+              "You provided a subface index, but this doesn't make sense for the kind of FEValues you passed."));
           internal_fe_subface_values_neighbor->reinit(cell_neighbor,
                                                       face_no_neighbor,
                                                       sub_face_no_neighbor);
@@ -2859,7 +2904,7 @@ FEInterfaceValues<dim, spacedim>::interface_dof_to_dof_indices(
 
 
 template <int dim, int spacedim>
-const FEFaceValuesBase<dim, spacedim> &
+const FEValuesBase<dim, spacedim> &
 FEInterfaceValues<dim, spacedim>::get_fe_face_values(
   const unsigned int cell_index) const
 {
