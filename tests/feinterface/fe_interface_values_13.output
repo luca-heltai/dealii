@@ -1,0 +1,117 @@
+
+DEAL::FE_DGQ<2>(0)
+DEAL::at_boundary(): 0
+n_current_interface_dofs(): 2
+interface_dof_indices: 0 1 
+  index 0 global_dof_index:0:
+    dof indices: 0 | -1
+  index 1 global_dof_index:1:
+    dof indices: -1 | 0
+
+DEAL::1.00000 0.500000
+DEAL::1.00000 0.00000
+DEAL::qpoint 0: 1.00000 0.500000
+DEAL::shape_value(true): 1.00000 0.00000
+DEAL::shape_value(false): 0.00000 1.00000
+DEAL::jump_in_shape_values(): 1.00000 -1.00000
+DEAL::average_of_shape_values(): 0.500000 0.500000
+DEAL::FE_DGQ<2>(1)
+DEAL::at_boundary(): 0
+n_current_interface_dofs(): 8
+interface_dof_indices: 0 1 2 3 4 5 6 7 
+  index 0 global_dof_index:0:
+    dof indices: 0 | -1
+  index 1 global_dof_index:1:
+    dof indices: 1 | -1
+  index 2 global_dof_index:2:
+    dof indices: 2 | -1
+  index 3 global_dof_index:3:
+    dof indices: 3 | -1
+  index 4 global_dof_index:4:
+    dof indices: -1 | 0
+  index 5 global_dof_index:5:
+    dof indices: -1 | 1
+  index 6 global_dof_index:6:
+    dof indices: -1 | 2
+  index 7 global_dof_index:7:
+    dof indices: -1 | 3
+
+DEAL::1.00000 0.211325
+DEAL::1.00000 0.788675
+DEAL::1.00000 0.00000
+DEAL::1.00000 0.00000
+DEAL::qpoint 0: 1.00000 0.211325
+DEAL::qpoint 1: 1.00000 0.788675
+DEAL::shape_value(true): 0.00000 0.500000 0.00000 0.500000 0.00000 0.00000 0.00000 0.00000
+DEAL::shape_value(false): 0.00000 0.00000 0.00000 0.00000 0.00000 0.500000 0.00000 0.500000
+DEAL::jump_in_shape_values(): 0.00000 0.500000 0.00000 0.500000 0.00000 -0.500000 0.00000 -0.500000
+DEAL::average_of_shape_values(): 0.00000 0.250000 0.00000 0.250000 0.00000 0.250000 0.00000 0.250000
+DEAL::FE_DGQ<3>(0)
+DEAL::at_boundary(): 0
+n_current_interface_dofs(): 2
+interface_dof_indices: 0 1 
+  index 0 global_dof_index:0:
+    dof indices: 0 | -1
+  index 1 global_dof_index:1:
+    dof indices: -1 | 0
+
+DEAL::1.00000 0.500000 0.500000
+DEAL::1.00000 0.00000 0.00000
+DEAL::qpoint 0: 1.00000 0.500000 0.500000
+DEAL::shape_value(true): 1.00000 0.00000
+DEAL::shape_value(false): 0.00000 1.00000
+DEAL::jump_in_shape_values(): 1.00000 -1.00000
+DEAL::average_of_shape_values(): 0.500000 0.500000
+DEAL::FE_DGQ<3>(1)
+DEAL::at_boundary(): 0
+n_current_interface_dofs(): 16
+interface_dof_indices: 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 
+  index 0 global_dof_index:0:
+    dof indices: 0 | -1
+  index 1 global_dof_index:1:
+    dof indices: 1 | -1
+  index 2 global_dof_index:2:
+    dof indices: 2 | -1
+  index 3 global_dof_index:3:
+    dof indices: 3 | -1
+  index 4 global_dof_index:4:
+    dof indices: 4 | -1
+  index 5 global_dof_index:5:
+    dof indices: 5 | -1
+  index 6 global_dof_index:6:
+    dof indices: 6 | -1
+  index 7 global_dof_index:7:
+    dof indices: 7 | -1
+  index 8 global_dof_index:8:
+    dof indices: -1 | 0
+  index 9 global_dof_index:9:
+    dof indices: -1 | 1
+  index 10 global_dof_index:10:
+    dof indices: -1 | 2
+  index 11 global_dof_index:11:
+    dof indices: -1 | 3
+  index 12 global_dof_index:12:
+    dof indices: -1 | 4
+  index 13 global_dof_index:13:
+    dof indices: -1 | 5
+  index 14 global_dof_index:14:
+    dof indices: -1 | 6
+  index 15 global_dof_index:15:
+    dof indices: -1 | 7
+
+DEAL::1.00000 0.211325 0.211325
+DEAL::1.00000 0.788675 0.211325
+DEAL::1.00000 0.211325 0.788675
+DEAL::1.00000 0.788675 0.788675
+DEAL::1.00000 0.00000 5.55112e-17
+DEAL::1.00000 0.00000 0.00000
+DEAL::1.00000 0.00000 5.55112e-17
+DEAL::1.00000 0.00000 0.00000
+DEAL::qpoint 0: 1.00000 0.211325 0.211325
+DEAL::qpoint 1: 1.00000 0.788675 0.211325
+DEAL::qpoint 2: 1.00000 0.211325 0.788675
+DEAL::qpoint 3: 1.00000 0.788675 0.788675
+DEAL::shape_value(true): 4.62593e-18 0.250000 1.72642e-17 0.250000 1.23951e-18 0.250000 4.62593e-18 0.250000 0.00000 0.00000 0.00000 0.00000 0.00000 0.00000 0.00000 0.00000
+DEAL::shape_value(false): 0.00000 0.00000 0.00000 0.00000 0.00000 0.00000 0.00000 0.00000 4.62593e-18 0.250000 1.72642e-17 0.250000 1.23951e-18 0.250000 4.62593e-18 0.250000
+DEAL::jump_in_shape_values(): 4.62593e-18 0.250000 1.72642e-17 0.250000 1.23951e-18 0.250000 4.62593e-18 0.250000 -4.62593e-18 -0.250000 -1.72642e-17 -0.250000 -1.23951e-18 -0.250000 -4.62593e-18 -0.250000
+DEAL::average_of_shape_values(): 2.31296e-18 0.125000 8.63210e-18 0.125000 6.19757e-19 0.125000 2.31296e-18 0.125000 2.31296e-18 0.125000 8.63210e-18 0.125000 6.19757e-19 0.125000 2.31296e-18 0.125000
