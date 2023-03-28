@@ -3,16 +3,16 @@
 subsection Distributed Lagrange<1,2>
   set Adjust grids                                       = true# true
   set Apply space refinements steps near embedded domain = true
-  set Coupling strategy                                  = exact
+  set Coupling strategy                                  = exact #inexact
   set Embedded configuration finite element degree       = 1
   set Embedded post refinement cycles                    = 0
   set Finite element embedded degree                     = 0
   set Finite element space degree                        = 1
   
-  set Number of embedded initial refinement cycles       = 3#5#3#16
+  set Number of embedded initial refinement cycles       = 4#3#5#3#16
   set Number of refinement cycles                        = 5 #7 #total refinement cycles
   set Number of space initial refinement cycles          = 4
-  set Space pre refinements cycles                       = 2
+  set Space pre refinements cycles                       = 4
   set Use embedded refinement                            = false
   set Use space refinement                               = false
 
@@ -61,8 +61,8 @@ subsection Distributed Lagrange<1,2>
 
   subsection Immersed configuration
     set Function constants  = R=.3, Cx=.5, Cy=.5, r=.1, w=12
-    # set Function expression = (R+r*cos(w*pi*x))*cos(2*pi*x)+Cx; (R+r*cos(w*pi*x))*sin(2*pi*x)+Cy
-    set Function expression = R*cos(2*pi*x)+Cx; R*sin(2*pi*x)+Cy
+    set Function expression = (R+r*cos(w*pi*x))*cos(2*pi*x)+Cx; (R+r*cos(w*pi*x))*sin(2*pi*x)+Cy
+    # set Function expression = R*cos(2*pi*x)+Cx; R*sin(2*pi*x)+Cy
     set Variable names      = x,y,t
     # # Sometimes it is convenient to use symbolic constants in the expression
     # # that describes the function, rather than having to use its numeric value

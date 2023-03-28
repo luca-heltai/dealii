@@ -19,6 +19,7 @@
 #include <deal.II/base/parameter_acceptor.h>
 #include <deal.II/base/convergence_table.h>
 #include <deal.II/fe/fe_system.h>
+#include <deal.II/grid/grid_in.h>
 #include <deal.II/non_matching/quadrature_overlapped_grids.h>
 #include <deal.II/non_matching/coupling.h>
 #include <deal.II/numerics/error_estimator.h>
@@ -321,13 +322,18 @@ void PoissonDLM<dim, spacedim>::setup_grids_and_dofs()
             }
           else
             {
-              const double Cx = .5;
-              const double Cy = .5;
-              const double R  = .3;
-              GridGenerator::hyper_sphere(embedded_triangulation, {Cx, Cy}, R);
-              embedded_triangulation.refine_global(
-                parameters.embedded_initial_global_refinements); // 2
+              // const double Cx = .5;
+              // const double Cy = .5;
+              // const double R  = .3;
+              // GridGenerator::hyper_sphere(embedded_triangulation, {Cx, Cy},
+              // R); embedded_triangulation.refine_global(
+              //   parameters.embedded_initial_global_refinements); // 2
+              GridIn<1, 2> grid_in;
+              grid_in.attach_triangulation(embedded_triangulation);
+              std::ifstream input_file("my_flower_interface.vtk");
+              Assert(dim == 1 && spacedim == 2, ExcInternalError());
 
+              grid_in.read_vtk(input_file);
               embedded_mapping = std::make_unique<MappingQ<dim, spacedim>>(1);
             }
         }
@@ -431,6 +437,10 @@ void PoissonDLM<dim, spacedim>::setup_grids_and_dofs()
   if (parameters.adjust_grids_ratio == true && cycle == 0)
     {
       adjust_grids();
+      {
+        std::ofstream output_test_space("space_grid_vediamo.vtk");
+        GridOut().write_vtk(space_triangulation, output_test_space);
+      }
     }
 
   setup_space_dofs();
@@ -915,8 +925,8 @@ void PoissonDLM<dim, spacedim>::solve()
   // ReductionControl reduction_control(2000, 1.0e-12, 1.0e-10);
 
   //
-  ReductionControl reduction_control(2000, 1.0e-10, 1.0e-2);
-  // ReductionControl reduction_control(2000, 1.0e-12, 1.0e-2);
+  // ReductionControl reduction_control(2000, 1.0e-10, 1.0e-2);
+  ReductionControl reduction_control(2000, 1.0e-12, 1.0e-2);
   // SolverCG<Vector<double>> solver_cg(reduction_control);
   // SolverFGMRES<TrilinosWrappers::MPI::Vector> solver_cg(reduction_control);
   SolverGMRES<TrilinosWrappers::MPI::Vector> solver_cg(reduction_control);
