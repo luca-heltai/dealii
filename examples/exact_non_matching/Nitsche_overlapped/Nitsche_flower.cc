@@ -19,6 +19,7 @@
 
 #include <deal.II/lac/linear_operator_tools.h>
 #include <deal.II/lac/petsc_precondition.h>
+#include <deal.II/grid/grid_in.h>
 #include <deal.II/base/conditional_ostream.h>
 #include <deal.II/base/mpi.h>
 #include <deal.II/lac/petsc_vector.h>
@@ -422,46 +423,56 @@ void PoissonNitscheInterface<dim, spacedim>::generate_grids(
     {
       if (cycle == 0)
         {
-          // Use a level set to generate the embedded domain.
-          GridGenerator::hyper_cube(
-            embedded_triangulation,
-            0.,
-            1.); // parametric space for the embedded curve
-          embedded_triangulation.refine_global(4); // 2
+          // // Use a level set to generate the embedded domain.
+          // GridGenerator::hyper_cube(
+          //   embedded_triangulation,
+          //   0.,
+          //   1.); // parametric space for the embedded curve
+          // embedded_triangulation.refine_global(4); // 2
 
-          embedded_configuration_fe = std::make_unique<FESystem<dim, spacedim>>(
-            FE_Q<dim, spacedim>(embedded_configuration_finite_element_degree),
-            spacedim);
+          // embedded_configuration_fe = std::make_unique<FESystem<dim,
+          // spacedim>>(
+          //   FE_Q<dim,
+          //   spacedim>(embedded_configuration_finite_element_degree),
+          //   spacedim);
 
-          embedded_configuration_dh =
-            std::make_unique<DoFHandler<dim, spacedim>>(embedded_triangulation);
+          // embedded_configuration_dh =
+          //   std::make_unique<DoFHandler<dim,
+          //   spacedim>>(embedded_triangulation);
+          GridIn<1, 2> grid_in;
+          grid_in.attach_triangulation(embedded_triangulation);
+          std::ifstream input_file("my_flower_interface.vtk");
+          Assert(dim == 1 && spacedim == 2, ExcInternalError());
+          grid_in.read_vtk(input_file);
         }
 
 
 
-      embedded_configuration_dh->distribute_dofs(*embedded_configuration_fe);
+      // embedded_configuration_dh->distribute_dofs(*embedded_configuration_fe);
 
-      embedded_configuration.reinit(embedded_configuration_dh->n_dofs());
+      // embedded_configuration.reinit(embedded_configuration_dh->n_dofs());
 
-      EmbeddedConfigurationFunction<2> embedded_configuration_function;
+      // EmbeddedConfigurationFunction<2> embedded_configuration_function;
 
-      VectorTools::interpolate(*embedded_configuration_dh,
-                               embedded_configuration_function,
-                               embedded_configuration);
+      // VectorTools::interpolate(*embedded_configuration_dh,
+      //                          embedded_configuration_function,
+      //                          embedded_configuration);
 
-      embedded_mapping = std::make_unique<MappingFEField<1, 2, Vector<double>>>(
-        *embedded_configuration_dh, embedded_configuration);
+      // embedded_mapping = std::make_unique<MappingFEField<1, 2,
+      // Vector<double>>>(
+      //   *embedded_configuration_dh, embedded_configuration);
+      embedded_mapping = std::make_unique<MappingQ<dim, spacedim>>(1);
 
-      // Just write the embedded grid
-      {
-        std::ofstream          out_emb("grid_embedded_nitsche.vtu");
-        DataOut<dim, spacedim> embedding_out;
-        embedding_out.attach_dof_handler(*embedded_configuration_dh);
-        embedding_out.build_patches(
-          *embedded_mapping, embedded_configuration_finite_element_degree);
-        embedding_out.write_vtu(out_emb);
-        std::cout << "griglia_emb written" << std::endl;
-      }
+      // // Just write the embedded grid
+      // {
+      //   std::ofstream          out_emb("grid_embedded_nitsche.vtu");
+      //   DataOut<dim, spacedim> embedding_out;
+      //   embedding_out.attach_dof_handler(*embedded_configuration_dh);
+      //   embedding_out.build_patches(
+      //     *embedded_mapping, embedded_configuration_finite_element_degree);
+      //   embedding_out.write_vtu(out_emb);
+      //   std::cout << "griglia_emb written" << std::endl;
+      // }
 
 
 
@@ -613,7 +624,7 @@ void PoissonNitscheInterface<dim, spacedim>::adjust_grids()
   refine();
 
   // Pre refine the space grid according to the delta refinement
-  const unsigned int n_space_cycles = 2;
+  const unsigned int n_space_cycles = 4; // before it was 2.
   for (unsigned int i = 0; i < n_space_cycles; ++i)
     {
       const auto &tree =
@@ -759,6 +770,7 @@ void PoissonNitscheInterface<dim, spacedim>::assemble_system()
     FE_Q<dim, spacedim>       embedded_fe(1);
     DoFHandler<dim, spacedim> embedded_dh(embedded_triangulation);
     embedded_dh.distribute_dofs(embedded_fe);
+    std::cout << "Embedded DoFs: " << embedded_dh.n_dofs() << std::endl;
 
     // NonMatching::create_coupling_mass_matrix_nitsche(*space_cache,
     //                                                  space_dh,
