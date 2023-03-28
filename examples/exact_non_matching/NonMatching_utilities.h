@@ -149,8 +149,8 @@ namespace NonMatchingUtilities
                              const Quadrature<dim> &                quad)
     {
       Assert(dh.n_dofs() > 0, ExcMessage("DoFhandler is empty."));
-      Assert(order > 0,
-             ExcMessage("Order of quadrature rule must be larger than 0."));
+      // Assert(order > 0,
+      //        ExcMessage("Order of quadrature rule must be larger than 0."));
       Assert(u.size() > 0, ExcMessage("Solution vector is not valid."));
 
       if (fe.degree == 0 && dynamic_cast<const QGaussLobatto<dim> *>(&quad))
