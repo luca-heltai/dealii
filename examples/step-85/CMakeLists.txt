@@ -3,11 +3,11 @@
 # #
 
 # Set the name of the project and target:
-# SET(TARGET "step_85_implicit")
+SET(TARGET "step_85_implicit")
 
 # SET(TARGET "test_discrete_points")
 
-SET(TARGET "step-85_sphere")
+# SET(TARGET "step-85_sphere")
 
 # SET(TARGET "testing_discrete_level_set")
 

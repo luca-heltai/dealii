@@ -15,24 +15,25 @@
 
 #include <deal.II/base/function.h>
 
-#include <deal.II/base/convergence_table.h>
-#include <deal.II/base/point.h>
-#include <deal.II/base/quadrature.h>
-#include <deal.II/cgal/triangulation.h>
 #include <CGAL/Constrained_Delaunay_triangulation_2.h>
-#include <CGAL/Delaunay_mesher_2.h>
 #include <CGAL/Delaunay_mesh_face_base_2.h>
 #include <CGAL/Delaunay_mesh_size_criteria_2.h>
+#include <CGAL/Delaunay_mesher_2.h>
+#include <deal.II/grid/grid_in.h>
+#include <deal.II/base/convergence_table.h>
 #include <deal.II/base/mpi.h>
-#include <deal.II/base/utilities.h>
-#include <deal.II/lac/petsc_precondition.h>
-#include <deal.II/distributed/shared_tria.h>
-#include <deal.II/grid/grid_out.h>
-#include <deal.II/lac/petsc_vector.h>
-#include <deal.II/lac/petsc_sparse_matrix.h>
-#include <deal.II/lac/petsc_solver.h>
+#include <deal.II/base/point.h>
+#include <deal.II/base/quadrature.h>
 #include <deal.II/base/quadrature_lib.h>
 #include <deal.II/base/tensor.h>
+#include <deal.II/base/utilities.h>
+#include <deal.II/cgal/triangulation.h>
+#include <deal.II/distributed/shared_tria.h>
+#include <deal.II/grid/grid_out.h>
+#include <deal.II/lac/petsc_precondition.h>
+#include <deal.II/lac/petsc_solver.h>
+#include <deal.II/lac/petsc_sparse_matrix.h>
+#include <deal.II/lac/petsc_vector.h>
 
 #include <deal.II/dofs/dof_tools.h>
 
@@ -70,16 +71,14 @@
 
 #include <deal.II/base/function_signed_distance.h>
 
+#include "../exact_non_matching/NonMatching_utilities.h"
 #include <deal.II/non_matching/fe_immersed_values.h>
 #include <deal.II/non_matching/fe_values.h>
 #include <deal.II/non_matching/mesh_classifier.h>
-#include "../exact_non_matching/NonMatching_utilities.h"
-
 
 const double Cx = .5;
 const double Cy = .5;
 const double R  = .3;
-
 
 namespace Step85
 {
@@ -93,22 +92,22 @@ namespace Step85
       (void)component;
       // const double xc = 0.2 / std::sqrt(20.);
       // const double yc = 0.2 / std::sqrt(20.);
-      // const double w  = 12.;
-      // const double R = .3;
-      // const double r = .1;
+      const double w = 12.;
+      const double R = .3;
+      const double r = .1;
       const double x = p[0];
       const double y = p[1];
-      // const double oscillating_term =
-      //   (1. - 2. * (y * y) / (x * x + y * y)) *
-      //   (1. - 16. * (x * x * y * y) / ((x * x + y * y) * (x * x + y * y)));
-      // return std::sqrt(p[0]*p[0] + p[1]*p[1]) - r*(p[0]*p[0]*p[0]
-      // - 3.*p[0]*p[1]*p[1])*std::pow(p[0]*p[0] + p[1]*p[1],-3./2.) - R;
-      // return std::sqrt(x * x + y * y) - r * oscillating_term - R;
-      return std::sqrt((x - Cx) * (x - Cx) + (y - Cy) * (y - Cy)) - R;
+      const double oscillating_term =
+        (1. - 2. * (y * y) / (x * x + y * y)) *
+        (1. - 16. * (x * x * y * y) / ((x * x + y * y) * (x * x + y * y)));
+      // return std::sqrt(p[0] * p[0] + p[1] * p[1]) -
+      //        r * (p[0] * p[0] * p[0] - 3. * p[0] * p[1] * p[1]) *
+      //          std::pow(p[0] * p[0] + p[1] * p[1], -3. / 2.) -
+      //        R;
+      return std::sqrt(x * x + y * y) - r * oscillating_term - R;
+      // return std::sqrt((x - Cx) * (x - Cx) + (y - Cy) * (y - Cy)) - R;
     }
   };
-
-
 
   template <int dim>
   class LaplaceSolver
@@ -223,15 +222,22 @@ namespace Step85
     level_set_dof_handler.distribute_dofs(fe_level_set);
     level_set.reinit(level_set_dof_handler.n_dofs());
 
-    const Functions::SignedDistance::Sphere<dim> signed_distance_sphere({Cx,
-                                                                         Cy},
-                                                                        R);
+    // const Functions::SignedDistance::Sphere<dim> signed_distance_sphere({Cx,
+    //                                                                      Cy},
+    //                                                                     R);
     // ImplicitFunction                             implicit_function;
     // VectorTools::interpolate(level_set_dof_handler,
     //                          implicit_function,
     //                          level_set);
-    GridGenerator::hyper_sphere(embedded_tria, {Cx, Cy}, R);
-    embedded_tria.refine_global(11);
+    // GridGenerator::hyper_sphere(embedded_tria, {Cx, Cy}, R);
+    // embedded_tria.refine_global(11);
+
+
+    // The grid will be read from an external .vtk file
+    GridIn<1, 2> grid_in;
+    grid_in.attach_triangulation(embedded_tria);
+    std::ifstream input_file("my_flower_interface.vtk");
+    grid_in.read_vtk(input_file);
 
     NonMatchingUtilities::CDT tr;
     using Point2 = NonMatchingUtilities::Point2;
@@ -259,26 +265,26 @@ namespace Step85
     NonMatchingUtilities::DiscreteLevelSet<dim, decltype(tree)>
       discrete_level_set(&tree, tr);
 
-    { // Sanity checks
-      std::cout << signed_distance_sphere.value(Point<2>{}) << " and "
-                << discrete_level_set.value(Point<2>{}) << std::endl;
+    // { // Sanity checks
+    //   std::cout << signed_distance_sphere.value(Point<2>{}) << " and "
+    //             << discrete_level_set.value(Point<2>{}) << std::endl;
 
-      std::cout << discrete_level_set.value(Point<2>{1.1, 1.1}) << " and "
-                << signed_distance_sphere.value(Point<2>{1.1, 1.1})
-                << std::endl;
+    //   std::cout << discrete_level_set.value(Point<2>{1.1, 1.1}) << " and "
+    //             << signed_distance_sphere.value(Point<2>{1.1, 1.1})
+    //             << std::endl;
 
-      std::cout << discrete_level_set.value(Point<2>{1.2, 1.2}) << " and "
-                << signed_distance_sphere.value(Point<2>{1.2, 1.2})
-                << std::endl;
+    //   std::cout << discrete_level_set.value(Point<2>{1.2, 1.2}) << " and "
+    //             << signed_distance_sphere.value(Point<2>{1.2, 1.2})
+    //             << std::endl;
 
-      std::cout << discrete_level_set.value(Point<2>{0.5, 0.5}) << " and "
-                << signed_distance_sphere.value(Point<2>{0.5, 0.5})
-                << std::endl;
+    //   std::cout << discrete_level_set.value(Point<2>{0.5, 0.5}) << " and "
+    //             << signed_distance_sphere.value(Point<2>{0.5, 0.5})
+    //             << std::endl;
 
-      std::cout << discrete_level_set.value(Point<2>{0.8, 0.8}) << " and "
-                << signed_distance_sphere.value(Point<2>{0.8, 0.8})
-                << std::endl;
-    }
+    //   std::cout << discrete_level_set.value(Point<2>{0.8, 0.8}) << " and "
+    //             << signed_distance_sphere.value(Point<2>{0.8, 0.8})
+    //             << std::endl;
+    // }
 
     VectorTools::interpolate(level_set_dof_handler,
                              discrete_level_set,
@@ -302,13 +308,12 @@ namespace Step85
   {
     AssertIndexRange(component, this->n_components);
     (void)component;
-    const Point<2> xc{Cx, Cy};
-    const double   r = (point - xc).norm();
-    return r <= R ? -std::log(R) : -std::log(r);
+    // const Point<2> xc{Cx, Cy};
+    // const double   r = (point - xc).norm();
+    // return r <= R ? -std::log(R) : -std::log(r);
 
-
-    // return std::sin(2. * numbers::PI * point[0]) *
-    //        std::sin(2. * numbers::PI * point[1]);
+    return std::sin(2. * numbers::PI * point[0]) *
+           std::sin(2. * numbers::PI * point[1]);
     // 1. - 2. / dim * (point.norm_square() - 1.);
   }
 
@@ -320,23 +325,21 @@ namespace Step85
     AssertIndexRange(component, this->n_components);
     (void)component;
     Assert(dim == 2, ExcMessage("Tested so far for 1d2d"));
-    // Tensor<1, dim> grad;
-    // grad[0] = 2. * M_PI * std::cos(2. * M_PI * point[0]) *
-    //           std::sin(2. * M_PI * point[1]);
-    // grad[1] = 2. * M_PI * std::cos(2. * M_PI * point[1]) *
-    //           std::sin(2. * M_PI * point[0]);
+    Tensor<1, dim> grad;
+    grad[0] = 2. * M_PI * std::cos(2. * M_PI * point[0]) *
+              std::sin(2. * M_PI * point[1]);
+    grad[1] = 2. * M_PI * std::cos(2. * M_PI * point[1]) *
+              std::sin(2. * M_PI * point[0]);
 
-    const Point<2> xc{Cx, Cy};
-    const double   r = (point - xc).norm();
+    // const Point<2> xc{Cx, Cy};
+    // const double   r = (point - xc).norm();
 
-    Tensor<1, 2> gradient;
-    gradient[0] = (r <= R) ? 0. : -(point[0] - Cx) / (r * r);
-    gradient[1] = (r <= R) ? 0. : -(point[1] - Cy) / (r * r);
+    // Tensor<1, 2> gradient;
+    // gradient[0] = (r <= R) ? 0. : -(point[0] - Cx) / (r * r);
+    // gradient[1] = (r <= R) ? 0. : -(point[1] - Cy) / (r * r);
 
-    return gradient;
+    return grad;
   }
-
-
 
   template <int dim>
   class BoundaryValues : public Function<dim>
@@ -398,10 +401,9 @@ namespace Step85
                                  const unsigned int component) const
   {
     (void)component;
-    return 0.;
-    // return 8. * numbers::PI * numbers::PI * std::sin(2. * numbers::PI * p[0])
-    // *
-    //        std::sin(2. * numbers::PI * p[1]);
+    // return 0.;
+    return 8. * numbers::PI * numbers::PI * std::sin(2. * numbers::PI * p[0]) *
+           std::sin(2. * numbers::PI * p[1]);
   }
 
   enum ActiveFEIndex
@@ -504,7 +506,6 @@ namespace Step85
                                          numbers::invalid_subdomain_id,
                                          face_has_flux_coupling);
     sparsity_pattern.copy_from(dsp);
-
 
     const std::vector<IndexSet> locally_owned_dofs_per_proc =
       DoFTools::locally_owned_dofs_per_subdomain(dof_handler);
@@ -1162,7 +1163,6 @@ namespace Step85
     rhs.compress(VectorOperation::add);
   }
 
-
   template <int dim>
   void LaplaceSolver<dim>::solve()
   {
@@ -1426,7 +1426,6 @@ namespace Step85
     return std::sqrt(error_L2_squared);
   }
 
-
   template <int dim>
   double LaplaceSolver<dim>::compute_H1_error_from_outside() const
   {
@@ -1540,7 +1539,6 @@ namespace Step85
     return std::sqrt(error_H1_squared + sqrtL2error);
   }
 
-
   template <int dim>
   void LaplaceSolver<dim>::run()
   {
@@ -1587,7 +1585,6 @@ namespace Step85
           "L2-Error", ConvergenceTable::reduction_rate_log2);
         convergence_table.evaluate_convergence_rates(
           "H1-Error", ConvergenceTable::reduction_rate_log2);
-
 
         std::cout << std::endl;
         convergence_table.write_text(std::cout);

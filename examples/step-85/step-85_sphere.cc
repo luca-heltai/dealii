@@ -1947,10 +1947,10 @@ namespace Step85
           return std::sin(2. * numbers::PI * point[0]) *
                  std::sin(2. * numbers::PI * point[1]);
         case 3:
-          // return std::sin(2. * numbers::PI * point[0]) *
-          //        std::sin(2. * numbers::PI * point[1]) *
-          //        std::sin(2. * numbers::PI * point[2]);
-          return r <= R ? 1. / R : 1. / r;
+          return std::sin(2. * numbers::PI * point[0]) *
+                 std::sin(2. * numbers::PI * point[1]) *
+                 std::sin(2. * numbers::PI * point[2]);
+          // return r <= R ? 1. / R : 1. / r;
         default:
           Assert(false, ExcNotImplemented());
       }
@@ -1981,18 +1981,19 @@ namespace Step85
           break;
         case 3:
 
-          // grad[0] = 2. * M_PI * std::cos(2. * M_PI * point[0]) *
-          //           std::sin(2. * M_PI * point[1]) *
-          //           std::sin(2. * M_PI * point[2]);
-          // grad[1] = 2. * M_PI * std::sin(2. * M_PI * point[0]) *
-          //           std::cos(2. * M_PI * point[1]) *
-          //           std::sin(2. * M_PI * point[2]);
-          // grad[2] = 2. * M_PI * std::sin(2. * M_PI * point[0]) *
-          //           std::sin(2. * M_PI * point[1]) *
-          //           std::cos(2. * M_PI * point[2]);
-          grad[0] = (r <= R) ? 0. : -(point[0] - Cx) / (std::pow(r * r, 1.5));
-          grad[1] = (r <= R) ? 0. : -(point[1] - Cy) / (std::pow(r * r, 1.5));
-          grad[2] = (r <= R) ? 0. : -(point[2] - Cz) / (std::pow(r * r, 1.5));
+          grad[0] = 2. * M_PI * std::cos(2. * M_PI * point[0]) *
+                    std::sin(2. * M_PI * point[1]) *
+                    std::sin(2. * M_PI * point[2]);
+          grad[1] = 2. * M_PI * std::sin(2. * M_PI * point[0]) *
+                    std::cos(2. * M_PI * point[1]) *
+                    std::sin(2. * M_PI * point[2]);
+          grad[2] = 2. * M_PI * std::sin(2. * M_PI * point[0]) *
+                    std::sin(2. * M_PI * point[1]) *
+                    std::cos(2. * M_PI * point[2]);
+          // grad[0] = (r <= R) ? 0. : -(point[0] - Cx) / (std::pow(r *
+          // r, 1.5)); grad[1] = (r <= R) ? 0. : -(point[1] - Cy) / (std::pow(r
+          // * r, 1.5)); grad[2] = (r <= R) ? 0. : -(point[2] - Cz) /
+          // (std::pow(r * r, 1.5));
           return grad;
           break;
         default:
@@ -2069,11 +2070,11 @@ namespace Step85
                  std::sin(2. * numbers::PI * p[0]) *
                  std::sin(2. * numbers::PI * p[1]);
         case 3:
-          // return 12. * numbers::PI * numbers::PI *
-          //        std::sin(2. * numbers::PI * p[0]) *
-          //        std::sin(2. * numbers::PI * p[1]) *
-          //        std::sin(2. * numbers::PI * p[2]);
-          return 0.;
+          return 12. * numbers::PI * numbers::PI *
+                 std::sin(2. * numbers::PI * p[0]) *
+                 std::sin(2. * numbers::PI * p[1]) *
+                 std::sin(2. * numbers::PI * p[2]);
+          // return 0.;
         default:
           Assert(false, ExcMessage("Nonsense"));
       };
