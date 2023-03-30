@@ -305,20 +305,35 @@ void PoissonDLM<dim, spacedim>::setup_grids_and_dofs()
         {
           space_triangulation.refine_global(
             parameters.space_initial_global_refinements); // 4
+          {
+            std::ofstream out_space("background_for_paper" +
+                                    std::to_string(dim) + "_" +
+                                    std::to_string(spacedim) + ".vtk");
+            GridOut().write_vtk(space_triangulation, out_space);
+          }
           if (parameters.coupling_strategy == "inexact")
             {
               // Use a level set to generate the actual domain.
-              GridGenerator::hyper_cube(embedded_triangulation,
-                                        0.,
-                                        1.); // parametric space for the curve
-              embedded_triangulation.refine_global(
-                parameters.embedded_initial_global_refinements); // 2
+              // GridGenerator::hyper_cube(embedded_triangulation,
+              //                           0.,
+              //                           1.); // parametric space for the
+              //                           curve
+              // embedded_triangulation.refine_global(
+              //   parameters.embedded_initial_global_refinements); // 2
 
-              embedded_configuration_fe =
-                std::make_unique<FESystem<dim, spacedim>>(
-                  FE_Q<dim, spacedim>(
-                    parameters.embedded_configuration_finite_element_degree),
-                  spacedim);
+              // embedded_configuration_fe =
+              //   std::make_unique<FESystem<dim, spacedim>>(
+              //     FE_Q<dim, spacedim>(
+              //       parameters.embedded_configuration_finite_element_degree),
+              //     spacedim);
+
+
+              GridIn<1, 2> grid_in;
+              grid_in.attach_triangulation(embedded_triangulation);
+              std::ifstream input_file("my_flower_interface.vtk");
+              Assert(dim == 1 && spacedim == 2, ExcInternalError());
+              grid_in.read_vtk(input_file);
+              embedded_mapping = std::make_unique<MappingQ<dim, spacedim>>(1);
             }
           else
             {
@@ -328,12 +343,22 @@ void PoissonDLM<dim, spacedim>::setup_grids_and_dofs()
               // GridGenerator::hyper_sphere(embedded_triangulation, {Cx, Cy},
               // R); embedded_triangulation.refine_global(
               //   parameters.embedded_initial_global_refinements); // 2
+
+              // embedded_triangulation.reset_all_manifolds();
+
+
               GridIn<1, 2> grid_in;
               grid_in.attach_triangulation(embedded_triangulation);
               std::ifstream input_file("my_flower_interface.vtk");
               Assert(dim == 1 && spacedim == 2, ExcInternalError());
 
               grid_in.read_vtk(input_file);
+              {
+                std::ofstream out_emb("griglia_emb_paper" +
+                                      std::to_string(dim) + "_" +
+                                      std::to_string(spacedim) + ".vtk");
+                GridOut().write_vtk(embedded_triangulation, out_emb);
+              }
               embedded_mapping = std::make_unique<MappingQ<dim, spacedim>>(1);
             }
         }
@@ -382,12 +407,6 @@ void PoissonDLM<dim, spacedim>::setup_grids_and_dofs()
           // embedded_mapping =
           //   std::make_unique<MappingFEField<dim, spacedim, Vector<double>>>(
           //     *embedded_configuration_dh, embedded_configuration);
-
-          {
-            std::ofstream out_emb("griglia_emb" + std::to_string(dim) + "_" +
-                                  std::to_string(spacedim) + ".vtk");
-            GridOut().write_vtk(embedded_triangulation, out_emb);
-          }
         }
     }
 
@@ -395,23 +414,23 @@ void PoissonDLM<dim, spacedim>::setup_grids_and_dofs()
   embedded_fe =
     std::make_unique<FE_DGQ<dim, spacedim>>(parameters.fe_embedded_degree);
 
-  if (parameters.coupling_strategy == "inexact")
-    {
-      embedded_configuration_dh =
-        std::make_unique<DoFHandler<dim, spacedim>>(embedded_triangulation);
+  // if (parameters.coupling_strategy == "inexact")
+  //   {
+  //     embedded_configuration_dh =
+  //       std::make_unique<DoFHandler<dim, spacedim>>(embedded_triangulation);
 
-      embedded_configuration_dh->distribute_dofs(*embedded_configuration_fe);
+  //     embedded_configuration_dh->distribute_dofs(*embedded_configuration_fe);
 
-      embedded_configuration.reinit(embedded_configuration_dh->n_dofs());
+  //     embedded_configuration.reinit(embedded_configuration_dh->n_dofs());
 
-      VectorTools::interpolate(*embedded_configuration_dh,
-                               embedded_configuration_function,
-                               embedded_configuration);
+  //     VectorTools::interpolate(*embedded_configuration_dh,
+  //                              embedded_configuration_function,
+  //                              embedded_configuration);
 
-      embedded_mapping =
-        std::make_unique<MappingFEField<dim, spacedim, Vector<double>>>(
-          *embedded_configuration_dh, embedded_configuration);
-    }
+  //     embedded_mapping =
+  //       std::make_unique<MappingFEField<dim, spacedim, Vector<double>>>(
+  //         *embedded_configuration_dh, embedded_configuration);
+  //   }
 
   // {
   //   std::ofstream          out_emb("griglia_emb.vtu");
@@ -925,8 +944,8 @@ void PoissonDLM<dim, spacedim>::solve()
   // ReductionControl reduction_control(2000, 1.0e-12, 1.0e-10);
 
   //
-  // ReductionControl reduction_control(2000, 1.0e-10, 1.0e-2);
-  ReductionControl reduction_control(2000, 1.0e-12, 1.0e-2);
+  ReductionControl reduction_control(2000, 1.0e-10, 1.0e-2);
+  // ReductionControl reduction_control(2000, 1.0e-12, 1.0e-2);
   // SolverCG<Vector<double>> solver_cg(reduction_control);
   // SolverFGMRES<TrilinosWrappers::MPI::Vector> solver_cg(reduction_control);
   SolverGMRES<TrilinosWrappers::MPI::Vector> solver_cg(reduction_control);
