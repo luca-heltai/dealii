@@ -104,8 +104,8 @@ namespace Step85
       //        r * (p[0] * p[0] * p[0] - 3. * p[0] * p[1] * p[1]) *
       //          std::pow(p[0] * p[0] + p[1] * p[1], -3. / 2.) -
       //        R;
-      return std::sqrt(x * x + y * y) - r * oscillating_term - R;
-      // return std::sqrt((x - Cx) * (x - Cx) + (y - Cy) * (y - Cy)) - R;
+      // return std::sqrt(x * x + y * y) - r * oscillating_term - R; //flower
+      return std::sqrt((x - Cx) * (x - Cx) + (y - Cy) * (y - Cy)) - R;
     }
   };
 
@@ -229,15 +229,25 @@ namespace Step85
     // VectorTools::interpolate(level_set_dof_handler,
     //                          implicit_function,
     //                          level_set);
-    // GridGenerator::hyper_sphere(embedded_tria, {Cx, Cy}, R);
-    // embedded_tria.refine_global(11);
+    if (cycle == 0)
+      {
+        GridGenerator::hyper_sphere(embedded_tria, {Cx, Cy}, R);
+
+        // embedded_tria.refine_global(11);
+        embedded_tria.refine_global(3);
+        embedded_tria.reset_all_manifolds();
+      }
+    else
+      {
+        embedded_tria.refine_global(1);
+      }
 
 
     // The grid will be read from an external .vtk file
-    GridIn<1, 2> grid_in;
-    grid_in.attach_triangulation(embedded_tria);
-    std::ifstream input_file("my_flower_interface.vtk");
-    grid_in.read_vtk(input_file);
+    // GridIn<1, 2> grid_in;
+    // grid_in.attach_triangulation(embedded_tria);
+    // std::ifstream input_file("my_flower_interface.vtk");
+    // grid_in.read_vtk(input_file);
 
     NonMatchingUtilities::CDT tr;
     using Point2 = NonMatchingUtilities::Point2;
@@ -308,12 +318,12 @@ namespace Step85
   {
     AssertIndexRange(component, this->n_components);
     (void)component;
-    // const Point<2> xc{Cx, Cy};
-    // const double   r = (point - xc).norm();
-    // return r <= R ? -std::log(R) : -std::log(r);
+    const Point<2> xc{Cx, Cy};
+    const double   r = (point - xc).norm();
+    return r <= R ? -std::log(R) : -std::log(r);
 
-    return std::sin(2. * numbers::PI * point[0]) *
-           std::sin(2. * numbers::PI * point[1]);
+    // return std::sin(2. * numbers::PI * point[0]) *
+    //        std::sin(2. * numbers::PI * point[1]);
     // 1. - 2. / dim * (point.norm_square() - 1.);
   }
 
@@ -325,20 +335,20 @@ namespace Step85
     AssertIndexRange(component, this->n_components);
     (void)component;
     Assert(dim == 2, ExcMessage("Tested so far for 1d2d"));
-    Tensor<1, dim> grad;
-    grad[0] = 2. * M_PI * std::cos(2. * M_PI * point[0]) *
-              std::sin(2. * M_PI * point[1]);
-    grad[1] = 2. * M_PI * std::cos(2. * M_PI * point[1]) *
-              std::sin(2. * M_PI * point[0]);
+    // Tensor<1, dim> grad;
+    // grad[0] = 2. * M_PI * std::cos(2. * M_PI * point[0]) *
+    //           std::sin(2. * M_PI * point[1]);
+    // grad[1] = 2. * M_PI * std::cos(2. * M_PI * point[1]) *
+    //           std::sin(2. * M_PI * point[0]);
 
-    // const Point<2> xc{Cx, Cy};
-    // const double   r = (point - xc).norm();
+    const Point<2> xc{Cx, Cy};
+    const double   r = (point - xc).norm();
 
-    // Tensor<1, 2> gradient;
-    // gradient[0] = (r <= R) ? 0. : -(point[0] - Cx) / (r * r);
-    // gradient[1] = (r <= R) ? 0. : -(point[1] - Cy) / (r * r);
+    Tensor<1, 2> gradient;
+    gradient[0] = (r <= R) ? 0. : -(point[0] - Cx) / (r * r);
+    gradient[1] = (r <= R) ? 0. : -(point[1] - Cy) / (r * r);
 
-    return grad;
+    return gradient;
   }
 
   template <int dim>
@@ -401,9 +411,10 @@ namespace Step85
                                  const unsigned int component) const
   {
     (void)component;
-    // return 0.;
-    return 8. * numbers::PI * numbers::PI * std::sin(2. * numbers::PI * p[0]) *
-           std::sin(2. * numbers::PI * p[1]);
+    return 0.;
+    // return 8. * numbers::PI * numbers::PI * std::sin(2. * numbers::PI * p[0])
+    // *
+    //        std::sin(2. * numbers::PI * p[1]);
   }
 
   enum ActiveFEIndex

@@ -21,7 +21,10 @@
 
 #include <deal.II/dofs/dof_handler.h>
 
+#include <deal.II/grid/grid_tools_cache.h>
+
 #include <deal.II/lac/affine_constraints.h>
+#include <deal.II/lac/full_matrix.h>
 #include <deal.II/lac/la_parallel_vector.h>
 
 #include <deal.II/matrix_free/constraint_info.h>
@@ -198,6 +201,83 @@ public:
    */
   std::size_t
   memory_consumption() const;
+};
+
+
+
+/**
+ * Class for transfer between two non-nested levels.
+ *
+ */
+template <int dim, typename Number>
+class MGTwoLevelTransfer<dim, Vector<Number>>
+{
+public:
+  void
+  reinit(const GridTools::Cache<dim> &fine_cache,
+         const GridTools::Cache<dim> &coarse_cache,
+         const DoFHandler<dim> &      dof_handler_fine,
+         const DoFHandler<dim> &      dof_handler_coarse);
+
+  /**
+   * Perform prolongation.
+   */
+  void
+  prolongate_and_add(Vector<Number> &dst, const Vector<Number> &src) const;
+
+  /**
+   * Perform restriction.
+   */
+  void
+  restrict_and_add(Vector<Number> &dst, const Vector<Number> &src) const;
+
+  /**
+   * Perform interpolation of a solution vector from the fine level to the
+   * coarse level. This function is different from restriction, where a
+   * weighted residual is transferred to a coarser level (transposition of
+   * prolongation matrix).
+   */
+  void
+  interpolate(Vector<Number> &dst, const Vector<Number> &src) const;
+
+  /**
+   * Enable inplace vector operations if external and internal vectors
+   * are compatible.
+   */
+  void
+  enable_inplace_operations_if_possible(
+    const std::shared_ptr<const Utilities::MPI::Partitioner>
+      &partitioner_coarse,
+    const std::shared_ptr<const Utilities::MPI::Partitioner> &partitioner_fine);
+
+  /**
+   * Return the memory consumption of the allocated memory in this class.
+   */
+  std::size_t
+  memory_consumption() const;
+
+  // Record the number of DoFs in finer level
+  unsigned int dofs_per_level;
+
+
+private:
+  /**
+   * Weights for continuous elements.
+   */
+  std::vector<Number> weights;
+
+  /**
+   * Prolongation matrix for non-tensor-product elements.
+   */
+  FullMatrix<Number> prolongation_matrix;
+
+  /**
+   * Restriction matrix for non-tensor-product elements.
+   */
+  FullMatrix<Number> restriction_matrix;
+
+
+  friend class internal::MGTwoLevelTransferImplementation;
 };
 
 
@@ -499,6 +579,17 @@ public:
       &initialize_dof_vector = {});
 
   /**
+   * Constructor taking a collection of transfer operators (with the coarsest
+   * level kept
+   * empty in @p transfer) and an optional function that initializes the
+   * internal level vectors within the function call copy_to_mg() if used in the
+   * context of PreconditionMG.
+   */
+  MGTransferGlobalCoarsening(
+    const MGLevelObject<MGTwoLevelTransfer<dim, VectorType>> &transfer,
+    const bool                                                b);
+
+  /**
    * Similar function to MGTransferMatrixFree::build() with the difference that
    * the information for the prolongation for each level has already been built.
    * So this function only tries to optimize the data structures of the
@@ -687,6 +778,17 @@ MGTransferGlobalCoarsening<dim, VectorType>::MGTransferGlobalCoarsening(
 
 
 template <int dim, typename VectorType>
+MGTransferGlobalCoarsening<dim, VectorType>::MGTransferGlobalCoarsening(
+  const MGLevelObject<MGTwoLevelTransfer<dim, VectorType>> &transfer,
+  const bool                                                b)
+  : transfer(transfer)
+{
+  std::cout << b << std::endl;
+}
+
+
+
+template <int dim, typename VectorType>
 void
 MGTransferGlobalCoarsening<dim, VectorType>::build(
   const std::vector<std::shared_ptr<const Utilities::MPI::Partitioner>>
@@ -749,14 +851,14 @@ MGTransferGlobalCoarsening<dim, VectorType>::initialize_dof_vector(
   const unsigned int level,
   VectorType &       vec) const
 {
-  AssertDimension(transfer.n_levels(), external_partitioners.size());
-  AssertIndexRange(level, transfer.max_level() + 1);
+  // AssertDimension(transfer.n_levels(), external_partitioners.size());
+  // AssertIndexRange(level, transfer.max_level() + 1);
 
-  const auto &external_partitioner =
-    external_partitioners[level - transfer.min_level()];
+  // const auto &external_partitioner =
+  //   external_partitioners[level - transfer.min_level()];
 
-  if (vec.get_partitioner().get() != external_partitioner.get())
-    vec.reinit(external_partitioner);
+  // if (vec.get_partitioner().get() != external_partitioner.get())
+  //   vec.reinit(external_partitioner);
 }
 
 
@@ -806,16 +908,29 @@ MGTransferGlobalCoarsening<dim, VectorType>::copy_to_mg(
   MGLevelObject<VectorType> &      dst,
   const InVector &                 src) const
 {
-  (void)dof_handler;
+  // (void)dof_handler;
 
   for (unsigned int level = dst.min_level(); level <= dst.max_level(); ++level)
     {
       initialize_dof_vector(level, dst[level]);
+      // dst[level].reinit(dof_handler.n_dofs()); //TODO: use the DoF for the
+      // correct level
+      std::cout << "DoFs per level:" << level << " ="
+                << transfer[level].dofs_per_level;
+      dst[level].reinit(transfer[level].dofs_per_level);
 
       if (level == dst.max_level())
-        dst[level].copy_locally_owned_data_from(src);
+        {
+          dst[level] = src;
+          std::cout << "dst[" << level << "].size() = " << dst[level].size()
+                    << std::endl;
+        }
       else
-        dst[level] = 0.0;
+        {
+          dst[level] = 0.0;
+          std::cout << "dst[" << level << "].size() = " << dst[level].size()
+                    << std::endl;
+        }
     }
 }
 
@@ -831,7 +946,8 @@ MGTransferGlobalCoarsening<dim, VectorType>::copy_from_mg(
 {
   (void)dof_handler;
 
-  dst.copy_locally_owned_data_from(src[src.max_level()]);
+  // dst.copy_locally_owned_data_from(src[src.max_level()]);
+  dst = src[src.max_level()];
 }
 
 

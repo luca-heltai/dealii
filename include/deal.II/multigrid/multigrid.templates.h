@@ -123,6 +123,12 @@ Multigrid<VectorType>::level_v_step(const unsigned int level)
 
   // smoothing of the residual
   this->signals.pre_smoother_step(true, level);
+  {
+    std::cout << "solution[" << level << "].size() = " << solution[level].size()
+              << std::endl;
+    std::cout << "solution[" << level - 1
+              << "].size() = " << solution[level - 1].size() << std::endl;
+  }
   pre_smooth->apply(level, solution[level], defect[level]);
   this->signals.pre_smoother_step(false, level);
 
@@ -286,6 +292,14 @@ Multigrid<VectorType>::cycle()
       // the vectors for level>minlevel will be overwritten by the apply()
       // method of the smoother -> do not force them to be zeroed out here
       solution[level].reinit(defect[level], level > minlevel);
+      {
+        std::cout << "solution[" << level
+                  << "].size() inside cycle()= " << solution[level].size()
+                  << std::endl;
+        std::cout << "defect[" << level
+                  << "].size() inside cycle()= " << defect[level].size()
+                  << std::endl;
+      }
       t[level].reinit(defect[level], level > minlevel);
       if (cycle_type != v_cycle)
         defect2[level].reinit(defect[level]);

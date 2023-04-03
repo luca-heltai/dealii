@@ -3,7 +3,7 @@
 # #
 
 # Set the name of the project and target:
-#SET(TARGET "nitsche_example")
+# SET(TARGET "nitsche_example")
 
 # SET(TARGET "nitsche_level_set")
 

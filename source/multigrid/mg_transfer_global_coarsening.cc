@@ -57,6 +57,7 @@ namespace MGTransferGlobalCoarseningTools
   }
 } // namespace MGTransferGlobalCoarseningTools
 
+template class MGTwoLevelTransfer<2, Vector<double>>;
 #include "mg_transfer_global_coarsening.inst"
 
 DEAL_II_NAMESPACE_CLOSE

@@ -337,28 +337,28 @@ void PoissonDLM<dim, spacedim>::setup_grids_and_dofs()
             }
           else
             {
-              // const double Cx = .5;
-              // const double Cy = .5;
-              // const double R  = .3;
-              // GridGenerator::hyper_sphere(embedded_triangulation, {Cx, Cy},
-              // R); embedded_triangulation.refine_global(
-              //   parameters.embedded_initial_global_refinements); // 2
+              const double Cx = .5;
+              const double Cy = .5;
+              const double R  = .3;
+              GridGenerator::hyper_sphere(embedded_triangulation, {Cx, Cy}, R);
+              embedded_triangulation.refine_global(
+                parameters.embedded_initial_global_refinements); // 2
 
-              // embedded_triangulation.reset_all_manifolds();
+              embedded_triangulation.reset_all_manifolds();
 
 
-              GridIn<1, 2> grid_in;
-              grid_in.attach_triangulation(embedded_triangulation);
-              std::ifstream input_file("my_flower_interface.vtk");
-              Assert(dim == 1 && spacedim == 2, ExcInternalError());
+              // GridIn<1, 2> grid_in;
+              // grid_in.attach_triangulation(embedded_triangulation);
+              // std::ifstream input_file("my_flower_interface.vtk");
+              // Assert(dim == 1 && spacedim == 2, ExcInternalError());
 
-              grid_in.read_vtk(input_file);
-              {
-                std::ofstream out_emb("griglia_emb_paper" +
-                                      std::to_string(dim) + "_" +
-                                      std::to_string(spacedim) + ".vtk");
-                GridOut().write_vtk(embedded_triangulation, out_emb);
-              }
+              // grid_in.read_vtk(input_file);
+              // {
+              //   std::ofstream out_emb("griglia_emb_paper" +
+              //                         std::to_string(dim) + "_" +
+              //                         std::to_string(spacedim) + ".vtk");
+              //   GridOut().write_vtk(embedded_triangulation, out_emb);
+              // }
               embedded_mapping = std::make_unique<MappingQ<dim, spacedim>>(1);
             }
         }
@@ -947,22 +947,28 @@ void PoissonDLM<dim, spacedim>::solve()
   ReductionControl reduction_control(2000, 1.0e-10, 1.0e-2);
   // ReductionControl reduction_control(2000, 1.0e-12, 1.0e-2);
   // SolverCG<Vector<double>> solver_cg(reduction_control);
-  // SolverFGMRES<TrilinosWrappers::MPI::Vector> solver_cg(reduction_control);
-  SolverGMRES<TrilinosWrappers::MPI::Vector> solver_cg(reduction_control);
+  SolverFGMRES<TrilinosWrappers::MPI::Vector> solver_cg(reduction_control);
+  // SolverGMRES<TrilinosWrappers::MPI::Vector> solver_cg(reduction_control);
   // SolverCG<TrilinosWrappers::MPI::Vector> solver_cg(reduction_control);
 
   auto S_inv = inverse_operator(S, solver_cg, preconditioner);
   // auto S_inv = inverse_operator(S, solver_cg, PreconditionIdentity());
+  TrilinosWrappers::MPI::Vector dummy_vec = K_inv * space_rhs;
+  std::cout << "Solved initially with CG in : "
+            << reduction_control_K.last_step() << "iterations." << std::endl;
+  lambda = S_inv * (C * dummy_vec - embedded_rhs);
+  std::cout << "Solved for multiplier with CG in : "
+            << reduction_control_K.last_step() << "iterations." << std::endl;
 
-  lambda   = S_inv * (C * K_inv * space_rhs - embedded_rhs);
   solution = K_inv * (space_rhs - Ct * lambda);
   std::cout << "Norm of the multiplier: " << lambda.norm_sqr() << std::endl;
+
+  std::cout << "Solved with CG in : " << reduction_control_K.last_step()
+            << "iterations." << std::endl;
 
   std::cout << "Solved with Schur in : " << reduction_control.last_step()
             << "iterations." << std::endl;
 
-  std::cout << "Solved with CG in : " << reduction_control_K.last_step()
-            << "iterations." << std::endl;
 
   std::cout << "Total number of iterations: "
             << reduction_control.last_step() + reduction_control_K.last_step()
@@ -1021,6 +1027,9 @@ void PoissonDLM<dim, spacedim>::output_results(const unsigned cycle) const
     convergence_table.add_value("cycle", cycle);
     convergence_table.add_value("cells", space_triangulation.n_active_cells());
     convergence_table.add_value("dofs", space_dh->n_dofs());
+    convergence_table.add_value("dofs_no_hanging_nodes",
+                                space_dh->n_dofs() -
+                                  space_constraints.n_constraints());
     convergence_table.add_value("dofs_emb", embedded_dh->n_dofs());
     convergence_table.add_value("L2", L2_error);
     convergence_table.add_value("H1", H1_error);
@@ -1139,10 +1148,18 @@ void PoissonDLM<dim, spacedim>::run()
   convergence_table.set_scientific("H1", true);
   convergence_table.set_scientific("L2_multiplier", true);
   convergence_table.set_scientific("H12_multiplier", true);
+  // convergence_table.evaluate_convergence_rates(
+  //   "L2", "dofs", ConvergenceTable::reduction_rate_log2, spacedim);
   convergence_table.evaluate_convergence_rates(
-    "L2", "dofs", ConvergenceTable::reduction_rate_log2, spacedim);
+    "L2",
+    "dofs_no_hanging_nodes",
+    ConvergenceTable::reduction_rate_log2,
+    spacedim);
   convergence_table.evaluate_convergence_rates(
-    "H1", "dofs", ConvergenceTable::reduction_rate_log2, spacedim);
+    "H1",
+    "dofs_no_hanging_nodes",
+    ConvergenceTable::reduction_rate_log2,
+    spacedim);
   convergence_table.evaluate_convergence_rates(
     "L2_multiplier", "dofs_emb", ConvergenceTable::reduction_rate_log2, dim);
   convergence_table.evaluate_convergence_rates(

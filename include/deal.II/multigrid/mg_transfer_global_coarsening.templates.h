@@ -31,6 +31,7 @@
 #include <deal.II/dofs/dof_tools.h>
 
 #include <deal.II/fe/fe_tools.h>
+#include <deal.II/fe/fe_values.h>
 
 #include <deal.II/grid/cell_id_translator.h>
 #include <deal.II/grid/filtered_iterator.h>
@@ -46,7 +47,7 @@
 #include <deal.II/multigrid/mg_transfer_matrix_free.templates.h>
 
 DEAL_II_NAMESPACE_OPEN
-
+namespace bgi = boost::geometry::index;
 namespace
 {
   /**
@@ -2477,6 +2478,130 @@ namespace MGTransferGlobalCoarseningTools
   }
 
 } // namespace MGTransferGlobalCoarseningTools
+
+
+template <int dim, typename Number>
+void
+MGTwoLevelTransfer<dim, Vector<Number>>::reinit(
+  const GridTools::Cache<dim> &fine_cache,
+  const GridTools::Cache<dim> &coarse_cache,
+  const DoFHandler<dim> &      dof_handler_fine,
+  const DoFHandler<dim> &      dof_handler_coarse)
+{
+  const ReferenceCell reference_cell =
+    coarse_cache.get_triangulation().get_reference_cells()[0];
+  const auto &       fe_space = dof_handler_coarse.get_fe();
+  const auto &       unit_pts = fe_space.get_unit_support_points();
+  const unsigned int n_coarse_dofs_per_cell = fe_space.n_dofs_per_cell();
+  const unsigned int n_fine_dofs_per_cell   = fe_space.n_dofs_per_cell();
+  const auto &       coarse_tree = coarse_cache.get_cell_bounding_boxes_rtree();
+  const auto &       tree        = fine_cache.get_cell_bounding_boxes_rtree();
+  std::vector<types::global_dof_index> coarse_dofs(n_coarse_dofs_per_cell);
+  std::vector<types::global_dof_index> fine_dofs(n_fine_dofs_per_cell);
+  const auto &coarse_mapping = coarse_cache.get_mapping();
+
+  FullMatrix<Number> my_prolongation_matrix(
+    dof_handler_fine.n_dofs(),
+    dof_handler_coarse.n_dofs()); // Just for testing. TODO: sparse format
+
+  const double    tol = 1e-12; // this will be checked in the reference cell
+  Quadrature<dim> quadrature(unit_pts);
+  FEValues<dim>   fe_values(fine_cache.get_mapping(),
+                          fe_space,
+                          quadrature,
+                          update_quadrature_points);
+  std::vector<std::pair<types::global_dof_index, Point<dim>>> dofs_and_pts;
+
+  weights.reserve(dof_handler_fine.n_dofs());
+  std::fill(weights.begin(), weights.end(), 0.);
+
+  for (const auto &[coarse_box, coarse_cell] : coarse_tree)
+    {
+      typename DoFHandler<dim>::active_cell_iterator coarse_cell_dh(
+        *coarse_cell, &dof_handler_coarse);
+      coarse_cell_dh->get_dof_indices(coarse_dofs);
+
+      for (const auto &[space_box, fine_cell] :
+           tree | bgi::adaptors::queried(bgi::intersects(coarse_box)))
+        {
+          // Collect all the DoFs and points that are in this fine cell.
+          typename DoFHandler<dim>::active_cell_iterator fine_cell_dh(
+            *fine_cell, &dof_handler_fine);
+          fine_cell_dh->get_dof_indices(fine_dofs);
+          fe_values.reinit(fine_cell_dh);
+
+          for (unsigned int i = 0; i < n_fine_dofs_per_cell; ++i)
+            {
+              const auto &ref_p = coarse_mapping.transform_real_to_unit_cell(
+                coarse_cell, fe_values.quadrature_point(i));
+              if (reference_cell.contains_point(ref_p, tol))
+                {
+                  // Record DoF and its reference position
+                  dofs_and_pts.emplace_back(fine_dofs[i], ref_p);
+                }
+            }
+        }
+
+      // Remove duplicate points in case of a continuous element.
+      std::sort(dofs_and_pts.begin(),
+                dofs_and_pts.end(),
+                [](const auto &a, const auto &b) { return a.first < b.first; });
+      dofs_and_pts.erase(std::unique(dofs_and_pts.begin(),
+                                     dofs_and_pts.end(),
+                                     [](const auto &a, const auto &b) {
+                                       return a.first == b.first;
+                                     }),
+                         dofs_and_pts.end());
+
+      //  Record valence of DoF
+      for (const auto &p : dofs_and_pts)
+        ++weights[p.first];
+
+      // Distribute
+      for (unsigned int i = 0; i < coarse_dofs.size(); ++i)
+        for (unsigned int q = 0; q < dofs_and_pts.size(); ++q)
+          my_prolongation_matrix(dofs_and_pts[q].first, coarse_dofs[i]) +=
+            fe_space.shape_value(i, dofs_and_pts[q].second);
+
+      dofs_and_pts.clear();
+    }
+  prolongation_matrix = my_prolongation_matrix;
+  dofs_per_level      = dof_handler_fine.n_dofs();
+}
+
+
+
+template <int dim, typename Number>
+void
+MGTwoLevelTransfer<dim, Vector<Number>>::prolongate_and_add(
+  Vector<Number> &      dst,
+  const Vector<Number> &src) const
+{
+  // Prolongate
+  dst.reinit(prolongation_matrix.m());
+  prolongation_matrix.vmult(dst, src, true);
+  // Pointwise scaling with the weights.
+  for (unsigned int i = 0; i < dst.size(); ++i)
+    dst[i] /= weights[i];
+}
+
+
+template <int dim, typename Number>
+void
+MGTwoLevelTransfer<dim, Vector<Number>>::restrict_and_add(
+  Vector<Number> &      dst,
+  const Vector<Number> &src) const
+{
+  // Prolongate
+  dst.reinit(prolongation_matrix.n());
+  {
+    // Dubegging
+  }
+  prolongation_matrix.Tvmult(dst, src, true);
+  // Pointwise scaling with the weights.
+  for (unsigned int i = 0; i < dst.size(); ++i)
+    dst[i] /= weights[i];
+}
 
 
 
