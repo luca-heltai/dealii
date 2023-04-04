@@ -132,10 +132,10 @@ double RightHandSide<2>::value(const Point<2> &   p,
 {
   // (void)p;
   (void)component;
-  // return 0.;
-  return 8. * numbers::PI * numbers::PI *
-         (std::sin(2. * numbers::PI * p[0]) *
-          std::sin(2. * numbers::PI * p[1]));
+  return 0.;
+  // return 8. * numbers::PI * numbers::PI *
+  //        (std::sin(2. * numbers::PI * p[0]) *
+  //         std::sin(2. * numbers::PI * p[1]));
 }
 
 
@@ -197,14 +197,14 @@ template <>
 double Solution<2>::value(const Point<2> &p, const unsigned int component) const
 {
   (void)component;
-  // const Point<2> xc{Cx, Cy};
-  // const double   r = (p - xc).norm();
-  // return r <= R ? -std::log(R) : -std::log(r);
+  const Point<2> xc{Cx, Cy};
+  const double   r = (p - xc).norm();
+  return r <= R ? -std::log(R) : -std::log(r);
 
   // const double r = p.norm();
   // return (r <= R) ? p[0] : ((R * R) / (r * r)) * p[0];
-  return std::sin(2. * numbers::PI * p[0]) * std::sin(2. * numbers::PI * p[1]);
-  // return 1.;
+  // return std::sin(2. * numbers::PI * p[0]) * std::sin(2. * numbers::PI *
+  // p[1]); return 1.;
 }
 
 
@@ -244,27 +244,26 @@ Tensor<1, 2> Solution<2>::gradient(const Point<2> &   p,
   (void)component;
 
 
-  // const Point<2> xc{Cx, Cy};
-  // const double   r = (p - xc).norm();
+  const Point<2> xc{Cx, Cy};
+  const double   r = (p - xc).norm();
 
   Tensor<1, 2> gradient;
-  // gradient[0] = (r <= R) ? 0. : -(p[0] - Cx) / (r * r);
-  // gradient[1] = (r <= R) ? 0. : -(p[1] - Cy) / (r * r);
+  gradient[0] = (r <= R) ? 0. : -(p[0] - Cx) / (r * r);
+  gradient[1] = (r <= R) ? 0. : -(p[1] - Cy) / (r * r);
 
-  // return gradient;
+  return gradient;
 
   // gradient[0] =
   //   (r <= R) ? 1. : -(R * R * (p[0] * p[0] - p[1] * p[1])) / (r * r * r * r);
 
   // gradient[1] = (r <= R) ? 0. : -(2. * R * R * p[0] * p[1]) / (r * r * r *
-  // r); return gradient;
-  gradient[0] =
-    std::cos(2. * numbers ::PI * p[0]) * std::sin(2. * numbers::PI * p[1]);
+  // r); return gradient; gradient[0] =
+  //   std::cos(2. * numbers ::PI * p[0]) * std::sin(2. * numbers::PI * p[1]);
 
-  gradient[1] =
-    std::sin(2. * numbers ::PI * p[0]) * std::cos(2. * numbers::PI * p[1]);
+  // gradient[1] =
+  //   std::sin(2. * numbers ::PI * p[0]) * std::cos(2. * numbers::PI * p[1]);
 
-  return 2. * numbers::PI * gradient;
+  // return 2. * numbers::PI * gradient;
 }
 
 

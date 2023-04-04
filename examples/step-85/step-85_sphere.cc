@@ -1742,6 +1742,8 @@ namespace Step85
 
     double compute_L2_error_from_outside() const;
 
+    double compute_H1_error_from_inside() const;
+
     double compute_H1_error_from_outside() const;
 
     bool face_has_ghost_penalty(
@@ -1766,7 +1768,7 @@ namespace Step85
     // const Functions::ConstantFunction<dim> boundary_condition;
 
     parallel::shared::Triangulation<dim> triangulation;
-    Triangulation<3>                     embedded_tria;
+    Triangulation<2, 3>                  embedded_tria;
 
     const FE_Q<dim> fe_level_set;
     DoFHandler<dim> level_set_dof_handler;
@@ -1883,9 +1885,16 @@ namespace Step85
     // GridOut       go;
     // go.write_vtk(tria_out, out_name_spheres);
 
-    Triangulation<2, 3> embedded_tria;
-    GridGenerator::hyper_sphere(embedded_tria, {Cx, Cy, Cz}, R);
-    embedded_tria.refine_global(9);
+
+    if (cycle == 0)
+      {
+        GridGenerator::hyper_sphere(embedded_tria, {Cx, Cy, Cz}, R);
+        embedded_tria.refine_global(5);
+      }
+    else
+      {
+        embedded_tria.refine_global(1);
+      }
     GridTools::Cache<2, 3> cache(embedded_tria);
     auto                   tree = cache.get_cell_bounding_boxes_rtree();
 
@@ -3091,6 +3100,122 @@ namespace Step85
   }
 
 
+
+  template <int dim>
+  double LaplaceSolver<dim>::compute_H1_error_from_inside() const
+  {
+    std::cout << "Computing H1 error from inside" << std::endl;
+
+    const QGauss<1> quadrature_1D(2 * fe_degree + 1);
+
+    NonMatching::RegionUpdateFlags region_update_flags;
+
+    region_update_flags.inside = update_values | update_gradients |
+                                 update_JxW_values | update_quadrature_points;
+    region_update_flags.surface = update_values | update_gradients |
+                                  update_JxW_values | update_quadrature_points |
+                                  update_normal_vectors;
+
+    NonMatching::FEValues<dim> non_matching_fe_values(fe_collection,
+                                                      quadrature_1D,
+                                                      region_update_flags,
+                                                      mesh_classifier,
+                                                      level_set_dof_handler,
+                                                      level_set);
+
+    const AnalyticalSolution<dim> analytical_solution;
+    double                        error_H1_squared = 0.;
+    FEValuesExtractors::Scalar    interior(0);
+
+
+    for (const auto &cell :
+         dof_handler.active_cell_iterators() |
+           IteratorFilters::ActiveFEIndexEqualTo(ActiveFEIndex::sol_in))
+      {
+        non_matching_fe_values.reinit(cell);
+
+        const std_cxx17::optional<FEValues<dim>> &fe_values =
+          non_matching_fe_values.get_inside_fe_values();
+
+        if (fe_values)
+          {
+            std::vector<Tensor<1, dim>> solution_gradients(
+              fe_values->n_quadrature_points);
+            (*fe_values)[interior].get_function_gradients(solution,
+                                                          solution_gradients);
+
+            for (const unsigned int q : fe_values->quadrature_point_indices())
+              {
+                const Point<dim> &point = fe_values->quadrature_point(q);
+                const double      error_at_point =
+                  (analytical_solution.gradient(point) - solution_gradients[q])
+                    .norm_square();
+                error_H1_squared += error_at_point * fe_values->JxW(q);
+              }
+          }
+      }
+
+    for (const auto &cell : dof_handler.active_cell_iterators() |
+                              IteratorFilters::ActiveFEIndexEqualTo(
+                                ActiveFEIndex::sol_intersection))
+      {
+        non_matching_fe_values.reinit(cell);
+        const std_cxx17::optional<FEValues<dim>> &inside_fe_values =
+          non_matching_fe_values.get_inside_fe_values();
+
+        if (inside_fe_values)
+          {
+            std::vector<Tensor<1, dim>> solution_gradients(
+              inside_fe_values->n_quadrature_points);
+            (*inside_fe_values)[interior].get_function_gradients(
+              solution, solution_gradients);
+
+            for (const unsigned int q :
+                 inside_fe_values->quadrature_point_indices())
+              {
+                const Point<dim> &point = inside_fe_values->quadrature_point(q);
+                const double      error_at_point =
+                  (analytical_solution.gradient(point) - solution_gradients[q])
+                    .norm_square();
+                error_H1_squared += error_at_point * inside_fe_values->JxW(q);
+              }
+          }
+
+        /*
+                const
+           std_cxx17::optional<NonMatching::FEImmersedSurfaceValues<dim>>
+                  &surface_fe_values =
+           non_matching_fe_values.get_surface_fe_values(); if
+           (surface_fe_values)
+                  {
+                    std::vector<double> solution_values(
+                      surface_fe_values->n_quadrature_points);
+                    (*surface_fe_values)[exterior].get_function_values(solution,
+                                                                       solution_values);
+
+                    std::vector<Tensor<1, dim>> solution_gradients(
+                      surface_fe_values->n_quadrature_points);
+                    (*surface_fe_values)[exterior].get_function_gradients(
+                      solution, solution_gradients);
+
+                    for (const unsigned int q :
+                         surface_fe_values->quadrature_point_indices())
+                      {
+                        const Point<dim> &point =
+                          surface_fe_values->quadrature_point(q);
+                        const double error_at_point =
+                          (analytical_solution.gradient(point) -
+           solution_gradients[q]) .norm_square(); error_H1_squared +=
+           error_at_point * surface_fe_values->JxW(q);
+                      }
+                  }*/
+      }
+    const double sqrtL2error = compute_L2_error_from_inside();
+    return std::sqrt(error_H1_squared + sqrtL2error);
+  }
+
+
+
   template <int dim>
   double LaplaceSolver<dim>::compute_H1_error_from_outside() const
   {
@@ -3241,7 +3366,7 @@ namespace Step85
         const double error_L2 = std::sqrt(error_L2_outside * error_L2_outside +
                                           error_L2_inside * error_L2_inside);
 
-        const double error_H1_inside  = compute_H1_error_from_outside();
+        const double error_H1_inside  = compute_H1_error_from_inside();
         const double error_H1_outside = compute_H1_error_from_outside();
         const double error_H1 = std::sqrt(error_H1_outside * error_H1_outside +
                                           error_H1_inside * error_H1_inside);

@@ -904,7 +904,9 @@ void PoissonDLM<dim, spacedim>::output_results(const unsigned cycle) const
 
     convergence_table.add_value("cycle", cycle);
     convergence_table.add_value("cells", space_triangulation.n_active_cells());
-    convergence_table.add_value("dofs", space_dh->n_dofs());
+    convergence_table.add_value("dofs",
+                                space_dh->n_dofs() -
+                                  space_constraints.n_constraints());
     convergence_table.add_value("dofs_emb", embedded_dh->n_dofs());
     convergence_table.add_value("L2", L2_error);
     convergence_table.add_value("H1", H1_error);

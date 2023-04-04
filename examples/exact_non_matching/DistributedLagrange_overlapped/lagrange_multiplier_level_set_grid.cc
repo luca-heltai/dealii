@@ -344,7 +344,7 @@ void PoissonDLM<dim, spacedim>::setup_grids_and_dofs()
               embedded_triangulation.refine_global(
                 parameters.embedded_initial_global_refinements); // 2
 
-              embedded_triangulation.reset_all_manifolds();
+              // embedded_triangulation.reset_all_manifolds();
 
 
               // GridIn<1, 2> grid_in;
