@@ -85,11 +85,11 @@ double RightHandSide<3>::value(const Point<3> &   p,
 {
   // (void)p;
   (void)component;
-  // return 0.;
-  return 12. * numbers::PI * numbers::PI *
-         (std::sin(2. * numbers::PI * p[0]) *
-          std::sin(2. * numbers::PI * p[1]) *
-          std::sin(2. * numbers::PI * p[2]));
+  return 0.;
+  // return 12. * numbers::PI * numbers::PI *
+  //        (std::sin(2. * numbers::PI * p[0]) *
+  //         std::sin(2. * numbers::PI * p[1]) *
+  //         std::sin(2. * numbers::PI * p[2]));
 }
 
 
@@ -147,11 +147,12 @@ template <>
 double Solution<3>::value(const Point<3> &p, const unsigned int component) const
 {
   (void)component;
-  // const Point<3> xc{Cx, Cy, Cz}; // center of the sphere
-  // const double   r = (p - xc).norm();
-  // return r <= R ? 1. / R : 1. / r;
-  return std::sin(2. * numbers::PI * p[0]) * std::sin(2. * numbers::PI * p[1]) *
-         std::sin(2. * numbers::PI * p[2]);
+  const Point<3> xc{Cx, Cy, Cz}; // center of the sphere
+  const double   r = (p - xc).norm();
+  return r <= R ? 1. / R : 1. / r;
+  // return std::sin(2. * numbers::PI * p[0]) * std::sin(2. * numbers::PI *
+  // p[1]) *
+  //        std::sin(2. * numbers::PI * p[2]);
 }
 
 
@@ -172,27 +173,27 @@ Tensor<1, 3> Solution<3>::gradient(const Point<3> &   p,
                                    const unsigned int component) const
 {
   (void)component;
-  Tensor<1, 3> gradient;
-  // Tensor<1, 3>   grad;
-  // const Point<3> xc{Cx, Cy, Cz}; // center of the sphere
-  // const double   r = (p - xc).norm();
+  // Tensor<1, 3> gradient;
+  Tensor<1, 3>   grad;
+  const Point<3> xc{Cx, Cy, Cz}; // center of the sphere
+  const double   r = (p - xc).norm();
 
-  gradient[0] = std::cos(2. * numbers ::PI * p[0]) *
-                std::sin(2. * numbers::PI * p[1]) *
-                std::sin(2. * numbers::PI * p[2]);
+  // gradient[0] = std::cos(2. * numbers ::PI * p[0]) *
+  //               std::sin(2. * numbers::PI * p[1]) *
+  //               std::sin(2. * numbers::PI * p[2]);
 
-  gradient[1] = std::sin(2. * numbers ::PI * p[0]) *
-                std::cos(2. * numbers::PI * p[1]) *
-                std::sin(2. * numbers::PI * p[2]);
+  // gradient[1] = std::sin(2. * numbers ::PI * p[0]) *
+  //               std::cos(2. * numbers::PI * p[1]) *
+  //               std::sin(2. * numbers::PI * p[2]);
 
-  gradient[2] = std::sin(2. * numbers ::PI * p[0]) *
-                std::sin(2. * numbers::PI * p[1]) *
-                std::cos(2. * numbers::PI * p[2]);
-  // grad[0] = (r <= R) ? 0. : -(p[0] - Cx) / (std::pow(r * r, 1.5));
-  // grad[1] = (r <= R) ? 0. : -(p[1] - Cy) / (std::pow(r * r, 1.5));
-  // grad[2] = (r <= R) ? 0. : -(p[2] - Cz) / (std::pow(r * r, 1.5));
-  // return grad;
-  return 2. * numbers::PI * gradient;
+  // gradient[2] = std::sin(2. * numbers ::PI * p[0]) *
+  //               std::sin(2. * numbers::PI * p[1]) *
+  //               std::cos(2. * numbers::PI * p[2]);
+  grad[0] = (r <= R) ? 0. : -(p[0] - Cx) / (std::pow(r * r, 1.5));
+  grad[1] = (r <= R) ? 0. : -(p[1] - Cy) / (std::pow(r * r, 1.5));
+  grad[2] = (r <= R) ? 0. : -(p[2] - Cz) / (std::pow(r * r, 1.5));
+  return grad;
+  // return 2. * numbers::PI * gradient;
 }
 
 
@@ -230,6 +231,8 @@ public:
 
 private:
   void generate_grids();
+
+  void adjust_grids();
 
   void setup_system();
 
@@ -386,7 +389,129 @@ void PoissonNitscheInterface<dim, spacedim>::generate_grids()
     std::make_unique<GridTools::Cache<dim, spacedim>>(embedded_triangulation);
 }
 
+template <int dim, int spacedim>
+void PoissonNitscheInterface<dim, spacedim>::adjust_grids()
+{
+  // Adjust grid diameters to satisfy ratio suggested by the theory.
 
+  std::cout << "Adjusting the grids..." << std::endl;
+  namespace bgi = boost::geometry::index;
+
+  auto refine = [&]() {
+    bool done = false;
+
+    double min_embedded = 1e10;
+    double max_embedded = 0;
+    double min_space    = 1e10;
+    double max_space    = 0;
+
+    while (done == false)
+      {
+        // Bounding boxes of the space grid
+        const auto &tree =
+          space_cache->get_locally_owned_cell_bounding_boxes_rtree();
+
+        // Bounding boxes of the embedded grid
+        const auto &embedded_tree =
+          embedded_cache->get_cell_bounding_boxes_rtree();
+
+        // Let's check all cells whose bounding box contains an embedded
+        // bounding box
+        done = true;
+
+        const bool use_space = false;
+
+        const bool use_embedded = false;
+
+        AssertThrow(!(use_embedded && use_space),
+                    ExcMessage("You can't refine both the embedded and "
+                               "the space grid at the same time."));
+
+        for (const auto &[embedded_box, embedded_cell] : embedded_tree)
+          {
+            const auto &[p1, p2] = embedded_box.get_boundary_points();
+            const auto diameter  = p1.distance(p2);
+            min_embedded         = std::min(min_embedded, diameter);
+            max_embedded         = std::max(max_embedded, diameter);
+
+            for (const auto &[space_box, space_cell] :
+                 tree | bgi::adaptors::queried(bgi::intersects(embedded_box)))
+              {
+                const auto &[sp1, sp2]    = space_box.get_boundary_points();
+                const auto space_diameter = sp1.distance(sp2);
+                min_space                 = std::min(min_space, space_diameter);
+                max_space                 = std::max(max_space, space_diameter);
+
+                if (use_embedded && space_diameter < diameter)
+                  {
+                    embedded_cell->set_refine_flag();
+                    done = false;
+                  }
+                if (use_space && diameter < space_diameter)
+                  {
+                    space_cell->set_refine_flag();
+                    done = false;
+                  }
+              }
+          }
+        if (done == false)
+          {
+            if (use_embedded)
+              {
+                // Compute again the embedded displacement grid
+                embedded_triangulation.execute_coarsening_and_refinement();
+              }
+            if (use_space)
+              {
+                // Compute again the embedded displacement grid
+                space_triangulation.execute_coarsening_and_refinement();
+              }
+          }
+      }
+    return std::make_tuple(min_space, max_space, min_embedded, max_embedded);
+  };
+
+  // Do the refinement loop once, to make sure we satisfy our criterions
+  refine();
+
+  // Pre refine the space grid according to the delta refinement
+  const bool   apply_delta_refinements     = true;
+  unsigned int space_pre_refinement_cycles = 1;
+  if (apply_delta_refinements)
+    for (unsigned int i = 0; i < space_pre_refinement_cycles; ++i)
+      {
+        const auto &tree =
+          space_cache->get_locally_owned_cell_bounding_boxes_rtree();
+
+        const auto &embedded_tree =
+          embedded_cache->get_cell_bounding_boxes_rtree();
+
+        for (const auto &[embedded_box, embedded_cell] : embedded_tree)
+          for (const auto &[space_box, space_cell] :
+               tree | bgi::adaptors::queried(bgi::intersects(embedded_box)))
+            space_cell->set_refine_flag();
+        space_triangulation.execute_coarsening_and_refinement();
+
+        // Make sure again we satisfy our criterion after the space refinement
+        refine();
+      }
+
+  // // Post refinement on embedded grid is easy
+  // const bool apply_delta_refinements = true;
+  // if (parameters.embedded_post_refinement_cycles != 0)
+  //   {
+  //     embedded_triangulation.refine_global(
+  //       parameters.embedded_post_refinement_cycles);
+  //   }
+
+  // Check once again we satisfy our criterion, and record min/max
+  const auto [sm, sM, em, eM] = refine();
+
+  std::cout << "Space local min/max diameters   : " << sm << "/" << sM
+            << std::endl
+            << "Embedded space min/max diameters: " << em << "/" << eM
+            << std::endl;
+}
 
 template <int dim, int spacedim>
 void PoissonNitscheInterface<dim, spacedim>::setup_system()
@@ -631,7 +756,7 @@ void PoissonNitscheInterface<dim, spacedim>::output_results(
   }
 
   {
-    if (cycle < 2)
+    if (cycle < 3)
       {
         std::ofstream output_test_space("space_grid_cycle3.vtk");
         GridOut().write_vtk(space_triangulation, output_test_space);
@@ -651,7 +776,10 @@ void PoissonNitscheInterface<dim, spacedim>::run()
   for (unsigned int cycle = 0; cycle < n_refinement_cycles; ++cycle)
     {
       std::cout << "Cycle: " << cycle << std::endl;
-
+      if (cycle < 1)
+        {
+          adjust_grids();
+        }
       // Compute all the things we need to assemble the Nitsche's
       // contributions, namely the two cached triangulations and a degree to
       // integrate over the intersections.
