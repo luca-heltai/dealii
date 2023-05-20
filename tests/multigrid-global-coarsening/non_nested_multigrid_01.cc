@@ -80,6 +80,7 @@ test(const unsigned int n_refinements,
       // set up dofhandler
       dof_handler.reinit(tria);
       dof_handler.distribute_dofs(*fe);
+      std::cout << "DoFs = " << dof_handler.n_dofs() << std::endl;
 
       // set up constraints
       IndexSet locally_relevant_dofs;

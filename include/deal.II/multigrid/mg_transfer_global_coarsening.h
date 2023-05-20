@@ -26,6 +26,7 @@
 #include <deal.II/lac/la_parallel_vector.h>
 
 #include <deal.II/matrix_free/constraint_info.h>
+#include <deal.II/matrix_free/operators.h>
 #include <deal.II/matrix_free/shape_info.h>
 
 #include <deal.II/multigrid/mg_base.h>
@@ -703,7 +704,52 @@ class MGTwoLevelTransferNonNested<dim,
 private:
   using VectorizedArrayType = VectorizedArray<Number, 1>;
 
+  struct AdditionalData
+  {
+    AdditionalData(const std::string &transfer_t = "interpolation")
+      : transfer_type(transfer_t)
+    {}
+    std::string transfer_type;
+  };
+
 public:
+  /**
+   * Mass operator
+   */
+  class MassOperator : public MatrixFreeOperators::
+                         Base<dim, LinearAlgebra::distributed::Vector<Number>>
+  {
+  public:
+    using value_type = Number;
+
+    MassOperator();
+
+    void
+    clear() override;
+
+    virtual void
+    compute_diagonal() override;
+
+  private:
+    virtual void
+    apply_add(
+      LinearAlgebra::distributed::Vector<Number> &      dst,
+      const LinearAlgebra::distributed::Vector<Number> &src) const override;
+
+    void
+    local_apply(const MatrixFree<dim, Number> &                   data,
+                LinearAlgebra::distributed::Vector<Number> &      dst,
+                const LinearAlgebra::distributed::Vector<Number> &src,
+                const std::pair<unsigned int, unsigned int> &cell_range) const;
+
+    void
+    local_compute_diagonal(
+      const MatrixFree<dim, Number> &              data,
+      LinearAlgebra::distributed::Vector<Number> & dst,
+      const unsigned int &                         dummy,
+      const std::pair<unsigned int, unsigned int> &cell_range) const;
+  };
+
   /**
    * Set up transfer operator between the given DoFHandler objects (
    * @p dof_handler_fine and @p dof_handler_coarse).
@@ -792,6 +838,16 @@ private:
    * rank.
    */
   std::vector<unsigned int> level_dof_indices_fine;
+
+  /**
+   * DoFidx associate (uniquely) to a support point
+   */
+  std::vector<types::global_dof_index> DoFidx2qpointidx;
+
+  /**
+   * Mass operator needed for projection
+   */
+  MassOperator mass_operator;
 };
 
 

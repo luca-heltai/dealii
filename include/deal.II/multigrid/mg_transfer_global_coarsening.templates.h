@@ -3513,6 +3513,46 @@ namespace internal
 } // namespace internal
 
 
+
+template <int dim, typename Number>
+MGTwoLevelTransferNonNested<dim, LinearAlgebra::distributed::Vector<Number>>::
+  MassOperator::MassOperator()
+  : MatrixFreeOperators::Base<dim, LinearAlgebra::distributed::Vector<Number>>()
+{}
+
+
+
+template <int dim, typename Number>
+void
+MGTwoLevelTransferNonNested<dim, LinearAlgebra::distributed::Vector<Number>>::
+  MassOperator::clear()
+
+{
+  MatrixFreeOperators::Base<dim, LinearAlgebra::distributed::Vector<Number>>::
+    clear();
+}
+
+
+
+template <int dim, typename Number>
+void
+MGTwoLevelTransferNonNested<dim, LinearAlgebra::distributed::Vector<Number>>::
+  MassOperator::compute_diagonal()
+{}
+
+template <int dim, typename Number>
+void
+MGTwoLevelTransferNonNested<dim, LinearAlgebra::distributed::Vector<Number>>::
+  MassOperator::apply_add(
+    LinearAlgebra::distributed::Vector<Number> &      dst,
+    const LinearAlgebra::distributed::Vector<Number> &src) const
+{
+  (void)dst;
+  (void)src;
+}
+
+
+
 template <int dim, typename Number>
 void
 MGTwoLevelTransferNonNested<dim, LinearAlgebra::distributed::Vector<Number>>::
@@ -3534,6 +3574,21 @@ MGTwoLevelTransferNonNested<dim, LinearAlgebra::distributed::Vector<Number>>::
 
   this->fine_element_is_continuous = true;
 
+  std::shared_ptr<MatrixFree<dim, Number>> matrix_free_storage(
+    new MatrixFree<dim, Number>());
+  typename MatrixFree<dim, Number>::AdditionalData data;
+  data.mapping_update_flags         = (update_values | update_JxW_values |
+                               update_quadrature_points | update_values);
+  const unsigned int test_fe_degree = 1;
+  const unsigned int n_qpoints      = test_fe_degree + 1;
+  matrix_free_storage->reinit(mapping_fine,
+                              dof_handler_fine,
+                              constraint_fine,
+                              QGauss<1>(n_qpoints),
+                              data);
+
+  // intialize mass operator
+  mass_operator.initialize(matrix_free_storage);
   // create partitioners and internal vectors
   {
     IndexSet locally_active_dofs =
@@ -3711,10 +3766,47 @@ MGTwoLevelTransferNonNested<dim, LinearAlgebra::distributed::Vector<Number>>::
           evaluation_point_results.push_back(result);
         }
     }
+  const unsigned int test_fe_degree = 1;
+  const unsigned int n_qpoints      = test_fe_degree + 1;
+  mass_operator.initialize_dof_vector(dst);
+  FEEvaluation<dim, test_fe_degree, n_qpoints, 1, Number> phi(
+    *mass_operator.get_matrix_free());
 
-  for (unsigned int j = 0; j < evaluation_point_results.size(); ++j)
-    dst.local_element(this->level_dof_indices_fine[j]) +=
-      evaluation_point_results[j];
+  std::vector<unsigned int> local_indices;
+
+  for (unsigned int cell = 0;
+       cell < mass_operator.get_matrix_free()->n_cell_batches();
+       ++cell)
+    {
+      phi.reinit(cell);
+      mass_operator.get_matrix_free()
+        ->get_dof_info()
+        .get_dof_indices_on_cell_batch(local_indices, cell, false);
+      for (unsigned int q = 0; q < phi.n_q_points; ++q)
+        {
+          phi.submit_value(
+            evaluation_point_results[level_dof_indices_fine[local_indices[q]]],
+            q);
+        }
+      phi.integrate_scatter(EvaluationFlags::values, dst);
+    }
+  dst.compress(VectorOperation::add);
+
+  for (const auto &x : dst)
+    std::cout << x << std::endl;
+
+  /*
+    if (additional_data.transfer.compare("interpolation") == 0)
+      {
+        for (unsigned int j = 0; j < evaluation_point_results.size(); ++j)
+          dst.local_element(this->level_dof_indices_fine[j]) +=
+            evaluation_point_results[j];
+      }
+    else if (additional_data.transfer.compare("projection") == 0)
+      {
+
+      }
+  */
 }
 
 
