@@ -3781,6 +3781,20 @@ namespace internal
 } // namespace internal
 
 
+
+template <int dim, typename Number>
+MGTwoLevelTransferNonNested<dim, LinearAlgebra::distributed::Vector<Number>>::
+  MGTwoLevelTransferNonNested(AdditionalData data)
+{
+  rpe = std::make_shared<Utilities::MPI::RemotePointEvaluation<dim>>(
+    data.tolerance,
+    data.enforce_unique_mapping,
+    data.rtree_level,
+    data.marked_vertices);
+}
+
+
+
 template <int dim, typename Number>
 void
 MGTwoLevelTransferNonNested<dim, LinearAlgebra::distributed::Vector<Number>>::
@@ -3857,13 +3871,13 @@ MGTwoLevelTransferNonNested<dim, LinearAlgebra::distributed::Vector<Number>>::
       this->partitioner_fine->global_to_local(global_dof_indices[i]);
 
   // hand points over to RPE
-  rpe.reinit(points, dof_handler_coarse.get_triangulation(), mapping_coarse);
+  rpe->reinit(points, dof_handler_coarse.get_triangulation(), mapping_coarse);
 
   // set up MappingInfo for easier data access
-  mapping_info = internal::fill_mapping_info<dim, Number>(rpe);
+  mapping_info = internal::fill_mapping_info<dim, Number>(*rpe);
 
   // set up constraints
-  const auto &cell_data = rpe.get_cell_data();
+  const auto &cell_data = rpe->get_cell_data();
 
   constraint_info.reinit(dof_handler_coarse,
                          cell_data.cells.size(),
@@ -3872,7 +3886,7 @@ MGTwoLevelTransferNonNested<dim, LinearAlgebra::distributed::Vector<Number>>::
   for (unsigned int i = 0; i < cell_data.cells.size(); ++i)
     {
       typename DoFHandler<dim>::active_cell_iterator cell(
-        &rpe.get_triangulation(),
+        &(rpe->get_triangulation()),
         cell_data.cells[i].first,
         cell_data.cells[i].second,
         &dof_handler_coarse);
@@ -3939,18 +3953,18 @@ MGTwoLevelTransferNonNested<dim, LinearAlgebra::distributed::Vector<Number>>::
       }
   };
 
-  rpe.template evaluate_and_process<Number>(evaluation_point_results,
-                                            buffer,
-                                            evaluation_function);
+  rpe->template evaluate_and_process<Number>(evaluation_point_results,
+                                             buffer,
+                                             evaluation_function);
 
   // Weight operator in case some points are owned by multiple cells.
-  if (rpe.is_map_unique() == false)
+  if (rpe->is_map_unique() == false)
     {
       const auto evaluation_point_results_temp = evaluation_point_results;
       evaluation_point_results.clear();
-      evaluation_point_results.reserve(rpe.get_point_ptrs().size() - 1);
+      evaluation_point_results.reserve(rpe->get_point_ptrs().size() - 1);
 
-      const auto &ptr = rpe.get_point_ptrs();
+      const auto &ptr = rpe->get_point_ptrs();
 
       for (unsigned int i = 0; i < ptr.size() - 1; ++i)
         {
@@ -3998,7 +4012,7 @@ MGTwoLevelTransferNonNested<dim, LinearAlgebra::distributed::Vector<Number>>::
   std::vector<Number> evaluation_point_results;
   std::vector<Number> buffer;
 
-  evaluation_point_results.resize(rpe.get_point_ptrs().size() - 1);
+  evaluation_point_results.resize(rpe->get_point_ptrs().size() - 1);
 
   for (unsigned int j = 0; j < evaluation_point_results.size(); ++j)
     {
@@ -4019,9 +4033,9 @@ MGTwoLevelTransferNonNested<dim, LinearAlgebra::distributed::Vector<Number>>::
     }
 
   // Weight operator in case some points are owned by multiple cells.
-  if (rpe.is_map_unique() == false)
+  if (rpe->is_map_unique() == false)
     {
-      const auto &ptr = rpe.get_point_ptrs();
+      const auto &ptr = rpe->get_point_ptrs();
 
       for (unsigned int i = 0; i < ptr.size() - 1; ++i)
         {
@@ -4065,9 +4079,9 @@ MGTwoLevelTransferNonNested<dim, LinearAlgebra::distributed::Vector<Number>>::
       }
   };
 
-  rpe.template process_and_evaluate<Number>(evaluation_point_results,
-                                            buffer,
-                                            evaluation_function);
+  rpe->template process_and_evaluate<Number>(evaluation_point_results,
+                                             buffer,
+                                             evaluation_function);
 }
 
 
