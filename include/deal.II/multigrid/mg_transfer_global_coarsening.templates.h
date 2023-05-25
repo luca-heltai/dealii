@@ -3785,8 +3785,14 @@ namespace internal
 template <int dim, typename Number>
 MGTwoLevelTransferNonNested<dim, LinearAlgebra::distributed::Vector<Number>>::
   MGTwoLevelTransferNonNested(AdditionalData data)
+  : transfer_type(data.transfer_type)
 {
   rpe = std::make_shared<Utilities::MPI::RemotePointEvaluation<dim>>(
+    data.tolerance,
+    data.enforce_unique_mapping,
+    data.rtree_level,
+    data.marked_vertices);
+  rpe_fine = std::make_shared<Utilities::MPI::RemotePointEvaluation<dim>>(
     data.tolerance,
     data.enforce_unique_mapping,
     data.rtree_level,
@@ -3823,55 +3829,187 @@ MGTwoLevelTransferNonNested<dim, LinearAlgebra::distributed::Vector<Number>>::
                                                           mapping_fine,
                                                           constraint_fine);
   const auto &global_dof_indices = std::get<2>(points_ptrs_indices);
+  const auto &points             = std::get<0>(points_ptrs_indices);
 
-  // create partitioners and internal vectors
-  {
-    IndexSet locally_active_dofs =
-      DoFTools::extract_locally_active_dofs(dof_handler_coarse);
-    this->partitioner_coarse.reset(
-      new Utilities::MPI::Partitioner(dof_handler_coarse.locally_owned_dofs(),
-                                      locally_active_dofs,
-                                      dof_handler_coarse.get_communicator()));
 
-    this->vec_coarse.reinit(this->partitioner_coarse);
-  }
-  {
-    // in case a DG space of order 0 is provided, DoFs indices are never defined
-    // on element faces or vertices and therefore, the partitioner is fine
-    IndexSet locally_relevant_dofs(dof_handler_fine.n_dofs());
-    if (!this->fine_element_is_continuous &&
-        !dof_handler_fine.get_fe().degree == 0)
-      locally_relevant_dofs.add_indices(global_dof_indices.begin(),
-                                        global_dof_indices.end());
+  if (this->transfer_type.compare("projection") != 0)
+    {
+      // create partitioners and internal vectors
+      {
+        IndexSet locally_active_dofs =
+          DoFTools::extract_locally_active_dofs(dof_handler_coarse);
+        this->partitioner_coarse.reset(new Utilities::MPI::Partitioner(
+          dof_handler_coarse.locally_owned_dofs(),
+          locally_active_dofs,
+          dof_handler_coarse.get_communicator()));
 
-    this->partitioner_fine.reset(
-      new Utilities::MPI::Partitioner(dof_handler_fine.locally_owned_dofs(),
-                                      locally_relevant_dofs,
-                                      dof_handler_fine.get_communicator()));
+        this->vec_coarse.reinit(this->partitioner_coarse);
+      }
+      {
+        // in case a DG space of order 0 is provided, DoFs indices are never
+        // defined on element faces or vertices and therefore, the partitioner
+        // is fine
+        IndexSet locally_relevant_dofs(dof_handler_fine.n_dofs());
+        if (!this->fine_element_is_continuous &&
+            !dof_handler_fine.get_fe().degree == 0)
+          locally_relevant_dofs.add_indices(global_dof_indices.begin(),
+                                            global_dof_indices.end());
 
-    this->vec_fine.reinit(this->partitioner_fine);
-  }
+        this->partitioner_fine.reset(
+          new Utilities::MPI::Partitioner(dof_handler_fine.locally_owned_dofs(),
+                                          locally_relevant_dofs,
+                                          dof_handler_fine.get_communicator()));
 
-  const auto &points = std::get<0>(points_ptrs_indices);
+        this->vec_fine.reinit(this->partitioner_fine);
+      }
 
-  // using level_dof_indices_fine_ptrs always works but in case of CG or DG
-  // with degree==0 and n_components==1 support points to dof mapping is unique
-  // and we dont need it.
-  if (dof_handler_fine.get_fe().n_components() == 1 &&
-      (this->fine_element_is_continuous ||
-       dof_handler_fine.get_fe().degree == 0))
-    this->level_dof_indices_fine_ptrs.clear();
+
+      // using level_dof_indices_fine_ptrs always works but in case of CG or DG
+      // with degree==0 and n_components==1 support points to dof mapping is
+      // unique and we dont need it.
+      if (dof_handler_fine.get_fe().n_components() == 1 &&
+          (this->fine_element_is_continuous ||
+           dof_handler_fine.get_fe().degree == 0))
+        this->level_dof_indices_fine_ptrs.clear();
+      else
+        this->level_dof_indices_fine_ptrs = std::get<1>(points_ptrs_indices);
+
+      // fill level_dof_indices_fine with local indices
+      this->level_dof_indices_fine.resize(global_dof_indices.size());
+      for (unsigned int i = 0; i < global_dof_indices.size(); ++i)
+        this->level_dof_indices_fine[i] =
+          this->partitioner_fine->global_to_local(global_dof_indices[i]);
+    }
+  else if (this->transfer_type.compare("projection") == 0)
+    {
+      // setup matrix-free storage for projection
+      typename MatrixFree<dim, Number>::AdditionalData additional_data;
+      additional_data.mapping_update_flags =
+        (update_values | update_JxW_values | update_quadrature_points);
+      matrix_free_storage = std::make_shared<MatrixFree<dim, Number>>();
+      matrix_free_storage->reinit(mapping_fine,
+                                  dof_handler_fine,
+                                  constraint_fine,
+                                  QGaussLobatto<1>(
+                                    dof_handler_fine.get_fe().degree + 1),
+                                  additional_data);
+      matrix_free_storage->initialize_dof_vector(this->vec_fine);
+      this->partitioner_fine = matrix_free_storage->get_vector_partitioner();
+
+      matrix_free_storage_coarse = std::make_shared<MatrixFree<dim, Number>>();
+      matrix_free_storage_coarse->reinit(
+        mapping_coarse,
+        dof_handler_coarse,
+        constraint_coarse,
+        QGaussLobatto<1>(dof_handler_coarse.get_fe().degree + 1),
+        additional_data);
+      matrix_free_storage_coarse->initialize_dof_vector(this->vec_coarse);
+      this->partitioner_coarse =
+        matrix_free_storage_coarse->get_vector_partitioner();
+      // this->partitioner_coarse.reset(
+      //   &(*matrix_free_storage_coarse->get_vector_partitioner()));
+    }
   else
-    this->level_dof_indices_fine_ptrs = std::get<1>(points_ptrs_indices);
+    {
+      Assert(false, ExcNotImplemented());
+    }
 
-  // fill level_dof_indices_fine with local indices
-  this->level_dof_indices_fine.resize(global_dof_indices.size());
-  for (unsigned int i = 0; i < global_dof_indices.size(); ++i)
-    this->level_dof_indices_fine[i] =
-      this->partitioner_fine->global_to_local(global_dof_indices[i]);
 
-  // hand points over to RPE
-  rpe->reinit(points, dof_handler_coarse.get_triangulation(), mapping_coarse);
+  if (transfer_type.compare("projection") == 0)
+    {
+      // Collect points on the fine grid where the src field has to be
+      // evaluated for the projection.
+      const auto collected_evaluation_points = [&]() {
+        FEEvaluation<dim, -1, 0, dim, Number> evaluator(*matrix_free_storage);
+
+        std::vector<Point<dim>> evaluation_points;
+
+        for (unsigned int cell = 0;
+             cell < matrix_free_storage->n_cell_batches();
+             ++cell)
+          {
+            evaluator.reinit(cell);
+
+            for (unsigned int q = 0; q < evaluator.n_q_points; ++q)
+              {
+                const auto points = evaluator.quadrature_point(q);
+                for (unsigned int v = 0;
+                     v <
+                     matrix_free_storage->n_active_entries_per_cell_batch(cell);
+                     ++v)
+                  {
+                    Point<dim> point;
+
+                    for (int i = 0; i < dim; ++i)
+                      point[i] = points[i][v];
+
+                    evaluation_points.push_back(point);
+                  }
+              }
+          }
+        return evaluation_points;
+      }();
+
+      // hand points over to RPE
+      rpe->reinit(collected_evaluation_points,
+                  dof_handler_coarse.get_triangulation(),
+                  mapping_coarse);
+
+
+      // Collect points on the fine grid where the src field has to be
+      // evaluated for the projection.
+      const auto collected_evaluation_points_coarse = [&]() {
+        FEEvaluation<dim, -1, 0, dim, Number> evaluator(
+          *matrix_free_storage_coarse);
+
+        std::vector<Point<dim>> evaluation_points;
+
+        for (unsigned int cell = 0;
+             cell < matrix_free_storage_coarse->n_cell_batches();
+             ++cell)
+          {
+            evaluator.reinit(cell);
+
+            for (unsigned int q = 0; q < evaluator.n_q_points; ++q)
+              {
+                const auto points = evaluator.quadrature_point(q);
+                for (unsigned int v = 0;
+                     v < matrix_free_storage_coarse
+                           ->n_active_entries_per_cell_batch(cell);
+                     ++v)
+                  {
+                    Point<dim> point;
+
+                    for (int i = 0; i < dim; ++i)
+                      point[i] = points[i][v];
+
+                    evaluation_points.push_back(point);
+                  }
+              }
+          }
+        return evaluation_points;
+      }();
+
+      // hand points over to RPE
+      rpe_fine->reinit(collected_evaluation_points_coarse,
+                       dof_handler_fine.get_triangulation(),
+                       mapping_fine);
+    }
+  else if (transfer_type.compare("interpolation") == 0)
+    {
+      // If pointwise interpolation is selected, use unique points as determined
+      // before.
+
+      // hand points over to RPE
+      rpe->reinit(points,
+                  dof_handler_coarse.get_triangulation(),
+                  mapping_coarse);
+    }
+  else
+    {
+      Assert(false, ExcNotImplemented());
+    }
+
 
   // set up MappingInfo for easier data access
   mapping_info = internal::fill_mapping_info<dim, Number>(*rpe);
@@ -3899,6 +4037,37 @@ MGTwoLevelTransferNonNested<dim, LinearAlgebra::distributed::Vector<Number>>::
     }
 
   constraint_info.finalize();
+
+  if (this->transfer_type.compare("projection") == 0)
+    {
+      // ***Fine case***
+      // set up MappingInfo for easier data access
+      mapping_info_fine = internal::fill_mapping_info<dim, Number>(*rpe_fine);
+
+      // set up constraints
+      const auto &cell_data_fine = rpe_fine->get_cell_data();
+
+      constraint_info_fine.reinit(dof_handler_fine,
+                                  cell_data_fine.cells.size(),
+                                  false /*TODO*/);
+
+      for (unsigned int i = 0; i < cell_data_fine.cells.size(); ++i)
+        {
+          typename DoFHandler<dim>::active_cell_iterator cell(
+            &(rpe_fine->get_triangulation()),
+            cell_data_fine.cells[i].first,
+            cell_data_fine.cells[i].second,
+            &dof_handler_fine);
+
+          constraint_info_fine.read_dof_indices(i,
+                                                numbers::invalid_unsigned_int,
+                                                cell,
+                                                constraint_fine,
+                                                this->partitioner_fine);
+        }
+
+      constraint_info_fine.finalize();
+    }
 
   const auto &fe_base = dof_handler_coarse.get_fe().base_element(0);
 
@@ -3957,6 +4126,88 @@ MGTwoLevelTransferNonNested<dim, LinearAlgebra::distributed::Vector<Number>>::
                                              buffer,
                                              evaluation_function);
 
+  if (transfer_type.compare("projection") == 0)
+    {
+      FEEvaluation<dim, -1, 0, 1, Number> phi(*matrix_free_storage);
+
+      // Vectorize evaluation_point_results and store it in evaluated_src.
+      evaluated_src.resize(matrix_free_storage->n_cell_batches() *
+                           phi.n_q_points);
+
+      std::cout << "N cell batches = " << matrix_free_storage->n_cell_batches()
+                << std::endl;
+      std::cout << "N q points " << phi.n_q_points << std::endl;
+      for (unsigned int cell = 0, c = 0;
+           cell < matrix_free_storage->n_cell_batches();
+           ++cell)
+        for (unsigned int q = 0; q < phi.n_q_points; ++q)
+          for (unsigned int v = 0;
+               v < matrix_free_storage->n_active_entries_per_cell_batch(cell);
+               ++v, ++c)
+            evaluated_src[phi.n_q_points * cell + q][v] =
+              evaluation_point_results[c];
+
+      // Should be used only for FE_Q or FE_DGQ elements.
+      if (dynamic_cast<const FE_Q<dim> *>(
+            &matrix_free_storage->get_dof_handler().get_fe()))
+        {
+          // Perform cell_loop with mass lumping if Lagrangian (continuous)
+          // elements are used. Since quadrature points (Gauss Lobatto
+          // points) are support points themselves, the mass matrix is diagonal
+          // by construction. Then we use right away a MassOperator to get the
+          // inverse diagonal.
+
+          MatrixFreeOperators::MassOperator<
+            dim,
+            -1,
+            0,
+            1,
+            LinearAlgebra::distributed::Vector<Number>>
+            mass_operator;
+
+          LinearAlgebra::distributed::Vector<Number>
+            inverse_lumped_diagonal_vector;
+          matrix_free_storage->initialize_dof_vector(
+            inverse_lumped_diagonal_vector);
+
+          mass_operator.initialize(matrix_free_storage);
+          mass_operator.compute_diagonal();
+          inverse_lumped_diagonal_vector =
+            mass_operator.get_matrix_diagonal_inverse()->get_vector();
+
+          HelperMassOperator helper_mass{matrix_free_storage};
+          matrix_free_storage->cell_loop(
+            &HelperMassOperator::local_apply_mass,
+            &helper_mass,
+            dst,
+            evaluated_src,
+            nullptr,
+            [&](const unsigned int start_range, const unsigned int end_range) {
+              for (unsigned int i = start_range; i < end_range; ++i)
+                dst.local_element(i) *=
+                  inverse_lumped_diagonal_vector.local_element(i);
+            });
+          return; // dst filled, skip last part.
+        }
+      else if (dynamic_cast<const FE_DGQ<dim> *>(
+                 &matrix_free_storage->get_dof_handler().get_fe()))
+        {
+          // DG case. Mass matrix is block diagonal, hence a cellwise
+          // division can be performed to compute the projection.
+          HelperMassOperator helper_mass{matrix_free_storage};
+          matrix_free_storage->cell_loop(
+            &HelperMassOperator::local_apply_mass_dg,
+            &helper_mass,
+            dst,
+            evaluated_src);
+          return; // dst filled, skip last part.
+        }
+      else
+        {
+          AssertThrow(false, ExcNotImplemented());
+        }
+    }
+
   // Weight operator in case some points are owned by multiple cells.
   if (rpe->is_map_unique() == false)
     {
@@ -4009,79 +4260,212 @@ MGTwoLevelTransferNonNested<dim, LinearAlgebra::distributed::Vector<Number>>::
     LinearAlgebra::distributed::Vector<Number> &      dst,
     const LinearAlgebra::distributed::Vector<Number> &src) const
 {
-  std::vector<Number> evaluation_point_results;
-  std::vector<Number> buffer;
-
-  evaluation_point_results.resize(rpe->get_point_ptrs().size() - 1);
-
-  for (unsigned int j = 0; j < evaluation_point_results.size(); ++j)
+  if (this->transfer_type.compare("projection") == 0)
     {
-      if (level_dof_indices_fine_ptrs.size() == 0)
+      // Now evaluate!
+      std::vector<Number> evaluation_point_results;
+      std::vector<Number> buffer;
+
+      const auto evaluation_function = [&](auto &      values,
+                                           const auto &cell_data) {
+        std::vector<Number> solution_values;
+
+        FEPointEvaluation<1, dim, dim, Number> evaluator(*mapping_info_fine,
+                                                         *fe_coarse);
+
+        for (unsigned int cell = 0; cell < cell_data.cells.size(); ++cell)
+          {
+            solution_values.resize(fe_coarse->n_dofs_per_cell());
+
+            // gather and resolve constraints
+            internal::VectorReader<Number, VectorizedArrayType> reader;
+            constraint_info_fine.read_write_operation(
+              reader,
+              src,
+              reinterpret_cast<VectorizedArrayType *>(solution_values.data()),
+              cell,
+              1,
+              solution_values.size(),
+              true);
+
+            // evaluate and scatter
+            evaluator.reinit(cell);
+
+            evaluator.evaluate(solution_values,
+                               dealii::EvaluationFlags::values);
+
+            for (const auto q : evaluator.quadrature_point_indices())
+              values[q + cell_data.reference_point_ptrs[cell]] =
+                evaluator.get_value(q);
+          }
+      };
+
+      rpe_fine->template evaluate_and_process<Number>(evaluation_point_results,
+                                                      buffer,
+                                                      evaluation_function);
+
+
+      // Vectorize evaluation_point_results and store it in evaluated_src.
+      FEEvaluation<dim, -1, 0, 1, Number> phi(*matrix_free_storage_coarse);
+
+      evaluated_src.resize(matrix_free_storage_coarse->n_cell_batches() *
+                           phi.n_q_points);
+
+      std::cout << "N cell batches = "
+                << matrix_free_storage_coarse->n_cell_batches() << std::endl;
+      std::cout << "N q points " << phi.n_q_points << std::endl;
+      for (unsigned int cell = 0, c = 0;
+           cell < matrix_free_storage_coarse->n_cell_batches();
+           ++cell)
+        for (unsigned int q = 0; q < phi.n_q_points; ++q)
+          for (unsigned int v = 0;
+               v < matrix_free_storage_coarse->n_active_entries_per_cell_batch(
+                     cell);
+               ++v, ++c)
+            evaluated_src[phi.n_q_points * cell + q][v] =
+              evaluation_point_results[c];
+
+
+      // Should be used only for FE_Q or FE_DGQ elements.
+      if (dynamic_cast<const FE_Q<dim> *>(
+            &matrix_free_storage_coarse->get_dof_handler().get_fe()))
         {
-          evaluation_point_results[j] =
-            src.local_element(this->level_dof_indices_fine[j]);
+          // Perform cell_loop with mass lumping if Lagrangian (continuous)
+          // elements are used. Since quadrature points (Gauss Lobatto
+          // points) are support points themselves, the mass matrix is diagonal
+          // by construction. Then we use right away a MassOperator to get the
+          // inverse diagonal.
+
+          MatrixFreeOperators::MassOperator<
+            dim,
+            -1,
+            0,
+            1,
+            LinearAlgebra::distributed::Vector<Number>>
+            mass_operator;
+
+          LinearAlgebra::distributed::Vector<Number>
+            inverse_lumped_diagonal_vector;
+          matrix_free_storage_coarse->initialize_dof_vector(
+            inverse_lumped_diagonal_vector);
+
+          mass_operator.initialize(matrix_free_storage_coarse);
+          mass_operator.compute_diagonal();
+          inverse_lumped_diagonal_vector =
+            mass_operator.get_matrix_diagonal_inverse()->get_vector();
+
+          HelperMassOperator helper_mass{matrix_free_storage_coarse};
+          matrix_free_storage_coarse->cell_loop(
+            &HelperMassOperator::local_apply_mass,
+            &helper_mass,
+            dst,
+            evaluated_src,
+            nullptr,
+            [&](const unsigned int start_range, const unsigned int end_range) {
+              for (unsigned int i = start_range; i < end_range; ++i)
+                dst.local_element(i) *= inverse_lumped_diagonal_vector(i);
+            });
+          return; // dst filled, skip last part.
+        }
+      else if (dynamic_cast<const FE_DGQ<dim> *>(
+                 &matrix_free_storage_coarse->get_dof_handler().get_fe()))
+        {
+          // DG case. Mass matrix is block diagonal, hence a cellwise
+          // division can be performed to compute the projection.
+          HelperMassOperator helper_mass{matrix_free_storage_coarse};
+          matrix_free_storage_coarse->cell_loop(
+            &HelperMassOperator::local_apply_mass_dg,
+            &helper_mass,
+            dst,
+            evaluated_src);
+          return; // dst filled, skip last part.
         }
       else
         {
-          evaluation_point_results[j] = 0.0;
-          for (unsigned int i = this->level_dof_indices_fine_ptrs[j];
-               i < this->level_dof_indices_fine_ptrs[j + 1];
-               ++i)
-            evaluation_point_results[j] +=
-              src.local_element(this->level_dof_indices_fine[i]);
+          AssertThrow(false, ExcNotImplemented());
         }
-    }
 
-  // Weight operator in case some points are owned by multiple cells.
-  if (rpe->is_map_unique() == false)
+
+      return;
+    }
+  else
     {
-      const auto &ptr = rpe->get_point_ptrs();
+      std::vector<Number> evaluation_point_results;
+      std::vector<Number> buffer;
+      // pointwise interpolation
+      evaluation_point_results.resize(rpe->get_point_ptrs().size() - 1);
 
-      for (unsigned int i = 0; i < ptr.size() - 1; ++i)
+      for (unsigned int j = 0; j < evaluation_point_results.size(); ++j)
         {
-          const auto n_entries = ptr[i + 1] - ptr[i];
-          if (n_entries == 0)
-            continue;
-
-          evaluation_point_results[i] /= n_entries;
+          if (level_dof_indices_fine_ptrs.size() == 0)
+            {
+              evaluation_point_results[j] =
+                src.local_element(this->level_dof_indices_fine[j]);
+            }
+          else
+            {
+              evaluation_point_results[j] = 0.0;
+              for (unsigned int i = this->level_dof_indices_fine_ptrs[j];
+                   i < this->level_dof_indices_fine_ptrs[j + 1];
+                   ++i)
+                evaluation_point_results[j] +=
+                  src.local_element(this->level_dof_indices_fine[i]);
+            }
         }
+
+      // Weight operator in case some points are owned by multiple cells.
+      if (rpe->is_map_unique() == false)
+        {
+          const auto &ptr = rpe->get_point_ptrs();
+
+          for (unsigned int i = 0; i < ptr.size() - 1; ++i)
+            {
+              const auto n_entries = ptr[i + 1] - ptr[i];
+              if (n_entries == 0)
+                continue;
+
+              evaluation_point_results[i] /= n_entries;
+            }
+        }
+
+      const auto evaluation_function = [&](const auto &values,
+                                           const auto &cell_data) {
+        std::vector<Number>                    solution_values;
+        FEPointEvaluation<1, dim, dim, Number> evaluator(*mapping_info,
+                                                         *fe_coarse);
+
+        for (unsigned int cell = 0; cell < cell_data.cells.size(); ++cell)
+          {
+            solution_values.resize(fe_coarse->n_dofs_per_cell());
+
+            // gather and integrate
+            evaluator.reinit(cell);
+
+            for (const auto q : evaluator.quadrature_point_indices())
+              evaluator.submit_value(
+                values[q + cell_data.reference_point_ptrs[cell]], q);
+
+            evaluator.integrate(solution_values, EvaluationFlags::values);
+
+            // resolve constraints and scatter
+            internal::VectorDistributorLocalToGlobal<Number,
+                                                     VectorizedArrayType>
+              writer;
+            constraint_info.read_write_operation(
+              writer,
+              dst,
+              reinterpret_cast<VectorizedArrayType *>(solution_values.data()),
+              cell,
+              1,
+              solution_values.size(),
+              true);
+          }
+      };
+
+      rpe->template process_and_evaluate<Number>(evaluation_point_results,
+                                                 buffer,
+                                                 evaluation_function);
     }
-
-  const auto evaluation_function = [&](const auto &values,
-                                       const auto &cell_data) {
-    std::vector<Number>                    solution_values;
-    FEPointEvaluation<1, dim, dim, Number> evaluator(*mapping_info, *fe_coarse);
-
-    for (unsigned int cell = 0; cell < cell_data.cells.size(); ++cell)
-      {
-        solution_values.resize(fe_coarse->n_dofs_per_cell());
-
-        // gather and integrate
-        evaluator.reinit(cell);
-
-        for (const auto q : evaluator.quadrature_point_indices())
-          evaluator.submit_value(
-            values[q + cell_data.reference_point_ptrs[cell]], q);
-
-        evaluator.integrate(solution_values, EvaluationFlags::values);
-
-        // resolve constraints and scatter
-        internal::VectorDistributorLocalToGlobal<Number, VectorizedArrayType>
-          writer;
-        constraint_info.read_write_operation(
-          writer,
-          dst,
-          reinterpret_cast<VectorizedArrayType *>(solution_values.data()),
-          cell,
-          1,
-          solution_values.size(),
-          true);
-      }
-  };
-
-  rpe->template process_and_evaluate<Number>(evaluation_point_results,
-                                             buffer,
-                                             evaluation_function);
 }
 
 

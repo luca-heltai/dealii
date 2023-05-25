@@ -26,6 +26,9 @@
 #include <deal.II/lac/la_parallel_vector.h>
 
 #include <deal.II/matrix_free/constraint_info.h>
+#include <deal.II/matrix_free/fe_evaluation.h>
+#include <deal.II/matrix_free/matrix_free.h>
+#include <deal.II/matrix_free/operators.h>
 #include <deal.II/matrix_free/shape_info.h>
 
 #include <deal.II/multigrid/mg_base.h>
@@ -705,21 +708,27 @@ private:
 
 public:
   /**
-   * AdditionalData structure for construction arguments needed by
+   * AdditionalData structure to determine the transfer type (by default,
+   * pointwise interpolation) and the construction arguments needed by
    * RemotePointEvaluation. Default values are the same as the ones in
    * RemotePointEvaluation.
+   *
    */
   struct AdditionalData
   {
+    std::string                        transfer_type;
     double                             tolerance;
     bool                               enforce_unique_mapping;
     unsigned int                       rtree_level;
     std::function<std::vector<bool>()> marked_vertices;
-    AdditionalData(const double       tol                = 1e-6,
+
+    AdditionalData(const std::string &transfer_t         = "interpolation",
+                   const double       tol                = 1e-6,
                    const bool         enf_unique_mapping = false,
                    const unsigned int rtree_l            = 0,
                    const std::function<std::vector<bool>()> &marked_verts = {})
-      : tolerance(tol)
+      : transfer_type(transfer_t)
+      , tolerance(tol)
       , enforce_unique_mapping(enf_unique_mapping)
       , rtree_level(rtree_l)
       , marked_vertices(marked_verts)
@@ -789,15 +798,45 @@ protected:
 
 private:
   /**
+   * String describing the type of transfer operator to be used. Different
+   * choiches are possible:
+   * - "interpolation": values are interpolated pointwise
+   * from one grid to the other.
+   * - "projection": L^2 projection onto the finer space.
+   *
+   * The default value is "interpolation".
+   */
+  std::string transfer_type;
+
+  /**
    * Object to evaluate shape functions on one mesh on visited support points of
    * the other mesh.
    */
   std::shared_ptr<Utilities::MPI::RemotePointEvaluation<dim>> rpe;
 
+  std::shared_ptr<Utilities::MPI::RemotePointEvaluation<dim>> rpe_fine;
+
+  /**
+   * Matrix-free object needed by transfer operators.
+   *
+   */
+  std::shared_ptr<MatrixFree<dim, Number>> matrix_free_storage;
+
+  std::shared_ptr<MatrixFree<dim, Number>> matrix_free_storage_coarse;
+
+  /**
+   * AlignedVector needed to hold vectorized point values in case a projection
+   * operator is chosen as transfer operator.
+   *
+   */
+  mutable AlignedVector<VectorizedArray<Number>> evaluated_src;
+
   /**
    * MappingInfo object needed as Mapping argument by FEPointEvaluation.
    */
   std::shared_ptr<NonMatching::MappingInfo<dim, dim, Number>> mapping_info;
+
+  std::shared_ptr<NonMatching::MappingInfo<dim, dim, Number>> mapping_info_fine;
 
   /**
    * Helper class for reading from and writing to global vectors and for
@@ -805,6 +844,9 @@ private:
    */
   internal::MatrixFreeFunctions::ConstraintInfo<dim, VectorizedArrayType>
     constraint_info;
+
+  internal::MatrixFreeFunctions::ConstraintInfo<dim, VectorizedArrayType>
+    constraint_info_fine;
 
   /**
    * Finite element of the coarse DoFHandler passed to reinit().
@@ -823,6 +865,82 @@ private:
    * point.
    */
   std::vector<unsigned int> level_dof_indices_fine_ptrs;
+
+  class HelperMassOperator
+  {
+  public:
+    HelperMassOperator(std::shared_ptr<MatrixFree<dim, Number>> mf_data)
+      : matrix_free(mf_data){};
+
+    /**
+     * Elemental application of the mass matrix. The only difference lies in the
+     * entries of ‘src‘ that are chosen to be tested. During prolongation, ‘src‘
+     * will be an AligendVector<VA<Number>> containing the evaluation of the
+     * coarse solution on the fine grid.
+     */
+    void
+    local_apply_mass(const MatrixFree<dim, Number> &               matrix_free,
+                     LinearAlgebra::distributed::Vector<Number> &  dst,
+                     const AlignedVector<VectorizedArray<Number>> &src,
+                     const std::pair<unsigned int, unsigned int> & cell_range)
+    {
+      FEEvaluation<dim, -1, 0, 1, Number> phi(matrix_free);
+
+      for (unsigned int cell = cell_range.first; cell < cell_range.second;
+           ++cell)
+        {
+          phi.reinit(cell);
+          for (unsigned int q = 0; q < phi.n_q_points; ++q)
+            phi.submit_value(src[phi.n_q_points * cell + q], q);
+          phi.integrate_scatter(EvaluationFlags::values, dst);
+        }
+    }
+
+
+
+    /**
+     * Same as the function before, with the difference that the
+     * inverse mass matrix is applied after tessting. This is meant to be used
+     * in DG case.
+     */
+    void
+    local_apply_mass_dg(const MatrixFree<dim, Number> &             matrix_free,
+                        LinearAlgebra::distributed::Vector<Number> &dst,
+                        const AlignedVector<VectorizedArray<Number>> &src,
+                        const std::pair<unsigned int, unsigned int> &cell_range)
+    {
+      Assert(
+        matrix_free.get_dof_handler().get_fe().conforming_space ==
+          FiniteElementData<dim>::Conformity::L2,
+        ExcMessage(
+          "This local operator can be used with discontinuous elements only. Check the FiniteElement you used."));
+      FEEvaluation<dim, -1, 0, 1, Number> phi(matrix_free);
+
+      AlignedVector<VectorizedArray<Number>> inverse_coefficients(
+        phi.n_q_points);
+      MatrixFreeOperators::CellwiseInverseMassMatrix<dim, -1, 1, Number>
+        cellwise_inverse_operator(phi);
+
+      for (unsigned int cell = cell_range.first; cell < cell_range.second;
+           ++cell)
+        {
+          phi.reinit(cell);
+          for (unsigned int q = 0; q < phi.n_q_points; ++q)
+            phi.submit_value(src[phi.n_q_points * cell + q], q);
+          phi.integrate(EvaluationFlags::values);
+
+          // post operation
+          cellwise_inverse_operator.fill_inverse_JxW_values(
+            inverse_coefficients);
+          cellwise_inverse_operator.apply(phi.begin_dof_values(),
+                                          phi.begin_dof_values());
+          phi.set_dof_values(dst);
+        }
+    }
+
+  private:
+    std::shared_ptr<MatrixFree<dim, Number>> matrix_free;
+  };
 };
 
 
