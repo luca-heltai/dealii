@@ -4363,7 +4363,8 @@ MGTwoLevelTransferNonNested<dim, LinearAlgebra::distributed::Vector<Number>>::
             nullptr,
             [&](const unsigned int start_range, const unsigned int end_range) {
               for (unsigned int i = start_range; i < end_range; ++i)
-                dst.local_element(i) *= inverse_lumped_diagonal_vector(i);
+                dst.local_element(i) *=
+                  inverse_lumped_diagonal_vector.local_element(i);
             });
           return; // dst filled, skip last part.
         }
