@@ -1387,8 +1387,7 @@ namespace DoFTools
 
     // generate a mapping that maps codimension-1 cells
     // to codimension-0 cells and faces
-    for (const auto &cell :
-         c0_dh.active_cell_iterators()) // disp_dof.active_cell_iterators())
+    for (const auto &cell : c0_dh.active_cell_iterators())
       for (const auto f : cell->face_indices())
         if (cell->face(f)->at_boundary())
           {
