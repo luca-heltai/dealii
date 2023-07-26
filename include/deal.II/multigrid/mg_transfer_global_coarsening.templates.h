@@ -3839,11 +3839,11 @@ MGTwoLevelTransferNonNested<dim, LinearAlgebra::distributed::Vector<Number>>::
 
   // create partitioners and internal vectors
   {
-    IndexSet locally_active_dofs =
-      DoFTools::extract_locally_active_dofs(dof_handler_coarse);
+    IndexSet locally_relevant_dofs =
+      DoFTools::extract_locally_relevant_dofs(dof_handler_coarse);
     this->partitioner_coarse.reset(
       new Utilities::MPI::Partitioner(dof_handler_coarse.locally_owned_dofs(),
-                                      locally_active_dofs,
+                                      locally_relevant_dofs,
                                       dof_handler_coarse.get_communicator()));
 
     this->vec_coarse.reinit(this->partitioner_coarse);
