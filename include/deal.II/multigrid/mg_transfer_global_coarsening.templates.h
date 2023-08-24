@@ -4496,7 +4496,8 @@ namespace internal
         const bool needs_conversion =
           dof_handler.get_fe().conforming_space ==
             FiniteElementData<dim>::Conformity::L2 &&
-          (dof_handler.get_fe().degree > 0);
+          (dof_handler.get_fe().degree > 0) &&
+          dof_handler.get_fe().reference_cell().is_hyper_cube();
         std::vector<unsigned int> lexicographic_to_hierarchic;
         if (needs_conversion)
           lexicographic_to_hierarchic =
@@ -4634,8 +4635,10 @@ namespace internal
       const auto  n_components = fe.n_components();
 
       if (n_components == 1 &&
-          (fe.conforming_space == FiniteElementData<dim>::Conformity::H1 ||
-           degree == 0))
+          ((fe.reference_cell().is_hyper_cube() &&
+            (fe.conforming_space == FiniteElementData<dim>::Conformity::H1 ||
+             degree == 0)) ||
+           fe.reference_cell().is_simplex()))
         {
           // in case a DG space of order 0 is provided, DoFs indices are always
           // uniquely assigned to support points (they are always defined in the
@@ -4654,6 +4657,8 @@ namespace internal
           auto dof_handler_support_points =
             std::make_shared<DoFHandler<dim, spacedim>>(tria);
 
+          if (fe.reference_cell().is_simplex())
+            dof_handler_support_points->distribute_dofs(fe.base_element(0));
           if (degree == 0)
             dof_handler_support_points->distribute_dofs(
               FE_DGQ<dim, spacedim>(degree));
