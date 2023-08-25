@@ -4657,15 +4657,14 @@ namespace internal
           auto dof_handler_support_points =
             std::make_shared<DoFHandler<dim, spacedim>>(tria);
 
-          if (fe.reference_cell().is_simplex())
-            dof_handler_support_points->distribute_dofs(fe.base_element(0));
           if (degree == 0)
             dof_handler_support_points->distribute_dofs(
               FE_DGQ<dim, spacedim>(degree));
+          else if (fe.reference_cell().is_simplex())
+            dof_handler_support_points->distribute_dofs(fe.base_element(0));
           else
             dof_handler_support_points->distribute_dofs(
               FE_Q<dim, spacedim>(degree));
-
           return dof_handler_support_points;
         }
     }
@@ -4877,7 +4876,9 @@ MGTwoLevelTransferNonNested<dim, LinearAlgebra::distributed::Vector<Number>>::
   else if (const auto fe = dynamic_cast<const FE_DGQ<dim> *>(&fe_base))
     fe_coarse = fe->clone();
   else if (const auto fe = dynamic_cast<const FE_SimplexP<dim> *>(&fe_base))
-    fe_coarse = fe->clone();
+    fe_coarse =
+      std::make_unique<FESystem<dim>>(FE_SimplexDGP<dim>(fe->get_degree()),
+                                      n_components);
   else if (const auto fe = dynamic_cast<const FE_SimplexDGP<dim> *>(&fe_base))
     fe_coarse = fe->clone();
   else
