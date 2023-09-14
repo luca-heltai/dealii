@@ -684,6 +684,12 @@
  *       <br/> Keywords: FEInterfaceValues, NonMatching::FEImmersedSurfaceValues
  *       </td></tr>
  *
+ *   <tr valign="top">
+ *       <td>step-88</td>
+ *       <td> A multigrid-implementation with non-matching levels.
+ *       <br/> Keywords: MGTwoLevelTransferNonNested, MGTransferMF, Multigrid
+ *       </td></tr>
+ *
  * </table>
  *
  *
@@ -1026,7 +1032,8 @@
  *     <td>
  *       step-60,
  *       step-70,
- *       step-85
+ *       step-85,
+ *       step-88
  *     </td>
  *   </tr>
  *
