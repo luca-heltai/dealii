@@ -13,7 +13,7 @@
  *
  * ---------------------------------------------------------------------
  *
- * Author: Marco Feder, ..., 2023
+ * Author: Marco Feder, (SISSA), 2023
  *         Peter Munch, University of Augsburg, 2023
  */
 
@@ -51,22 +51,25 @@
 #include <deal.II/multigrid/mg_matrix.h>
 #include <deal.II/multigrid/mg_smoother.h>
 #include <deal.II/multigrid/mg_tools.h>
+
+// The following include file is the one containing the implementation of actual
+// transfer between non-nested levels:
 #include <deal.II/multigrid/mg_transfer_global_coarsening.h>
 #include <deal.II/multigrid/multigrid.h>
 
 #include <deal.II/numerics/data_out.h>
 #include <deal.II/numerics/vector_tools.h>
 
+// This is just C+:
 #include <fstream>
 
 
-
+// As we want to use as coarse grid solver the Trilinos implementation of AMG,
+// the following class is just a wrapper that transforms a given preconditioner
+// into a coarse grid solver.
 namespace dealii
 {
-  /**
-   * Coarse grid solver using a preconditioner only. This is a little wrapper,
-   * transforming a preconditioner into a coarse grid solver.
-   */
+
   template <class VectorType, class PreconditionerType>
   class MGCoarseGridApplyPreconditioner : public MGCoarseGridBase<VectorType>
   {
@@ -235,7 +238,7 @@ namespace Step88
     {
       char buffer[100];
 
-      std::snprintf(buffer, 100, (mesh_file_format + "%d").c_str(), level);
+      std::snprintf(buffer, 100, mesh_file_format.c_str(), level);
 
       return {buffer};
     }
@@ -269,7 +272,8 @@ namespace Step88
   };
 
 
-
+  // The following class only implements the evaluation of the Laplace operator.
+  // See step-37 for an extended discussion on how this is done.
   template <int dim, typename number>
   class LaplaceOperator : public Subscriptor
   {
@@ -485,6 +489,11 @@ namespace Step88
 
 
 
+  // @sect3{The <code>Step88</code> class template}
+
+  // The main class has the classical structure as in all other tutorial
+  // programs, with the obvious exception that no matrix needs to be assembled
+  // in this case.
   template <int dim>
   class LaplaceProblem
   {
@@ -517,6 +526,9 @@ namespace Step88
     std::unique_ptr<Mapping<dim>>       mapping;
     Quadrature<dim>                     quadrature;
 
+    // The following objects are used to store, on every level of the hierarchy,
+    // its associated DoFHandler, AffineConstraints and the underlying
+    // differential operator.
     MGLevelObject<DoFHandler<dim>>              dof_handlers;
     MGLevelObject<AffineConstraints<Number>>    constraints;
     MGLevelObject<LaplaceOperator<dim, Number>> operators;
@@ -535,22 +547,6 @@ namespace Step88
     , max_level(params.n_global_refinements)
     , pcout(std::cout, (Utilities::MPI::this_mpi_process(comm) == 0))
   {}
-
-
-
-  template <int dim>
-  void LaplaceProblem<dim>::run()
-  {
-    const bool nested_mesh = create_grids();
-    std::cout << params.mg_non_nested << std::endl;
-    AssertThrow(nested_mesh || params.mg_non_nested, ExcNotImplemented());
-
-    setup_system();
-
-    solve();
-
-    output_results();
-  }
 
 
 
@@ -807,6 +803,24 @@ namespace Step88
         data_out.write_vtu_in_parallel("grid_" + std::to_string(l) + ".vtu",
                                        comm);
       }
+  }
+
+
+
+  // The run function is standard: first we import the sequence of grids,
+  // perform the setup needed by the multigrid method and then we use it to
+  // solve the problem. Finally, we output the solution.
+  template <int dim>
+  void LaplaceProblem<dim>::run()
+  {
+    const bool nested_mesh = create_grids();
+    AssertThrow(nested_mesh || params.mg_non_nested, ExcNotImplemented());
+
+    setup_system();
+
+    solve();
+
+    output_results();
   }
 
 } // namespace Step88
