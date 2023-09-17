@@ -13,13 +13,13 @@ with  Maximilian Bergbauer, Johannes Heinz, Luca Heltai and Martin Kronbichler.
 <h1>Introduction</h1>
 
 This tutorial presents a matrix-free implementation of the non-nested multigrid method.
-Standard geometric multigrid methods assume to have a sequence of nested grids 
+Standard geometric multigrid methods assume to have a sequence of nested grids
 (here the subscript $L$ refers to the finest level of the hierarchy) $T_0 \subset T_1 \subset \ldots \subset T_L$ and
 the corresponding induced finite element spaces $V_0 \subset V_1 \subset \ldots \subset V_L$. However, for very fine
 and unstructured geometries (coming for instance from CAD models), it is
 in general quite non-trivial to generate the suitable hierarchy of levels
 needed by the multigrid algorithm and it is subject of active research. In such a scenario,
-one may decide to use Algebraic Multigrid (AMG) or a so-called <i>non-nested multigrid</i> method. 
+one may decide to use Algebraic Multigrid (AMG) or a so-called <i>non-nested multigrid</i> method.
 
 The theory behind this method was introduced in @cite Bramble1991TheAO.
 
@@ -32,7 +32,7 @@ the pointwise interpolation operator. The standard nodal interpolant for Lagrang
 
 $$I_l: \mathcal{C}^0(\Omega) \rightarrow V_l, \quad u \mapsto I_lu \coloneqq \sum_{n \in \mathcal{N}_l} u
 (n) \varphi_l^n$$
-with $\mathcal{N}_l$ the set of DoFs attached to the grid $T_l$ and $\varphi_l^n$ the basis function on level $l$ associated to DoF $n$. We can then define $\mathcal{P}_{l-1}^l$ as the restriction of this operator to the finite element space $V_{l-1}$. From a practical standpoint $\mathcal{P}_{l-1}^l$ can be represented as a sparse rectangular matrix whose entries are $\varphi_{l-1}^p(q)$ for all $q \in \mathcal{N}_l$ and $p \in \mathcal{N}_{l-1}$. This amounts to the evaluation of <i> coarse </i> basis functions on DoFs on the finer level. Since parent-child relationships between consecutive levels are not available in this context, these evaluations occurr at 
+with $\mathcal{N}_l$ the set of DoFs attached to the grid $T_l$ and $\varphi_l^n$ the basis function on level $l$ associated to DoF $n$. We can then define $\mathcal{P}_{l-1}^l$ as the restriction of this operator to the finite element space $V_{l-1}$. From a practical standpoint $\mathcal{P}_{l-1}^l$ can be represented as a sparse rectangular matrix whose entries are $\varphi_{l-1}^p(q)$ for all $q \in \mathcal{N}_l$ and $p \in \mathcal{N}_{l-1}$. This amounts to the evaluation of <i> coarse </i> basis functions on DoFs on the finer level. Since parent-child relationships between consecutive levels are not available in this context, these evaluations occurr at
 arbitrarily located points and hence ad-hoc search strategies must be performed in order which coarsers cells are surrounding points on the finer level. In a distributed setting, where each level is an independently partitioned triangulation, the major complication stems from the fact that the cell $K \in T_{l-1}$ and an owned point $\boldsymbol{x}$ may live on different partitions. Some details about the algorithmic realization of this distributed search and evaluation is explained in step-87.
 
 <h3>The test case</h3>
@@ -45,8 +45,4 @@ boundary conditions
   u &= u_D       \qquad && \text{on }\, \Gamma = \partial \Omega,
 @f}
 on a domain $\Omega$ generated out of a CAD model of a <i> piston </i> with the external mesh generator software Coreform CUBIT. The required hierarchy is generated during a pre-processing step inside the mesh generator by varying iteratively the mesh-size for each grid and finally exporting it in a format that can be read by the GridIn class.
-If you are interested in more complex configurations and operators (such as a linear elasiticty operator), you may want to see the discussion in the section at the end of this tutorial program. 
-
-
-
-
+If you are interested in more complex configurations and operators (such as a linear elasiticty operator), you may want to see the discussion in the section at the end of this tutorial program.

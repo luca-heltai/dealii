@@ -19,8 +19,10 @@
 
 // @sect3{Include files}
 
-// The first include files have all been treated in previous examples.
-
+// The first include files have all been treated in previous examples. We
+// include headers related to the FiniteElement space we want to work with, to
+// the TrilinosWrappers for the coarse grid solver, MatrixFree tools for
+// operator evaluation and Multigrid infrastructure.
 #include <deal.II/base/conditional_ostream.h>
 #include <deal.II/base/mpi.h>
 #include <deal.II/base/parameter_handler.h>
@@ -51,11 +53,11 @@
 #include <deal.II/multigrid/mg_matrix.h>
 #include <deal.II/multigrid/mg_smoother.h>
 #include <deal.II/multigrid/mg_tools.h>
+#include <deal.II/multigrid/multigrid.h>
 
 // The following include file is the one containing the implementation of actual
 // transfer between non-nested levels:
 #include <deal.II/multigrid/mg_transfer_global_coarsening.h>
-#include <deal.II/multigrid/multigrid.h>
 
 #include <deal.II/numerics/data_out.h>
 #include <deal.II/numerics/vector_tools.h>
@@ -69,7 +71,6 @@
 // into a coarse grid solver.
 namespace dealii
 {
-
   template <class VectorType, class PreconditionerType>
   class MGCoarseGridApplyPreconditioner : public MGCoarseGridBase<VectorType>
   {
@@ -208,13 +209,18 @@ namespace Step88
 {
   using namespace dealii;
 
+  // The next struct contains parameters such as the polynomial degree of the
+  // FiniteElement, the spatial dimension on the problem, the number of global
+  // refinements as well as parameters for the geometric multigrid scheme.
   struct Parameters
   {
-    std::string  mesh_type            = "hyper_cube_with_simplices";
+    // As said above, by default we will work with grids generated externally.
+    std::string  mesh_type            = "mesh_file";
     unsigned int dim                  = 2;
     unsigned int n_global_refinements = 3;
     unsigned int fe_degree            = 2;
 
+    // The following parameters are related to geometric multigrid.
     unsigned int solver_max_iterations = 100;
     double       solver_abs_tolerance  = 1e-20;
     double       solver_rel_tolerance  = 1e-4;
@@ -234,6 +240,10 @@ namespace Step88
       prm.parse_input_from_json(file, true);
     }
 
+    // This function simply reads the grid from a given level. The sequence of
+    // external grids has the form <code>piston_0.inp,piston_1.inp, ...</code>,
+    // where the integer suffix denotes the level (with the convention that the
+    // greter the index, the finer the level).
     std::string get_mesh_file_name(const unsigned int level) const
     {
       char buffer[100];
@@ -246,6 +256,8 @@ namespace Step88
   private:
     std::string mesh_file_format = "";
 
+    // As the name suggests, the following member function simply adds all
+    // parameters discussed above using ParameterAcceptor::add_parameter().
     void add_parameters(ParameterHandler &prm)
     {
       prm.add_parameter(
@@ -273,7 +285,9 @@ namespace Step88
 
 
   // The following class only implements the evaluation of the Laplace operator.
-  // See step-37 for an extended discussion on how this is done.
+  // We refer to step-37 for an extended discussion on how this is done.
+  // Alternatively, one could also use directly the
+  // MatrixFreeOperators::LaplaceOperator class.
   template <int dim, typename number>
   class LaplaceOperator : public Subscriptor
   {
@@ -491,9 +505,11 @@ namespace Step88
 
   // @sect3{The <code>Step88</code> class template}
 
-  // The main class has the classical structure as in all other tutorial
+  // The main class has the same structure as in all other tutorial
   // programs, with the obvious exception that no matrix needs to be assembled
-  // in this case.
+  // in this case. Notice that the create_grids() function return a boolean that
+  // is used to switch at runtime to a nested multigrid scheme if levels are
+  // nested.
   template <int dim>
   class LaplaceProblem
   {
@@ -520,6 +536,9 @@ namespace Step88
     const unsigned int max_level;
     ConditionalOStream pcout;
 
+    // Each level is described by an independent Triangulation object that will
+    // have to be accessed during the setup phase of the multigrid method.
+    // Hence, we store them in a standard vector of shared pointers.
     std::vector<std::shared_ptr<Triangulation<dim>>> triangulations;
 
     std::unique_ptr<FiniteElement<dim>> fe;
@@ -533,12 +552,16 @@ namespace Step88
     MGLevelObject<AffineConstraints<Number>>    constraints;
     MGLevelObject<LaplaceOperator<dim, Number>> operators;
 
+    // The next vectors store right-hand-side and solution.
     VectorType rhs;
     VectorType solution;
   };
 
 
 
+  // @sect4{Step88::LaplaceProblem}
+  // This constructor is pretty straightforward: all it does it to initialize
+  // some parameters, the number of levels and parallel output stream.
   template <int dim>
   LaplaceProblem<dim>::LaplaceProblem(const Parameters &params)
     : comm(MPI_COMM_WORLD)
@@ -549,10 +572,19 @@ namespace Step88
   {}
 
 
-
+  // @sect4{Step88::create_grids}
+  // Next, we fill the hierarchy of levels for the multigrid method. Depending
+  // on the selected type of mesh, we loop through the levels and for each one
+  // we create (or import) a different Triangulation that discretizes the same
+  // geoemtry. This member function returns true if the grid is created with the
+  // GridGenerator namespace, false otherwise.
   template <int dim>
   bool LaplaceProblem<dim>::create_grids()
   {
+    // If the geometry is a simple one such a <code>hyper_cube</code>, we can
+    // just use the GridGenerator namespace. Since the present infrastructure
+    // also support simplex meshes, we allow their usage by using
+    // GridGenerator::convert_hypercube_to_simplex_mesh.
     if (params.mesh_type == "hyper_cube")
       {
         for (unsigned int l = min_level; l <= max_level; ++l)
@@ -583,6 +615,10 @@ namespace Step88
 
         return true;
       }
+
+    // By default we will import each level separately by reading it from
+    // externally generated grids. Notice that each triangulation here is
+    // a parallel::distributed::Triangulation independently partitioned.
     else if (params.mesh_type == "mesh_file")
       {
         for (unsigned int l = min_level; l <= max_level; ++l)
@@ -591,6 +627,9 @@ namespace Step88
               std::make_shared<parallel::distributed::Triangulation<dim>>(comm);
 
             GridIn<dim> grid_in(*triangulation);
+            // We chose the Abaqus format just for convenience, but adapting
+            // the present code to other formats is easy, as long as the format
+            // is supported by the GridIn class.
             grid_in.read(params.get_mesh_file_name(l), GridIn<dim>::abaqus);
 
             triangulations.push_back(triangulation);
@@ -604,18 +643,19 @@ namespace Step88
         return false;
       }
 
-
     AssertThrow(false, ExcNotImplemented());
-
     return true;
   }
 
 
-
+  // @sect4{Step88::setup_system}
+  // After generating all levels, we can define on each one of them a suitable
+  // FiniteElement space and distribute the DoFs.
   template <int dim>
   void LaplaceProblem<dim>::setup_system()
   {
-    // determine FE
+    // Depending on the types of cells of the triangulation, we use the
+    // appropriate FiniteElement spaces, Mapping and Quadrature rules:
     if (triangulations.back()->all_reference_cells_are_hyper_cube())
       fe = std::make_unique<FE_Q<dim>>(params.fe_degree);
     else if (triangulations.back()->all_reference_cells_are_simplex())
@@ -625,45 +665,47 @@ namespace Step88
 
     const auto reference_cell = triangulations.back()->get_reference_cells()[0];
 
-    // determine mapping
-    mapping = reference_cell.template get_default_mapping<dim>(1);
-
-    // determine quadrature
+    mapping    = reference_cell.template get_default_mapping<dim>(1);
     quadrature = reference_cell.template get_gauss_type_quadrature<dim>(
       params.fe_degree + 1);
 
-    // initialize levels
+    // We set each MGLevelObject to its correct size before filling it:
     dof_handlers.resize(min_level, max_level);
     constraints.resize(min_level, max_level);
     operators.resize(min_level, max_level);
 
+    // Next, we start looping over all levels:
     for (unsigned int l = min_level; l <= max_level; ++l)
       {
-        // DoFHandler
+        // We distribute the DoFs on each level in the standard way:
         dof_handlers[l].reinit(*triangulations[l]);
         dof_handlers[l].distribute_dofs(*fe);
 
         pcout << dof_handlers[l].n_dofs() << std::endl;
 
-        // constraints
+        // Constraints are handled in the usual way. Since we chose homogeneous
+        // Dirichlet boundary conditions, we directly call
+        // DoFTools::make_zero_boundary_constraints() in order to enforce the
+        // solution to be zero on all of the boundary.
         constraints[l].reinit(
           DoFTools::extract_locally_relevant_dofs(dof_handlers[l]));
         DoFTools::make_zero_boundary_constraints(dof_handlers[l],
                                                  constraints[l]);
         constraints[l].close();
 
-        // operator
+        // Finally, we conclude the setup with the evaluation of the
+        // LaplaceOperator on the present level.
         operators[l].reinit(*mapping,
                             dof_handlers[l],
                             constraints[l],
                             quadrature);
       }
 
-    // intialize vectors
+    // We then initialize solution and right-hand-side vector on the finest
+    // level.
     operators.back().initialize_dof_vector(solution);
     operators.back().initialize_dof_vector(rhs);
 
-    // intialized right-hand-side vector
     VectorTools::create_right_hand_side(*mapping,
                                         dof_handlers.back(),
                                         quadrature,
@@ -674,10 +716,13 @@ namespace Step88
 
 
 
+  // @sect4{Step88::solve}
+  // We are now ready to initialize the intergrid transfer operators,
+  // smoothers and preconditioner.
   template <int dim>
   void LaplaceProblem<dim>::solve()
   {
-    // types
+    // We define some useful aliases for better code readability:
     using LevelMatrixType            = LaplaceOperator<dim, Number>;
     using SmootherPreconditionerType = DiagonalMatrix<VectorType>;
     using SmootherType               = PreconditionChebyshev<LevelMatrixType,
@@ -686,14 +731,21 @@ namespace Step88
     using MGTransferType             = MGTransferMF<dim, Number>;
     using PreconditionerType = PreconditionMG<dim, VectorType, MGTransferType>;
 
-    // initialized two-level transfer operators
+    // We then store a vector of pointers to two-level transfer operators.
+    // Since we only know at runtime the actual type of transfer (depending on
+    // the nested or non-nested nature of the hierarchy), we use the base
+    // class MGTwoLevelTransferBase. In order to setup the transfer operator
+    // from one level to the next, it is sufficient to call the
+    // MGTwoLevelTransferNonNested::reinit() (or
+    // MGTwoLevelTransfer::reinit_geometric_transfer() in case levels are
+    // nested). The only difference between the two interfaces is that the
+    // latter does not take Mapping arguments.
     MGLevelObject<std::shared_ptr<const MGTwoLevelTransferBase<VectorType>>>
       transfers(min_level, max_level);
 
     for (unsigned int l = min_level; l < max_level; ++l)
       if (params.mg_non_nested)
         {
-          // non-nested case
           auto transfer =
             std::make_shared<MGTwoLevelTransferNonNested<dim, VectorType>>();
 
@@ -708,7 +760,6 @@ namespace Step88
         }
       else
         {
-          // nested case
           auto transfer =
             std::make_shared<MGTwoLevelTransfer<dim, VectorType>>();
 
@@ -720,22 +771,20 @@ namespace Step88
           transfers[l + 1] = transfer;
         }
 
-    // collect partitioners
+    // After the setup of transfer operators, we can initialize multigrid
+    // operators, smoothers and related data structures:
     std::vector<std::shared_ptr<const Utilities::MPI::Partitioner>>
       partitioners;
 
     for (unsigned int l = min_level; l <= max_level; ++l)
       partitioners.push_back(operators[l].get_partitioner());
 
-    // initialize tranfer operator
     MGTransferMF<dim, Number> mg_transfer;
     mg_transfer.intitialize_two_level_transfers(transfers);
     mg_transfer.build(partitioners);
 
-    // intialize mg operators
     mg::Matrix<VectorType> mg_matrix(operators);
 
-    // initialize smoothers
     MGLevelObject<typename SmootherType::AdditionalData> smoother_data(
       min_level, max_level);
 
@@ -755,7 +804,8 @@ namespace Step88
       mg_smoother;
     mg_smoother.initialize(operators, smoother_data);
 
-    // initialized coarse-grid solver
+    // As coarse-grid solver we use the algebraic multigrid (AMG)
+    // preconditioner based on the Trilinos ML implementation.
     TrilinosWrappers::PreconditionAMG precondition_amg;
     precondition_amg.initialize(operators[min_level].get_system_matrix());
 
@@ -763,13 +813,14 @@ namespace Step88
                                     TrilinosWrappers::PreconditionAMG>
       mg_coarse(precondition_amg);
 
-    // initialize multgrid
+    // Finally, we can initialize the Multigrid object and use it to
+    // precondition our conjugate-gradient solver. Parameters related to the
+    // CG algorithm are read from the parameter files.
     Multigrid<VectorType> mg(
       mg_matrix, mg_coarse, mg_transfer, mg_smoother, mg_smoother);
 
     PreconditionerType preconditioner(dof_handlers.back(), mg, mg_transfer);
 
-    // solve
     ReductionControl solver_control(params.solver_max_iterations,
                                     params.solver_abs_tolerance,
                                     params.solver_rel_tolerance);
@@ -783,6 +834,8 @@ namespace Step88
 
 
 
+  // @sect4{Step88::output_results}
+  // The following function simply generates standard result output.
   template <int dim>
   void LaplaceProblem<dim>::output_results()
   {
@@ -792,7 +845,6 @@ namespace Step88
     data_out.build_patches(*mapping);
 
     data_out.write_vtu_in_parallel("solution.vtu", comm);
-
 
     for (unsigned int l = 0; l < triangulations.size(); ++l)
       {
@@ -807,9 +859,8 @@ namespace Step88
 
 
 
-  // The run function is standard: first we import the sequence of grids,
-  // perform the setup needed by the multigrid method and then we use it to
-  // solve the problem. Finally, we output the solution.
+  // The run function is standard: it simply calls all other methods in the
+  // correct order.
   template <int dim>
   void LaplaceProblem<dim>::run()
   {
@@ -817,9 +868,7 @@ namespace Step88
     AssertThrow(nested_mesh || params.mg_non_nested, ExcNotImplemented());
 
     setup_system();
-
     solve();
-
     output_results();
   }
 
@@ -840,20 +889,11 @@ int main(int argc, char *argv[])
       if (argc > 1)
         prm.parse(std::string(argv[1]));
 
-      if (prm.dim == 2)
-        {
-          LaplaceProblem<2> laplace_problem(prm);
-          laplace_problem.run();
-        }
-      else if (prm.dim == 3)
-        {
-          LaplaceProblem<3> laplace_problem(prm);
-          laplace_problem.run();
-        }
-      else
-        {
-          AssertThrow(false, ExcNotImplemented());
-        }
+      // Since the external grids are three-dimensional, we make sure this
+      // program is run in 3D only.
+      AssertThrow(prm.dim == 3, ExcNotImplemented());
+      LaplaceProblem<3> laplace_problem(prm);
+      laplace_problem.run();
     }
   catch (const std::exception &exc)
     {
