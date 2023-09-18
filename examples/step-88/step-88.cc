@@ -681,7 +681,8 @@ namespace Step88
         dof_handlers[l].reinit(*triangulations[l]);
         dof_handlers[l].distribute_dofs(*fe);
 
-        pcout << dof_handlers[l].n_dofs() << std::endl;
+        pcout << "Number of DoFs on level " + std::to_string(l) + ": "
+              << dof_handlers[l].n_dofs() << std::endl;
 
         // Constraints are handled in the usual way. Since we chose homogeneous
         // Dirichlet boundary conditions, we directly call
