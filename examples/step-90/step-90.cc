@@ -54,6 +54,7 @@
 #include <string>
 
 #include "singular_integral_tools.h"
+// #include "fe_coupling_values.h"
 
 namespace Step34
 {
@@ -64,8 +65,7 @@ namespace Step34
   namespace LaplaceKernel
   {
     template <int dim>
-    double
-    single_layer(const Tensor<1, dim> &R)
+    double single_layer(const Tensor<1, dim> &R)
     {
       switch (dim)
         {
@@ -82,8 +82,7 @@ namespace Step34
     }
 
     template <int dim>
-    Tensor<1, dim>
-    double_layer(const Tensor<1, dim> &R)
+    Tensor<1, dim> double_layer(const Tensor<1, dim> &R)
     {
       switch (dim)
         {
@@ -107,36 +106,26 @@ namespace Step34
     BEMProblem(const unsigned int fe_degree      = 1,
                const unsigned int mapping_degree = 1);
 
-    void
-    run();
+    void run();
 
   private:
-    void
-    read_parameters(const std::string &filename);
+    void read_parameters(const std::string &filename);
 
-    void
-    read_domain();
+    void read_domain();
 
-    void
-    refine_and_resize();
+    void refine_and_resize();
 
-    void
-    assemble_system();
+    void assemble_system();
 
-    void
-    solve_system();
+    void solve_system();
 
-    void
-    compute_errors(const unsigned int cycle);
+    void compute_errors(const unsigned int cycle);
 
-    void
-    compute_exterior_solution();
+    void compute_exterior_solution();
 
-    void
-    output_results(const unsigned int cycle);
+    void output_results(const unsigned int cycle);
 
-    Quadrature<dim - 1>
-    get_singular_quadrature(
+    Quadrature<dim - 1> get_singular_quadrature(
       const typename DoFHandler<dim - 1, dim>::active_cell_iterator &cell,
       const unsigned int index) const;
 
@@ -189,8 +178,7 @@ namespace Step34
   {}
 
   template <int dim>
-  void
-  BEMProblem<dim>::read_parameters(const std::string &filename)
+  void BEMProblem<dim>::read_parameters(const std::string &filename)
   {
     deallog << std::endl
             << "Parsing parameter file " << filename << std::endl
@@ -288,8 +276,7 @@ namespace Step34
 
 
   template <int dim>
-  void
-  BEMProblem<dim>::read_domain()
+  void BEMProblem<dim>::read_domain()
   {
     Triangulation<dim - 1, dim> tria_temp;
 
@@ -327,10 +314,9 @@ namespace Step34
 
 
   template <int dim>
-  void
-  BEMProblem<dim>::refine_and_resize()
+  void BEMProblem<dim>::refine_and_resize()
   {
-    tria.refine_global(3);
+    tria.refine_global(1);
 
     dof_handler.distribute_dofs(fe);
 
@@ -341,12 +327,13 @@ namespace Step34
     system_rhs.reinit(n_dofs);
     phi.reinit(n_dofs);
     alpha.reinit(n_dofs);
+
+    std::cout << "n_dofs: " << n_dofs << std::endl;
   }
 
 
   template <int dim>
-  void
-  BEMProblem<dim>::assemble_system()
+  void BEMProblem<dim>::assemble_system()
   {
     system_rhs    = 0;
     system_matrix = 0;
@@ -367,10 +354,25 @@ namespace Step34
 
     QGaussSimplex<dim - 1> quad(singular_quadrature_order);
 
-    FEValues<dim - 1, dim> fe_v(mapping,
-                                fe,
-                                quad,
-                                update_values | update_JxW_values);
+    hp::QCollection<dim - 1> quadrature_collection =
+      SingularIntegralTools::get_quadrature_collection(order);
+    hp::FECollection<dim - 1, dim> fe_collection(fe);
+
+    hp::FEValues<dim - 1, dim> fe_v(mapping,
+                                    fe,
+                                    quad,
+                                    update_values | update_JxW_values);
+
+
+    hp::FEValues<dim - 1, dim> fe_v_left(mapping,
+                                         fe_collection,
+                                         quadrature_collection,
+                                         update_values | update_JxW_values);
+
+    hp::FEValues<dim - 1, dim> fe_v_right(mapping,
+                                          fe_collection,
+                                          quadrature_collection,
+                                          update_values | update_JxW_values);
 
     for (const auto &cell : dof_handler.active_cell_iterators())
       {
@@ -393,28 +395,44 @@ namespace Step34
     for (const auto &cell_left : dof_handler.active_cell_iterators())
       for (const auto &cell_right : dof_handler.active_cell_iterators())
         {
-          const auto double_quadrature_at_reference_cells =
-            SingularIntegralTools::get_duffy_coupling_quadrature_at_reference(
-              cell_left, cell_right, order);
+          // const auto double_quadrature_at_reference_cells =
+          //   SingularIntegralTools::get_duffy_coupling_quadrature_at_reference(
+          //     cell_left, cell_right, order);
 
-          const unsigned int n_q_points =
-            double_quadrature_at_reference_cells.first.size();
+          // const unsigned int n_q_points =
+          //   double_quadrature_at_reference_cells.first.size();
 
-          FEValues<dim - 1, dim> fe_v_left(
-            mapping,
-            fe,
-            double_quadrature_at_reference_cells.first,
-            update_values | update_quadrature_points | update_JxW_values);
+          // FEValues<dim - 1, dim> fe_v_left(
+          //   mapping,
+          //   fe,
+          //   double_quadrature_at_reference_cells.first,
+          //   update_values | update_quadrature_points | update_JxW_values);
 
-          FEValues<dim - 1, dim> fe_v_right(
-            mapping,
-            fe,
-            double_quadrature_at_reference_cells.second,
-            update_values | update_normal_vectors | update_quadrature_points |
-              update_JxW_values);
+          // FEValues<dim - 1, dim> fe_v_right(
+          //   mapping,
+          //   fe,
+          //   double_quadrature_at_reference_cells.second,
+          //   update_values | update_normal_vectors | update_quadrature_points |
+          //     update_JxW_values);
+
+          auto &[lef_quadrature_index, right_quadrature_index] =
+            SingularIntegralTools::get_quadrature_indices(cell_left,
+                                                          cell_right);
+
+          cell_left.set_fe_index(left_quadrature_index);
+          cell_right.set_fe_index(right_quadrature_index);
 
           fe_v_left.reinit(cell_left);
           fe_v_right.reinit(cell_right);
+
+          const auto &[quadrature_coupling_type, dof_coupling_type] =
+            SingularIntegralTools::get_coupling_type(lef_quadrature_index,
+                                                     right_quadrature_index);
+
+          fe_coupling.reinit(fe_v_left,
+                             fe_v_right,
+                             quadrature_coupling_type,
+                             dof_coupling_type);
 
           cell_left->get_dof_indices(local_dofs_left);
           cell_right->get_dof_indices(local_dofs_right);
@@ -471,8 +489,7 @@ namespace Step34
 
 
   template <int dim>
-  void
-  BEMProblem<dim>::solve_system()
+  void BEMProblem<dim>::solve_system()
   {
     SolverGMRES<Vector<double>> solver(solver_control);
     solver.solve(system_matrix, phi, system_rhs, PreconditionIdentity());
@@ -480,8 +497,7 @@ namespace Step34
 
 
   template <int dim>
-  void
-  BEMProblem<dim>::compute_errors(const unsigned int cycle)
+  void BEMProblem<dim>::compute_errors(const unsigned int cycle)
   {
     Vector<float> difference_per_cell(tria.n_active_cells());
     VectorTools::integrate_difference(mapping,
@@ -518,8 +534,7 @@ namespace Step34
 
 
   template <>
-  Quadrature<2>
-  BEMProblem<3>::get_singular_quadrature(
+  Quadrature<2> BEMProblem<3>::get_singular_quadrature(
     const DoFHandler<2, 3>::active_cell_iterator &,
     const unsigned int index) const
   {
@@ -536,8 +551,7 @@ namespace Step34
   }
 
   template <>
-  Quadrature<1>
-  BEMProblem<2>::get_singular_quadrature(
+  Quadrature<1> BEMProblem<2>::get_singular_quadrature(
     const DoFHandler<1, 2>::active_cell_iterator &cell,
     const unsigned int                            index) const
   {
@@ -552,8 +566,7 @@ namespace Step34
 
 
   template <int dim>
-  void
-  BEMProblem<dim>::compute_exterior_solution()
+  void BEMProblem<dim>::compute_exterior_solution()
   {
     Triangulation<dim> external_tria;
     GridGenerator::hyper_cube(external_tria, -2, 2);
@@ -631,8 +644,7 @@ namespace Step34
 
 
   template <int dim>
-  void
-  BEMProblem<dim>::output_results(const unsigned int cycle)
+  void BEMProblem<dim>::output_results(const unsigned int cycle)
   {
     DataOut<dim - 1, dim> dataout;
 
@@ -670,8 +682,7 @@ namespace Step34
 
 
   template <int dim>
-  void
-  BEMProblem<dim>::run()
+  void BEMProblem<dim>::run()
   {
     read_parameters("parameters.prm");
 
@@ -699,8 +710,7 @@ namespace Step34
 } // namespace Step34
 
 
-int
-main()
+int main()
 {
   try
     {
