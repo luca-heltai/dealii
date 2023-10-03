@@ -352,7 +352,15 @@ namespace Step34
     FullMatrix<double> local_mass(n_dofs_per_cell, n_dofs_per_cell);
     Vector<double>     local_rhs(n_dofs_per_cell);
 
-    QGaussSimplex<dim - 1> quad(singular_quadrature_order);
+    QGaussSimplex<dim - 1>                  quad(singular_quadrature_order);
+    std::array<unsigned int, 2 * (dim - 1)> q_order;
+    for (unsigned int i = 0; i < 2 * (dim - 1); ++i)
+      q_order[i] = singular_quadrature_order;
+
+    const auto duffy_quad =
+      SingularIntegralTools::get_duffy_quadrature_collection<dim>(q_order);
+
+    std::cout << "Quad suite size: " << duffy_quad.first.size() << std::endl;
 
     hp::QCollection<dim - 1> quadrature_collection =
       SingularIntegralTools::get_quadrature_collection(order);
@@ -391,6 +399,7 @@ namespace Step34
               0.5 * local_mass(i, j);
       }
 
+    // unsigned pair_count = 0;
 
     for (const auto &cell_left : dof_handler.active_cell_iterators())
       for (const auto &cell_right : dof_handler.active_cell_iterators())
@@ -415,12 +424,63 @@ namespace Step34
           //   update_values | update_normal_vectors | update_quadrature_points |
           //     update_JxW_values);
 
+          /****
           auto &[lef_quadrature_index, right_quadrature_index] =
             SingularIntegralTools::get_quadrature_indices(cell_left,
                                                           cell_right);
 
           cell_left.set_fe_index(left_quadrature_index);
           cell_right.set_fe_index(right_quadrature_index);
+          ****/
+
+          const unsigned int quad_index =
+            SingularIntegralTools::get_coupling_index(cell_left, cell_right);
+          const auto quad_first  = duffy_quad.first[quad_index];
+          const auto quad_second = duffy_quad.second[quad_index];
+
+          // if (pair_count < 10)
+          //   {
+          //     std::cout << "QUAD INDEX: " << quad_index << std::endl;
+
+          //     std::cout << "QUAD FIRST SIZE: " << quad_first.size()
+          //               << std::endl;
+          //     std::cout << "QUAD REF   SIZE: "
+          //               << double_quadrature_at_reference_cells.first.size()
+          //               << std::endl;
+
+          //     for (unsigned int q = 0; q < quad_first.size(); ++q)
+          //       std::cout
+          //         << "(" << quad_first.point(q)[0] << ", "
+          //         << quad_first.point(q)[1] << "), " << quad_first.weight(q)
+          //         << ", ("
+          //         << double_quadrature_at_reference_cells.first.point(q)[0]
+          //         << ", "
+          //         << double_quadrature_at_reference_cells.first.point(q)[1]
+          //         << "), "
+          //         << double_quadrature_at_reference_cells.first.weight(q)
+          //         << std::endl;
+          //     std::cout << std::endl;
+          //   }
+
+
+          // pair_count++;
+
+          const unsigned int n_q_points = quad_first.size();
+
+          FEValues<dim - 1, dim> fe_v_left(mapping,
+                                           fe,
+                                           quad_first,
+                                           update_values |
+                                             update_quadrature_points |
+                                             update_JxW_values);
+
+          FEValues<dim - 1, dim> fe_v_right(mapping,
+                                            fe,
+                                            quad_second,
+                                            update_values |
+                                              update_normal_vectors |
+                                              update_quadrature_points |
+                                              update_JxW_values);
 
           fe_v_left.reinit(cell_left);
           fe_v_right.reinit(cell_right);

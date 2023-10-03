@@ -11,6 +11,8 @@
 #include <deal.II/grid/reference_cell.h>
 #include <deal.II/grid/tria_accessor.h>
 
+#include <deal.II/hp/q_collection.h>
+
 
 DEAL_II_NAMESPACE_OPEN
 
@@ -406,6 +408,12 @@ namespace SingularIntegralTools
   //   int> &quadrature_order);
 
 
+  template <int dim>
+  std::pair<hp::QCollection<dim - 1>, hp::QCollection<dim - 1>>
+  get_duffy_quadrature_collection(
+    const std::array<unsigned int, 2 * (dim - 1)> &order);
+
+
 
   std::vector<std::tuple<types::global_dof_index, unsigned int, unsigned int>>
   get_cell_coupling_info(
@@ -422,6 +430,43 @@ namespace SingularIntegralTools
               std::make_tuple(left_cell->vertex_index(v1), v1, v2));
         }
     return shared_vertices;
+  }
+
+  unsigned int
+  get_coupling_index(
+    const typename DoFHandler<2, 3>::active_cell_iterator &left_cell,
+    const typename DoFHandler<2, 3>::active_cell_iterator &right_cell)
+  {
+    const unsigned int dim  = 3;
+    const auto         info = get_cell_coupling_info(left_cell, right_cell);
+    switch (info.size())
+      {
+          case 0: {
+            return 0;
+            break;
+          }
+          case 1: {
+            return 1 + dim * std::get<1>(info[0]) + std::get<2>(info[0]);
+            break;
+          }
+          case 2: {
+            return 10 +
+                   dim * (std::get<1>(info[0]) + std::get<1>(info[1]) - 1) +
+                   (std::get<2>(info[0]) + std::get<2>(info[1]) - 1);
+            break;
+          }
+          case 3: {
+            return 19;
+            break;
+          }
+          default: {
+            Assert(false,
+                   ExcMessage("The possible number of common vertices"
+                              "for two triangles is 0, 1, 2 or 3."));
+            return numbers::invalid_unsigned_int;
+            break;
+          }
+      }
   }
 
 
@@ -574,6 +619,105 @@ namespace SingularIntegralTools
       reference_quad.second.compute_affine_transformation(right_vertices);
 
     return std::make_pair(left_quad, right_quad);
+  }
+
+
+  template <int dim>
+  std::pair<hp::QCollection<dim - 1>, hp::QCollection<dim - 1>>
+  get_duffy_quadrature_collection(
+    const std::array<unsigned int, 2 * (dim - 1)> &q_order)
+  {
+    // Now we only consider the case when dim - 1 = 2.
+    std::pair<hp::QCollection<dim - 1>, hp::QCollection<dim - 1>> qc_pair;
+
+    std::vector<unsigned int> order(2 * (dim - 1));
+    for (unsigned int i = 0; i < 2 * (dim - 1); ++i)
+      order[i] = q_order[i];
+
+    // disjoint case
+    const auto q0 = internal::get_duffy_coupling_quadrature(order, 0);
+    qc_pair.first.push_back(q0.first);
+    qc_pair.second.push_back(q0.second);
+
+    // common vertex
+    const auto             simplex = ReferenceCells::get_simplex<dim - 1>();
+    Triangulation<dim - 1> simplex_grid;
+    GridGenerator::reference_cell(simplex_grid, simplex);
+    const auto &simplex_vertices = simplex_grid.get_vertices();
+
+    std::array<Point<dim - 1>, dim> left_reordered_vertices;
+    std::array<Point<dim - 1>, dim> right_reordered_vertices;
+
+    const auto q1 = internal::get_duffy_coupling_quadrature(order, 1);
+    for (unsigned int i = 0; i < dim; ++i)
+      for (unsigned int j = 0; j < dim; ++j)
+        {
+          const auto shared_info = std::make_tuple(0, i, j);
+          std::vector<
+            std::tuple<types::global_dof_index, unsigned int, unsigned int>>
+                     info(1, shared_info);
+          const auto reordering = get_cell_coupling_reordering(info, dim, dim);
+
+          for (unsigned int d = 0; d < dim; ++d)
+            {
+              left_reordered_vertices[d] =
+                simplex_vertices[reordering.first[d]];
+              right_reordered_vertices[d] =
+                simplex_vertices[reordering.second[d]];
+            }
+          QSimplex<dim - 1> left_quad =
+            q1.first.compute_affine_transformation(left_reordered_vertices);
+          QSimplex<dim - 1> right_quad =
+            q1.second.compute_affine_transformation(right_reordered_vertices);
+
+          qc_pair.first.push_back(left_quad);
+          qc_pair.second.push_back(right_quad);
+        }
+
+    // common edge
+    const auto q2 = internal::get_duffy_coupling_quadrature(order, 2);
+    std::vector<std::vector<unsigned int>> shared_indices = {{0, 1},
+                                                             {2, 0},
+                                                             {1, 2}};
+
+
+    for (unsigned int i = 0; i < dim; ++i)
+      for (unsigned int j = 0; j < dim; ++j)
+        {
+          const auto shared_info_1 =
+            std::make_tuple(0, shared_indices[i][0], shared_indices[j][1]);
+          const auto shared_info_2 =
+            std::make_tuple(0, shared_indices[i][1], shared_indices[j][0]);
+          std::vector<
+            std::tuple<types::global_dof_index, unsigned int, unsigned int>>
+            info(2);
+
+          info[0]               = shared_info_1;
+          info[1]               = shared_info_2;
+          const auto reordering = get_cell_coupling_reordering(info, dim, dim);
+
+          for (unsigned int d = 0; d < dim; ++d)
+            {
+              left_reordered_vertices[d] =
+                simplex_vertices[reordering.first[d]];
+              right_reordered_vertices[d] =
+                simplex_vertices[reordering.second[d]];
+            }
+          QSimplex<dim - 1> left_quad =
+            q2.first.compute_affine_transformation(left_reordered_vertices);
+          QSimplex<dim - 1> right_quad =
+            q2.second.compute_affine_transformation(right_reordered_vertices);
+
+          qc_pair.first.push_back(left_quad);
+          qc_pair.second.push_back(right_quad);
+        }
+
+    // identical patches
+    const auto q3 = internal::get_duffy_coupling_quadrature(order, 3);
+    qc_pair.first.push_back(q3.first);
+    qc_pair.second.push_back(q3.second);
+
+    return qc_pair;
   }
 
 } // namespace SingularIntegralTools
