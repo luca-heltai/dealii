@@ -54,9 +54,8 @@
 #include <string>
 
 #include "singular_integral_tools.h"
-// #include "fe_coupling_values.h"
 
-namespace Step34
+namespace Step90
 {
   using namespace dealii;
 
@@ -318,7 +317,11 @@ namespace Step34
   {
     tria.refine_global(1);
 
+    // std::vector<const FiniteElement<dim - 1, dim> *> fe_vec(20, &fe);
+    // hp::FECollection<dim - 1, dim> fe_collection(fe);
+
     dof_handler.distribute_dofs(fe);
+    // dof_handler.distribute_dofs(fe_collection);
 
     const unsigned int n_dofs = dof_handler.n_dofs();
 
@@ -327,8 +330,6 @@ namespace Step34
     system_rhs.reinit(n_dofs);
     phi.reinit(n_dofs);
     alpha.reinit(n_dofs);
-
-    std::cout << "n_dofs: " << n_dofs << std::endl;
   }
 
 
@@ -340,52 +341,24 @@ namespace Step34
 
     unsigned int n_dofs_per_cell = fe.n_dofs_per_cell();
 
-    std::vector<types::global_dof_index> local_dofs_left(n_dofs_per_cell);
-    std::vector<types::global_dof_index> local_dofs_right(n_dofs_per_cell);
     std::vector<types::global_dof_index> local_dofs(n_dofs_per_cell);
-
-    double normal_wind;
-
-    std::vector<unsigned int> order(2 * (dim - 1), singular_quadrature_order);
 
     FullMatrix<double> local_system(n_dofs_per_cell, n_dofs_per_cell);
     FullMatrix<double> local_mass(n_dofs_per_cell, n_dofs_per_cell);
     Vector<double>     local_rhs(n_dofs_per_cell);
 
-    QGaussSimplex<dim - 1>                  quad(singular_quadrature_order);
-    std::array<unsigned int, 2 * (dim - 1)> q_order;
-    for (unsigned int i = 0; i < 2 * (dim - 1); ++i)
-      q_order[i] = singular_quadrature_order;
+    QGaussSimplex<dim - 1> quad(singular_quadrature_order);
 
-    const auto duffy_quad =
-      SingularIntegralTools::get_duffy_quadrature_collection<dim>(q_order);
-
-    std::cout << "Quad suite size: " << duffy_quad.first.size() << std::endl;
-
-    hp::QCollection<dim - 1> quadrature_collection =
-      SingularIntegralTools::get_quadrature_collection(order);
-    hp::FECollection<dim - 1, dim> fe_collection(fe);
-
-    hp::FEValues<dim - 1, dim> fe_v(mapping,
-                                    fe,
-                                    quad,
-                                    update_values | update_JxW_values);
-
-
-    hp::FEValues<dim - 1, dim> fe_v_left(mapping,
-                                         fe_collection,
-                                         quadrature_collection,
-                                         update_values | update_JxW_values);
-
-    hp::FEValues<dim - 1, dim> fe_v_right(mapping,
-                                          fe_collection,
-                                          quadrature_collection,
-                                          update_values | update_JxW_values);
+    FEValues<dim - 1, dim> fe_v(mapping,
+                                fe,
+                                quad,
+                                update_values | update_JxW_values);
 
     for (const auto &cell : dof_handler.active_cell_iterators())
       {
-        cell->get_dof_indices(local_dofs);
         fe_v.reinit(cell);
+        cell->get_dof_indices(local_dofs);
+
         local_mass = 0;
         for (unsigned int q = 0; q < quad.size(); ++q)
           for (unsigned int i = 0; i < n_dofs_per_cell; ++i)
@@ -399,110 +372,60 @@ namespace Step34
               0.5 * local_mass(i, j);
       }
 
-    // unsigned pair_count = 0;
+    std::vector<types::global_dof_index> local_dofs_left(n_dofs_per_cell);
+    std::vector<types::global_dof_index> local_dofs_right(n_dofs_per_cell);
+
+    double normal_wind;
+
+    std::vector<unsigned int> order(2 * (dim - 1), singular_quadrature_order);
+    std::array<unsigned int, 2 * (dim - 1)> q_order;
+    for (unsigned int i = 0; i < 2 * (dim - 1); ++i)
+      q_order[i] = singular_quadrature_order;
+
+    const auto duffy_quad =
+      SingularIntegralTools::get_duffy_quadrature_collection<dim>(q_order);
+
+    hp::FECollection<dim - 1, dim>      fe_collection(fe);
+    hp::MappingCollection<dim - 1, dim> mapping_collection(mapping);
+    hp::FEValues<dim - 1, dim>          hp_fe_v_left(mapping_collection,
+                                            fe_collection,
+                                            duffy_quad.first,
+                                            update_values |
+                                              update_quadrature_points |
+                                              update_JxW_values);
+    hp::FEValues<dim - 1, dim>          hp_fe_v_right(mapping_collection,
+                                             fe_collection,
+                                             duffy_quad.second,
+                                             update_values |
+                                               update_normal_vectors |
+                                               update_quadrature_points |
+                                               update_JxW_values);
 
     for (const auto &cell_left : dof_handler.active_cell_iterators())
       for (const auto &cell_right : dof_handler.active_cell_iterators())
         {
-          // const auto double_quadrature_at_reference_cells =
-          //   SingularIntegralTools::get_duffy_coupling_quadrature_at_reference(
-          //     cell_left, cell_right, order);
-
-          // const unsigned int n_q_points =
-          //   double_quadrature_at_reference_cells.first.size();
-
-          // FEValues<dim - 1, dim> fe_v_left(
-          //   mapping,
-          //   fe,
-          //   double_quadrature_at_reference_cells.first,
-          //   update_values | update_quadrature_points | update_JxW_values);
-
-          // FEValues<dim - 1, dim> fe_v_right(
-          //   mapping,
-          //   fe,
-          //   double_quadrature_at_reference_cells.second,
-          //   update_values | update_normal_vectors | update_quadrature_points |
-          //     update_JxW_values);
-
-          /****
-          auto &[lef_quadrature_index, right_quadrature_index] =
-            SingularIntegralTools::get_quadrature_indices(cell_left,
-                                                          cell_right);
-
-          cell_left.set_fe_index(left_quadrature_index);
-          cell_right.set_fe_index(right_quadrature_index);
-          ****/
-
           const unsigned int quad_index =
             SingularIntegralTools::get_coupling_index(cell_left, cell_right);
-          const auto quad_first  = duffy_quad.first[quad_index];
-          const auto quad_second = duffy_quad.second[quad_index];
 
-          // if (pair_count < 10)
-          //   {
-          //     std::cout << "QUAD INDEX: " << quad_index << std::endl;
+          hp_fe_v_left.reinit(cell_left, quad_index, 0, 0);
+          hp_fe_v_right.reinit(cell_right, quad_index, 0, 0);
 
-          //     std::cout << "QUAD FIRST SIZE: " << quad_first.size()
-          //               << std::endl;
-          //     std::cout << "QUAD REF   SIZE: "
-          //               << double_quadrature_at_reference_cells.first.size()
-          //               << std::endl;
-
-          //     for (unsigned int q = 0; q < quad_first.size(); ++q)
-          //       std::cout
-          //         << "(" << quad_first.point(q)[0] << ", "
-          //         << quad_first.point(q)[1] << "), " << quad_first.weight(q)
-          //         << ", ("
-          //         << double_quadrature_at_reference_cells.first.point(q)[0]
-          //         << ", "
-          //         << double_quadrature_at_reference_cells.first.point(q)[1]
-          //         << "), "
-          //         << double_quadrature_at_reference_cells.first.weight(q)
-          //         << std::endl;
-          //     std::cout << std::endl;
-          //   }
-
-
-          // pair_count++;
-
-          const unsigned int n_q_points = quad_first.size();
-
-          FEValues<dim - 1, dim> fe_v_left(mapping,
-                                           fe,
-                                           quad_first,
-                                           update_values |
-                                             update_quadrature_points |
-                                             update_JxW_values);
-
-          FEValues<dim - 1, dim> fe_v_right(mapping,
-                                            fe,
-                                            quad_second,
-                                            update_values |
-                                              update_normal_vectors |
-                                              update_quadrature_points |
-                                              update_JxW_values);
-
-          fe_v_left.reinit(cell_left);
-          fe_v_right.reinit(cell_right);
-
-          const auto &[quadrature_coupling_type, dof_coupling_type] =
-            SingularIntegralTools::get_coupling_type(lef_quadrature_index,
-                                                     right_quadrature_index);
-
-          fe_coupling.reinit(fe_v_left,
-                             fe_v_right,
-                             quadrature_coupling_type,
-                             dof_coupling_type);
+          const auto &fe_v_left  = hp_fe_v_left.get_present_fe_values();
+          const auto &fe_v_right = hp_fe_v_right.get_present_fe_values();
 
           cell_left->get_dof_indices(local_dofs_left);
           cell_right->get_dof_indices(local_dofs_right);
 
-          std::vector<Vector<double>>    cell_wind(n_q_points,
-                                                Vector<double>(dim));
           const std::vector<Point<dim>> &right_q_points =
             fe_v_right.get_quadrature_points();
           const std::vector<Point<dim>> &left_q_points =
             fe_v_left.get_quadrature_points();
+
+          unsigned int n_q_points = right_q_points.size();
+
+          std::vector<Vector<double>> cell_wind(n_q_points,
+                                                Vector<double>(dim));
+
           wind.vector_value_list(right_q_points, cell_wind);
           const std::vector<Tensor<1, dim>> &normals =
             fe_v_right.get_normal_vectors();
@@ -767,14 +690,14 @@ namespace Step34
     if (extend_solution == true)
       compute_exterior_solution();
   }
-} // namespace Step34
+} // namespace Step90
 
 
 int main()
 {
   try
     {
-      using namespace Step34;
+      using namespace Step90;
 
       const unsigned int degree         = 1;
       const unsigned int mapping_degree = 1;

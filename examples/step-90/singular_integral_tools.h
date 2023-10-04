@@ -299,8 +299,7 @@ namespace SingularIntegralTools
       return std::make_tuple(px_hat, py_hat, jxw_hat);
     }
 
-    std::pair<QSimplex<2>, QSimplex<2>>
-    get_duffy_coupling_quadrature(
+    std::pair<QSimplex<2>, QSimplex<2>> get_duffy_coupling_quadrature(
       const std::vector<unsigned int> &quadrature_order,
       const unsigned int               n_common_vertices)
     {
@@ -315,7 +314,8 @@ namespace SingularIntegralTools
 
       switch (n_common_vertices)
         {
-            case 0: {
+          case 0:
+            {
               const auto quad_tuple =
                 internal::simplices_disjoint(tensor_quadrature);
               const unsigned int  quad_size = std::get<2>(quad_tuple).size();
@@ -327,7 +327,8 @@ namespace SingularIntegralTools
 
               break;
             }
-            case 1: {
+          case 1:
+            {
               const auto quad_tuple =
                 internal::simplices_common_vertex(tensor_quadrature);
               const unsigned int  quad_size = std::get<2>(quad_tuple).size();
@@ -339,7 +340,8 @@ namespace SingularIntegralTools
 
               break;
             }
-            case 2: {
+          case 2:
+            {
               const auto quad_tuple = simplices_common_face(tensor_quadrature);
               const unsigned int  quad_size = std::get<2>(quad_tuple).size();
               std::vector<double> unit_weights(quad_size, 1.0);
@@ -350,7 +352,8 @@ namespace SingularIntegralTools
 
               break;
             }
-            case 3: {
+          case 3:
+            {
               const auto quad_tuple =
                 simplices_identical_panels(tensor_quadrature);
               const unsigned int  quad_size = std::get<2>(quad_tuple).size();
@@ -362,7 +365,8 @@ namespace SingularIntegralTools
 
               break;
             }
-            default: {
+          default:
+            {
               Assert(false,
                      ExcMessage("The possible number of common vertices"
                                 "for two triangles is 0, 1, 2 or 3."));
@@ -432,8 +436,7 @@ namespace SingularIntegralTools
     return shared_vertices;
   }
 
-  unsigned int
-  get_coupling_index(
+  unsigned int get_coupling_index(
     const typename DoFHandler<2, 3>::active_cell_iterator &left_cell,
     const typename DoFHandler<2, 3>::active_cell_iterator &right_cell)
   {
@@ -441,25 +444,30 @@ namespace SingularIntegralTools
     const auto         info = get_cell_coupling_info(left_cell, right_cell);
     switch (info.size())
       {
-          case 0: {
+        case 0:
+          {
             return 0;
             break;
           }
-          case 1: {
+        case 1:
+          {
             return 1 + dim * std::get<1>(info[0]) + std::get<2>(info[0]);
             break;
           }
-          case 2: {
+        case 2:
+          {
             return 10 +
                    dim * (std::get<1>(info[0]) + std::get<1>(info[1]) - 1) +
                    (std::get<2>(info[0]) + std::get<2>(info[1]) - 1);
             break;
           }
-          case 3: {
+        case 3:
+          {
             return 19;
             break;
           }
-          default: {
+        default:
+          {
             Assert(false,
                    ExcMessage("The possible number of common vertices"
                               "for two triangles is 0, 1, 2 or 3."));
@@ -492,12 +500,14 @@ namespace SingularIntegralTools
     unsigned int n_shared_vertices = coupling_info.size();
     switch (n_shared_vertices)
       {
-          case 0: {
+        case 0:
+          {
             left_reordering  = left_normal_reordering;
             right_reordering = right_normal_reordering;
             break;
           }
-          case 1: {
+        case 1:
+          {
             left_reordering  = left_normal_reordering;
             right_reordering = right_normal_reordering;
 
@@ -508,7 +518,8 @@ namespace SingularIntegralTools
             std::swap(right_reordering[0], right_reordering[local_right_index]);
             break;
           }
-          case 2: {
+        case 2:
+          {
             for (const auto &info : coupling_info)
               {
                 left_reordering.push_back(std::get<1>(info));
@@ -526,12 +537,14 @@ namespace SingularIntegralTools
                 right_reordering.push_back(i);
             break;
           }
-          case 3: {
+        case 3:
+          {
             left_reordering  = left_normal_reordering;
             right_reordering = right_normal_reordering;
             break;
           }
-          default: {
+        default:
+          {
             Assert(false,
                    ExcMessage("The possible number of common vertices"
                               "for two triangles is 0, 1, 2 or 3."));
