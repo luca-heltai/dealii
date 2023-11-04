@@ -2163,7 +2163,7 @@ namespace Step32
 
     assemble_stokes_preconditioner();
 
-    std::vector<std::vector<double>>   constant_modes;
+    std::vector<std::vector<double>> constant_modes;
     const FEValuesExtractors::Vector velocity_components(0);
     DoFTools::extract_constant_modes(stokes_dof_handler,
                                      stokes_fe.component_mask(

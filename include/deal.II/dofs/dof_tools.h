@@ -28,6 +28,7 @@
 #include <deal.II/fe/component_mask.h>
 
 #include <deal.II/lac/affine_constraints.h>
+#include <deal.II/lac/la_parallel_vector.h>
 #include <deal.II/lac/sparsity_pattern_base.h>
 
 #include <map>
@@ -1464,20 +1465,12 @@ namespace DoFTools
                          const ComponentMask              &component_mask,
                          std::vector<std::vector<double>> &constant_modes);
 
-  /**
-   *
-   *
-   *
-   *
-   *
-   *
-   *
-   */
-  template <int dim, int spacedim>
+  template <int dim>
   void
-  extract_rigid_body_modes(const DoFHandler<dim, spacedim>  &dof_handler,
-                           const ComponentMask              &component_mask,
-                           std::vector<std::vector<double>> &rigid_body_modes);
+  extract_rigid_body_modes(
+    const DoFHandler<dim>                                   &dof_handler,
+    std::vector<LinearAlgebra::distributed::Vector<double>> &rigid_body_modes);
+
   /** @} */
 
   /**

@@ -44,6 +44,8 @@
 #include <deal.II/lac/sparsity_pattern_base.h>
 #include <deal.II/lac/vector.h>
 
+#include <deal.II/numerics/vector_tools_interpolate.templates.h>
+
 #include <algorithm>
 #include <numeric>
 
@@ -994,6 +996,60 @@ namespace DoFTools
         selected_dofs.subtract_set(unconstrained_dofs);
         return selected_dofs;
       }
+
+
+
+      /**
+       * Definition of the 6 Rigid body motions for 3D linear elasticity.
+       */
+      template <int dim>
+      class RigidBodyMotion : public Function<dim>
+      {
+      public:
+        RigidBodyMotion(const unsigned int type_);
+
+        virtual double
+        value(const Point<dim> &p, const unsigned int component) const override;
+
+      private:
+        const unsigned int type;
+      };
+
+
+      template <int dim>
+      RigidBodyMotion<dim>::RigidBodyMotion(const unsigned int _type)
+        : Function<dim>(dim)
+        , type(_type)
+      {
+        Assert(dim == 3, ExcNotImplemented());
+        Assert(type <= 5, ExcNotImplemented());
+      }
+
+
+
+      template <int dim>
+      double
+      RigidBodyMotion<dim>::value(const Point<dim>  &p,
+                                  const unsigned int component) const
+      {
+        const std::array<double, 6> modes{{static_cast<double>(component == 0),
+                                           static_cast<double>(component == 1),
+                                           static_cast<double>(component == 2),
+                                           (component == 0) ? 0. :
+                                           (component == 1) ? p[2] :
+                                                              -p[1],
+                                           (component == 0) ? -p[2] :
+                                           (component == 1) ? 0. :
+                                                              p[0],
+                                           (component == 0) ? p[1] :
+                                           (component == 1) ? -p[0] :
+                                                              0.}};
+
+        return modes[type];
+      }
+
+
+
     } // namespace
   }   // namespace internal
 
@@ -1355,6 +1411,45 @@ namespace DoFTools
                     element_constant_modes[cell->active_fe_index()](
                       indices.second, i);
             }
+      }
+  }
+
+
+
+  template <int dim>
+  void
+  extract_rigid_body_modes(
+    const DoFHandler<dim>                                   &dof_handler,
+    std::vector<LinearAlgebra::distributed::Vector<double>> &rigid_body_modes)
+  {
+    // Specialized for 3D linear elasticity and continuous Lagrangian elements
+    AssertDimension(dim, 3);
+    AssertDimension(dof_handler.get_fe(0).n_components(), 3);
+    Assert((dof_handler.get_fe(0).base_element(0).conforms(
+             FiniteElementData<dim>::Conformity::H1)),
+           ExcMessage("Only continous Lagrangian elements are allowed."));
+
+    // Assume parallel layout already set
+    AssertDimension(rigid_body_modes.size(), 6);
+    for (unsigned int i = 0; i < 6; ++i)
+      Assert(
+        (rigid_body_modes[i].get_partitioner()->ghost_indices_initialized()),
+        ExcMessage("Parallel layout not set."));
+
+    // If there are no locally owned DoFs, return with an empty
+    // constant_modes object:
+    if (dof_handler.n_locally_owned_dofs() == 0)
+      {
+        rigid_body_modes =
+          std::vector<LinearAlgebra::distributed::Vector<double>>(0);
+        return;
+      }
+
+    for (unsigned int i = 0; i < 6; ++i)
+      {
+        const internal::RigidBodyMotion<dim> &rbm(i);
+        // Using a linear mapping
+        VectorTools::interpolate(dof_handler, rbm, rigid_body_modes[i]);
       }
   }
 

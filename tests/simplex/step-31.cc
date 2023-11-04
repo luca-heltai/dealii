@@ -603,7 +603,7 @@ namespace Step31
     assemble_stokes_preconditioner();
     Amg_preconditioner = std::make_shared<TrilinosWrappers::PreconditionAMG>();
     std::vector<std::vector<double>> constant_modes;
-    FEValuesExtractors::Vector     velocity_components(0);
+    FEValuesExtractors::Vector       velocity_components(0);
     DoFTools::extract_constant_modes(stokes_dof_handler,
                                      stokes_fe.component_mask(
                                        velocity_components),
