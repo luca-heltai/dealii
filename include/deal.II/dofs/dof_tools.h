@@ -1460,9 +1460,24 @@ namespace DoFTools
    */
   template <int dim, int spacedim>
   void
-  extract_constant_modes(const DoFHandler<dim, spacedim> &dof_handler,
-                         const ComponentMask             &component_mask,
-                         std::vector<std::vector<bool>>  &constant_modes);
+  extract_constant_modes(const DoFHandler<dim, spacedim>  &dof_handler,
+                         const ComponentMask              &component_mask,
+                         std::vector<std::vector<double>> &constant_modes);
+
+  /**
+   *
+   *
+   *
+   *
+   *
+   *
+   *
+   */
+  template <int dim, int spacedim>
+  void
+  extract_rigid_body_modes(const DoFHandler<dim, spacedim>  &dof_handler,
+                           const ComponentMask              &component_mask,
+                           std::vector<std::vector<double>> &rigid_body_modes);
   /** @} */
 
   /**

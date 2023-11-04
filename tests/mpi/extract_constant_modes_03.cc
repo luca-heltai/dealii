@@ -81,7 +81,7 @@ test(unsigned int fe_nothing_index)
     {
       ComponentMask mask(1, true);
 
-      std::vector<std::vector<bool>> constant_modes;
+      std::vector<std::vector<double>> constant_modes;
       DoFTools::extract_constant_modes(dofh, mask, constant_modes);
 
       for (unsigned int i = 0; i < constant_modes.size(); ++i)

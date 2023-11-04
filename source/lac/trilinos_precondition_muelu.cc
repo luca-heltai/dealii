@@ -29,16 +29,16 @@ DEAL_II_NAMESPACE_OPEN
 namespace TrilinosWrappers
 {
   PreconditionAMGMueLu::AdditionalData::AdditionalData(
-    const bool                            elliptic,
-    const unsigned int                    n_cycles,
-    const bool                            w_cycle,
-    const double                          aggregation_threshold,
-    const std::vector<std::vector<bool>> &constant_modes,
-    const unsigned int                    smoother_sweeps,
-    const unsigned int                    smoother_overlap,
-    const bool                            output_details,
-    const char                           *smoother_type,
-    const char                           *coarse_type)
+    const bool                              elliptic,
+    const unsigned int                      n_cycles,
+    const bool                              w_cycle,
+    const double                            aggregation_threshold,
+    const std::vector<std::vector<double>> &constant_modes,
+    const unsigned int                      smoother_sweeps,
+    const unsigned int                      smoother_overlap,
+    const bool                              output_details,
+    const char                             *smoother_type,
+    const char                             *coarse_type)
     : elliptic(elliptic)
     , n_cycles(n_cycles)
     , w_cycle(w_cycle)

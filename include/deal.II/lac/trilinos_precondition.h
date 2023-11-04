@@ -1357,8 +1357,8 @@ namespace TrilinosWrappers
                      const unsigned int n_cycles              = 1,
                      const bool         w_cycle               = false,
                      const double       aggregation_threshold = 1e-4,
-                     const std::vector<std::vector<bool>> &constant_modes =
-                       std::vector<std::vector<bool>>(0),
+                     const std::vector<std::vector<double>> &constant_modes =
+                       std::vector<std::vector<double>>(0),
                      const unsigned int smoother_sweeps  = 2,
                      const unsigned int smoother_overlap = 0,
                      const bool         output_details   = false,
@@ -1498,7 +1498,7 @@ namespace TrilinosWrappers
        * We obtain the <tt>constant_modes</tt> fulfilling the above requirements
        * with the function DoFTools::extract_constant_modes.
        */
-      std::vector<std::vector<bool>> constant_modes;
+      std::vector<std::vector<double>> constant_modes;
 
       /**
        * Determines how many sweeps of the smoother should be performed. When
@@ -1722,8 +1722,8 @@ namespace TrilinosWrappers
                      const unsigned int n_cycles              = 1,
                      const bool         w_cycle               = false,
                      const double       aggregation_threshold = 1e-4,
-                     const std::vector<std::vector<bool>> &constant_modes =
-                       std::vector<std::vector<bool>>(0),
+                     const std::vector<std::vector<double>> &constant_modes =
+                       std::vector<std::vector<double>>(0),
                      const unsigned int smoother_sweeps  = 2,
                      const unsigned int smoother_overlap = 0,
                      const bool         output_details   = false,
@@ -1768,7 +1768,7 @@ namespace TrilinosWrappers
        * near null space only consists of ones) or on a vector-valued
        * equation.
        */
-      std::vector<std::vector<bool>> constant_modes;
+      std::vector<std::vector<double>> constant_modes;
 
       /**
        * Determines how many sweeps of the smoother should be performed. When

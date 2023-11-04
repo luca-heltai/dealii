@@ -1622,7 +1622,7 @@ namespace Step42
     {
       TimerOutput::Scope t(computing_timer, "Solve: setup preconditioner");
 
-      std::vector<std::vector<bool>> constant_modes;
+      std::vector<std::vector<double>> constant_modes;
       DoFTools::extract_constant_modes(dof_handler,
                                        ComponentMask(),
                                        constant_modes);

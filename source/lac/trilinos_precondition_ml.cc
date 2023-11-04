@@ -37,17 +37,17 @@ namespace TrilinosWrappers
   /* -------------------------- PreconditionAMG -------------------------- */
 
   PreconditionAMG::AdditionalData::AdditionalData(
-    const bool                            elliptic,
-    const bool                            higher_order_elements,
-    const unsigned int                    n_cycles,
-    const bool                            w_cycle,
-    const double                          aggregation_threshold,
-    const std::vector<std::vector<bool>> &constant_modes,
-    const unsigned int                    smoother_sweeps,
-    const unsigned int                    smoother_overlap,
-    const bool                            output_details,
-    const char                           *smoother_type,
-    const char                           *coarse_type)
+    const bool                              elliptic,
+    const bool                              higher_order_elements,
+    const unsigned int                      n_cycles,
+    const bool                              w_cycle,
+    const double                            aggregation_threshold,
+    const std::vector<std::vector<double>> &constant_modes,
+    const unsigned int                      smoother_sweeps,
+    const unsigned int                      smoother_overlap,
+    const bool                              output_details,
+    const char                             *smoother_type,
+    const char                             *coarse_type)
     : elliptic(elliptic)
     , higher_order_elements(higher_order_elements)
     , n_cycles(n_cycles)

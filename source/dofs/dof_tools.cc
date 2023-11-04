@@ -1239,15 +1239,15 @@ namespace DoFTools
 
   template <int dim, int spacedim>
   void
-  extract_constant_modes(const DoFHandler<dim, spacedim> &dof_handler,
-                         const ComponentMask             &component_mask,
-                         std::vector<std::vector<bool>>  &constant_modes)
+  extract_constant_modes(const DoFHandler<dim, spacedim>  &dof_handler,
+                         const ComponentMask              &component_mask,
+                         std::vector<std::vector<double>> &constant_modes)
   {
     // If there are no locally owned DoFs, return with an empty
     // constant_modes object:
     if (dof_handler.n_locally_owned_dofs() == 0)
       {
-        constant_modes = std::vector<std::vector<bool>>(0);
+        constant_modes = std::vector<std::vector<double>>(0);
         return;
       }
 
@@ -1282,7 +1282,7 @@ namespace DoFTools
     // have the same constant modes, but that is messy...
     const dealii::hp::FECollection<dim, spacedim> &fe_collection =
       dof_handler.get_fe_collection();
-    std::vector<Table<2, bool>> element_constant_modes;
+    std::vector<Table<2, double>> element_constant_modes;
     std::vector<std::vector<std::pair<unsigned int, unsigned int>>>
       constant_mode_to_component_translation(n_components);
     {
@@ -1310,7 +1310,14 @@ namespace DoFTools
           // Add the constant modes of this element to the list and assert that
           // there are as many constant modes as for the other elements (or zero
           // constant modes).
-          element_constant_modes.push_back(data.first);
+
+          Table<2, double> converted_data(data.first.n_rows(),
+                                          data.first.n_cols());
+          for (unsigned int i = 0; i < data.first.n_rows(); ++i)
+            for (unsigned int j = 0; j < data.first.n_cols(); ++j)
+              converted_data[i][j] = data.first[i][j];
+
+          element_constant_modes.push_back(converted_data);
           Assert(
             element_constant_modes.back().n_rows() == 0 ||
               element_constant_modes.back().n_rows() ==
@@ -1323,7 +1330,7 @@ namespace DoFTools
       // accordingly
       constant_modes.clear();
       constant_modes.resize(n_constant_modes,
-                            std::vector<bool>(n_selected_dofs, false));
+                            std::vector<double>(n_selected_dofs, 0.));
     }
 
     // Loop over all owned cells and ask the element for the constant modes
