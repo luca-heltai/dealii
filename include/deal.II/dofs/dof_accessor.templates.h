@@ -889,7 +889,8 @@ namespace internal
               dofs_per_vertex = fe.n_dofs_per_vertex(),          //
               dofs_per_line   = fe.n_dofs_per_line(),            //
               dofs_per_quad   = fe.n_dofs_per_quad(0 /*dummy*/), //
-              dofs_per_hex    = fe.n_dofs_per_hex();             //
+              dofs_per_hex    = fe.n_dofs_per_hex(),             //
+              non_local_dofs  = fe.n_non_local_dofs_per_cell();  //
 
             unsigned int index = 0;
 
@@ -911,6 +912,10 @@ namespace internal
 
             index += interior_dofs;
 
+            // 5) non local dofs
+            if (dim == structdim)
+              index += non_local_dofs;
+
             return index;
           }
         else
@@ -920,6 +925,11 @@ namespace internal
                 accessor, fe_index_);
 
             unsigned int index = 0;
+
+            const auto diff = [](const auto &p) { return p.second - p.first; };
+
+            const unsigned int non_local_dofs =
+              accessor.get_fe(fe_index).n_non_local_dofs_per_cell();
 
             // 1) VERTEX dofs
             for (const auto vertex : accessor.vertex_indices())
@@ -944,6 +954,10 @@ namespace internal
 
             // 4) INNER dofs
             index += process_object_range(accessor, fe_index).second;
+
+            // 5) non local dofs
+            if (dim == structdim)
+              index += non_local_dofs;
 
             return index;
           }
@@ -1014,7 +1028,8 @@ namespace internal
         // even if level_dof_access==false.
         (void)count_level_dofs;
 
-        const auto &fe = accessor.get_fe(fe_index);
+        const auto &fe                      = accessor.get_fe(fe_index);
+        const auto  non_local_dofs_per_cell = fe.n_non_local_dofs_per_cell();
 
         // we want to pass in rvalue 'std::tuple<>' types as `DoFIndicesType`,
         // but we need non-const references for std::vector<> types, so get in
@@ -1141,6 +1156,11 @@ namespace internal
             dof_indices_ptr,
             dof_processor);
 
+        // 5) non_local dofs
+        for (unsigned int d = 0; d < non_local_dofs_per_cell; ++d, ++index)
+          {
+            // TODO: Check if we need DoFOperation::process_dof also here!
+          }
         AssertDimension(n_dof_indices(accessor, fe_index, count_level_dofs),
                         dof_indices_ptr - get_array_ptr(const_dof_indices));
 
@@ -1153,6 +1173,8 @@ namespace internal
         types::global_dof_index invalid_index = numbers::invalid_dof_index;
         for (; dof_indices_ptr < end_dof_indices; ++dof_indices_ptr)
           dof_processor(invalid_index, dof_indices_ptr);
+
+        AssertDimension(dof_indices.size(), index);
       }
 
 
@@ -1714,6 +1736,126 @@ DoFAccessor<structdim, dim, spacedim, level_dof_access>::get_fe(
 }
 
 
+// [LH: check where to put the non local part of this]
+
+// template <int structdim, int dim, int spacedim, bool level_dof_access>
+// inline void
+// DoFAccessor<structdim, dim, spacedim, level_dof_access>::get_dof_indices(
+//   std::vector<types::global_dof_index> &dof_indices,
+//   const unsigned int                    fe_index_) const
+// {
+//   Assert(this->dof_handler != nullptr, ExcInvalidObject());
+
+//   const unsigned int fe_index =
+//     (this->dof_handler->hp_capability_enabled == false &&
+//      fe_index_ == DoFHandler<dim, spacedim>::invalid_fe_index) ?
+//       DoFHandler<dim, spacedim>::default_fe_index :
+//       fe_index_;
+
+//   Assert(static_cast<unsigned int>(this->level()) <
+//            this->dof_handler->object_dof_indices.size(),
+//          ExcMessage(
+//            "The DoFHandler to which this accessor points has not "
+//            "been initialized, i.e., it doesn't appear that DoF indices "
+//            "have been distributed on it."));
+
+//   switch (structdim)
+//     {
+//       case 1:
+//         Assert(
+//           dof_indices.size() ==
+//             (this->n_vertices() *
+//                this->dof_handler->get_fe(fe_index).n_dofs_per_vertex() +
+//              this->dof_handler->get_fe(fe_index).n_dofs_per_line()) +
+//               this->dof_handler->get_fe(fe_index).n_non_local_dofs_per_cell(),
+//           ExcVectorDoesNotMatch());
+//         break;
+//       case 2:
+//         Assert(
+//           dof_indices.size() ==
+//             (this->n_vertices() *
+//                this->dof_handler->get_fe(fe_index).n_dofs_per_vertex() +
+//              this->n_lines() *
+//                this->dof_handler->get_fe(fe_index).n_dofs_per_line() +
+//              this->dof_handler->get_fe(fe_index).n_dofs_per_quad()) +
+//               this->dof_handler->get_fe(fe_index).n_non_local_dofs_per_cell(),
+//           ExcVectorDoesNotMatch());
+//         break;
+//       case 3:
+//         Assert(
+//           dof_indices.size() ==
+//             (this->n_vertices() *
+//                this->dof_handler->get_fe(fe_index).n_dofs_per_vertex() +
+//              this->n_lines() *
+//                this->dof_handler->get_fe(fe_index).n_dofs_per_line() +
+//              this->n_faces() *
+//                this->dof_handler->get_fe(fe_index).n_dofs_per_quad() +
+//              this->dof_handler->get_fe(fe_index).n_dofs_per_hex()) +
+//               this->dof_handler->get_fe(fe_index).n_non_local_dofs_per_cell(),
+//           ExcVectorDoesNotMatch());
+//         break;
+//       default:
+//         Assert(false, ExcNotImplemented());
+//     }
+
+
+//   // this function really only makes sense if either a) there are degrees of
+//   // freedom defined on the present object, or b) the object is non-active
+//   // objects but all degrees of freedom are located on vertices, since
+//   otherwise
+//   // there are degrees of freedom on sub-objects which are not allocated for
+//   // this non-active thing
+//   Assert(this->fe_index_is_active(fe_index) ||
+//            (this->dof_handler->get_fe(fe_index).n_dofs_per_cell() ==
+//             this->n_vertices() *
+//               this->dof_handler->get_fe(fe_index).n_dofs_per_vertex()),
+//          ExcInternalError());
+
+//   // now do the actual work
+//   dealii::internal::DoFAccessorImplementation::Implementation::get_dof_indices(
+//     *this, dof_indices, fe_index);
+// }
+
+
+
+// template <int structdim, int dim, int spacedim, bool level_dof_access>
+// inline void
+// DoFAccessor<structdim, dim, spacedim, level_dof_access>::get_mg_dof_indices(
+//   const int                             level,
+//   std::vector<types::global_dof_index> &dof_indices,
+//   const unsigned int                    fe_index_) const
+// {
+//   Assert(this->dof_handler != nullptr, ExcInvalidObject());
+
+//   const unsigned int fe_index =
+//     (this->dof_handler->hp_capability_enabled == false &&
+//      fe_index_ == DoFHandler<dim, spacedim>::invalid_fe_index) ?
+//       DoFHandler<dim, spacedim>::default_fe_index :
+//       fe_index_;
+
+//   internal::DoFAccessorImplementation::Implementation::get_mg_dof_indices(
+//     *this, level, dof_indices, fe_index);
+// }
+
+
+// template <int structdim, int dim, int spacedim, bool level_dof_access>
+// inline void
+// DoFAccessor<structdim, dim, spacedim, level_dof_access>::set_mg_dof_indices(
+//   const int                                   level,
+//   const std::vector<types::global_dof_index> &dof_indices,
+//   const unsigned int                          fe_index_)
+// {
+//   Assert(this->dof_handler != nullptr, ExcInvalidObject());
+
+//   const unsigned int fe_index =
+//     (this->dof_handler->hp_capability_enabled == false &&
+//      fe_index_ == DoFHandler<dim, spacedim>::invalid_fe_index) ?
+//       DoFHandler<dim, spacedim>::default_fe_index :
+//       fe_index_;
+
+//   internal::DoFAccessorImplementation::Implementation::set_mg_dof_indices(
+//     *this, level, dof_indices, fe_index);
+// }
 
 template <int structdim, int dim, int spacedim, bool level_dof_access>
 inline typename dealii::internal::DoFHandlerImplementation::
@@ -2121,6 +2263,87 @@ namespace internal
      */
     struct Implementation
     {
+      // [LH: check where to put the non-local part of these functions.]
+
+      // /**
+      //  * Implement the updating of the cache.
+      //  */
+      // template <int dim, int spacedim, bool level_dof_access>
+      // static void
+      // update_cell_dof_indices_cache(
+      //   const DoFCellAccessor<dim, spacedim, level_dof_access> &accessor)
+      // {
+      //   // caches are only for cells with DoFs, i.e., for active ones and not
+      //   // FE_Nothing
+      //   if (accessor.has_children())
+      //     return;
+      //   const unsigned int dofs_per_cell =
+      //   accessor.get_fe().n_dofs_per_cell(); if (dofs_per_cell == 0)
+      //     return;
+
+      //   // call the get_dof_indices() function of DoFAccessor, which goes
+      //   // through all the parts of the cell to get the indices by hand. the
+      //   // corresponding function of DoFCellAccessor can then later use the
+      //   // cache
+      //   std::vector<types::global_dof_index> dof_indices(dofs_per_cell);
+      //   static_cast<
+      //     const dealii::DoFAccessor<dim, dim, spacedim, level_dof_access> &>(
+      //     accessor)
+      //     .get_dof_indices(dof_indices, accessor.active_fe_index());
+
+      //   types::global_dof_index *next_dof_index =
+      //     const_cast<types::global_dof_index *>(
+      //       dealii::internal::DoFAccessorImplementation::Implementation::
+      //         get_cache_ptr(accessor.dof_handler,
+      //                       accessor.present_level,
+      //                       accessor.present_index,
+      //                       dofs_per_cell));
+
+      //   for (unsigned int i = 0; i < dofs_per_cell; ++i, ++next_dof_index)
+      //     *next_dof_index = dof_indices[i];
+      // }
+
+
+
+      // /**
+      //  * Implement setting non-local dof indices on a cell.
+      //  */
+      // template <int dim, int spacedim, bool level_dof_access>
+      // static void
+      // set_non_local_dof_indices(
+      //   const DoFCellAccessor<dim, spacedim, level_dof_access> &accessor,
+      //   const std::vector<types::global_dof_index>
+      //   &local_non_local_dof_indices)
+      // {
+      //   Assert(accessor.has_children() == false, ExcInternalError());
+
+      //   const unsigned int dofs_per_cell =
+      //   accessor.get_fe().n_dofs_per_cell(); const unsigned int
+      //   n_non_local_dofs =
+      //     accessor.get_fe().n_non_local_dofs_per_cell();
+      //   const unsigned int n_local_dofs = dofs_per_cell - n_non_local_dofs;
+
+      //   AssertDimension(local_non_local_dof_indices.size(),
+      //   n_non_local_dofs);
+
+      //   // First the easy case.
+      //   if (n_non_local_dofs == 0)
+      //     return;
+
+      //   types::global_dof_index *next_dof_index =
+      //     const_cast<types::global_dof_index *>(
+      //       dealii::internal::DoFAccessorImplementation::Implementation::
+      //         get_cache_ptr(accessor.dof_handler,
+      //                       accessor.present_level,
+      //                       accessor.present_index,
+      //                       dofs_per_cell)) +
+      //     n_local_dofs;
+
+      //   for (unsigned int d = 0; d < n_non_local_dofs; ++d, ++next_dof_index)
+      //     *next_dof_index = local_non_local_dof_indices[d];
+      // }
+
+
       /**
        * Do what the active_fe_index function in the parent class is supposed to
        * do.
