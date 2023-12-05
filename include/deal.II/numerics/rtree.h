@@ -25,7 +25,10 @@
 #include <deal.II/boost_adaptors/point.h>
 #include <deal.II/boost_adaptors/segment.h>
 
+#include <deal.II/grid/tria.h>
+
 #include <boost/geometry/algorithms/distance.hpp>
+#include <boost/geometry/index/detail/rtree/utilities/print.hpp>
 #include <boost/geometry/index/rtree.hpp>
 #include <boost/geometry/strategies/strategies.hpp>
 
@@ -334,7 +337,7 @@ struct ExtractLevelVisitor
    * @p target_level of the tree.
    */
   inline ExtractLevelVisitor(
-    const Translator  &translator,
+    const Translator & translator,
     const unsigned int target_level,
     std::vector<BoundingBox<boost::geometry::dimension<Box>::value>> &boxes);
 
@@ -427,7 +430,7 @@ struct ExtractLevelVisitor
  *
  * std::vector<BoundingBox<2>> all_boxes(tria.n_locally_owned_active_cells());
  * unsigned int                i = 0;
- * for (const auto &cell : tria.active_cell_iterators())
+ * for (const auto &cell : tria.active_cell_iterator())
  *   if (cell->is_locally_owned())
  *     all_boxes[i++] = cell->bounding_box();
  *
@@ -461,8 +464,10 @@ extract_rtree_level(const Rtree &tree, const unsigned int level);
  * of the i-th node of the tree.
  */
 template <typename Rtree>
-std::vector<std::vector<BoundingBox<
-  boost::geometry::dimension<typename Rtree::indexable_type>::value>>>
+std::pair<
+  std::vector<std::vector<unsigned int>>,
+  std::vector<std::vector<typename Triangulation<boost::geometry::dimension<
+    typename Rtree::indexable_type>::value>::active_cell_iterator>>>
 extract_children_of_level(const Rtree &tree, const unsigned int level);
 
 
@@ -520,7 +525,7 @@ template <typename Value,
           typename Allocators>
 ExtractLevelVisitor<Value, Options, Translator, Box, Allocators>::
   ExtractLevelVisitor(
-    const Translator  &translator,
+    const Translator & translator,
     const unsigned int target_level,
     std::vector<BoundingBox<boost::geometry::dimension<Box>::value>> &boxes)
   : translator(translator)
@@ -653,8 +658,9 @@ struct NodeVisitor : public boost::geometry::index::detail::rtree::visitor<
   inline NodeVisitor(
     const Translator &translator,
     unsigned int      target_level,
-    std::vector<
-      std::vector<BoundingBox<boost::geometry::dimension<Box>::value>>> &boxes);
+    std::vector<std::vector<typename Triangulation<2>::active_cell_iterator>>
+      &                                     boxes,
+    std::vector<std::vector<unsigned int>> &csr);
 
 
   /**
@@ -707,6 +713,7 @@ struct NodeVisitor : public boost::geometry::index::detail::rtree::visitor<
    */
   size_t node_counter;
 
+  size_t next_level_leafs_processed;
   /**
    * The level where children are living.
    * Before: "we want to extract from the RTree object."
@@ -718,8 +725,10 @@ struct NodeVisitor : public boost::geometry::index::detail::rtree::visitor<
    * vector v has the following property: v[i] = vector with all
    * of the BoundingBox bounded by the i-th node of the Rtree.
    */
-  std::vector<std::vector<BoundingBox<boost::geometry::dimension<Box>::value>>>
-    &boxes_in_boxes;
+  std::vector<std::vector<typename Triangulation<2>::active_cell_iterator>>
+    &agglomerates;
+
+  std::vector<std::vector<unsigned int>> &row_ptr;
 };
 
 
@@ -730,15 +739,18 @@ template <typename Value,
           typename Box,
           typename Allocators>
 NodeVisitor<Value, Options, Translator, Box, Allocators>::NodeVisitor(
-  const Translator  &translator,
+  const Translator & translator,
   const unsigned int target_level,
-  std::vector<std::vector<BoundingBox<boost::geometry::dimension<Box>::value>>>
-    &bb_in_boxes)
+  std::vector<std::vector<typename Triangulation<2>::active_cell_iterator>>
+    &                                     bb_in_boxes,
+  std::vector<std::vector<unsigned int>> &csr)
   : translator(translator)
   , level(0)
   , node_counter(0)
+  , next_level_leafs_processed(0)
   , target_level(target_level)
-  , boxes_in_boxes(bb_in_boxes)
+  , agglomerates(bb_in_boxes)
+  , row_ptr(csr)
 {}
 
 
@@ -757,42 +769,68 @@ NodeVisitor<Value, Options, Translator, Box, Allocators>::operator()(
       InternalNode>::type; //  pairs of bounding box and pointer to child node
   const elements_type &elements =
     boost::geometry::index::detail::rtree::elements(node);
+  // std::cout << "LEVEL = " << level << std::endl;
 
-  if (level == target_level)
+  if (level < target_level)
     {
-      const unsigned int n_children = elements.size();
-      const auto         offset     = boxes_in_boxes.size();
-      boxes_in_boxes.resize(offset + n_children);
-    }
+      size_t level_backup = level;
+      ++level;
 
-  if (level == target_level + 1)
-    {
-      // I have now access to children of level target_level
-      boxes_in_boxes[node_counter].resize(elements.size()); // number of bboxes
-      unsigned int i = 0;
       for (typename elements_type::const_iterator it = elements.begin();
            it != elements.end();
            ++it)
         {
-          boost::geometry::convert(it->first, boxes_in_boxes[node_counter][i]);
-          ++i;
+          boost::geometry::index::detail::rtree::apply_visitor(*this,
+                                                               *it->second);
+          // std::cout << "Vengo da qui" << std::endl;
         }
-      // Children have been stored, go to the next parent.
-      ++node_counter;
-      return;
+
+      level = level_backup;
     }
-
-  size_t level_backup = level;
-  ++level;
-
-  for (typename elements_type::const_iterator it = elements.begin();
-       it != elements.end();
-       ++it)
+  else if (level == target_level)
     {
-      boost::geometry::index::detail::rtree::apply_visitor(*this, *it->second);
-    }
+      // std::cout << "ENTERED IN target_level" + std::to_string(target_level)
+      //<< std::endl;
 
-  level = level_backup;
+      // const unsigned int n_children = elements.size();
+      const auto offset = agglomerates.size();
+      agglomerates.resize(offset + 1);
+      row_ptr.resize(row_ptr.size() + 1);
+      next_level_leafs_processed = 0;
+      row_ptr.back().push_back(
+        next_level_leafs_processed); // convenction: row_ptr[0]=0
+      size_t level_backup = level;
+
+      ++level;
+      for (const auto &child : elements)
+        {
+          boost::geometry::index::detail::rtree::apply_visitor(*this,
+                                                               *child.second);
+          // std::cout << "Scanned on target level" << std::endl;
+        }
+      // std::cout << "###DONE WITH NODE number " << node_counter << "###"
+      //<< std::endl;
+
+      ++node_counter; // visited all children of an internal node
+
+      level = level_backup;
+    }
+  else if (level > target_level)
+    {
+      // Keep visiting until you go to the leafs.
+      size_t level_backup = level;
+
+      ++level;
+      // std::cout << "leafs_processed = " << next_level_leafs_processed
+      // << std::endl;
+      for (const auto &child : elements)
+        {
+          boost::geometry::index::detail::rtree::apply_visitor(*this,
+                                                               *child.second);
+        }
+      level = level_backup;
+      row_ptr[node_counter].push_back(next_level_leafs_processed);
+    }
 }
 
 
@@ -804,50 +842,72 @@ template <typename Value,
           typename Allocators>
 void
 NodeVisitor<Value, Options, Translator, Box, Allocators>::operator()(
-  const NodeVisitor::Leaf &)
+  const NodeVisitor::Leaf &leaf)
 {
   // No children for leaf nodes.
-  boxes_in_boxes.clear();
+  // agglomerates.clear();
+  using elements_type =
+    typename boost::geometry::index::detail::rtree::elements_type<
+      Leaf>::type; //  pairs of bounding box and pointer to child node
+  const elements_type &elements =
+    boost::geometry::index::detail::rtree::elements(leaf);
+
+  // std::cout << "I am on level " << level << " and those are the leafs"
+  //<< std::endl;
+  // std::cout << "Node counter = " << node_counter << std::endl;
+  // std::cout << "Next level leafs processed = " << next_level_leafs_processed
+  //<< std::endl;
+  for (const auto &it : elements)
+    {
+      agglomerates[node_counter].push_back(it.second);
+      // std::cout << it.second->active_cell_index() << ", ";
+    }
+  next_level_leafs_processed += elements.size();
+
+  // std::cout << std::endl;
 }
 
 template <typename Rtree>
-inline std::vector<std::vector<BoundingBox<
-  boost::geometry::dimension<typename Rtree::indexable_type>::value>>>
+inline std::pair<
+  std::vector<std::vector<unsigned int>>,
+  std::vector<std::vector<typename Triangulation<boost::geometry::dimension<
+    typename Rtree::indexable_type>::value>::active_cell_iterator>>>
 extract_children_of_level(const Rtree &tree, const unsigned int level)
 {
-  constexpr unsigned int dim =
-    boost::geometry::dimension<typename Rtree::indexable_type>::value;
-
   using RtreeView =
     boost::geometry::index::detail::rtree::utilities::view<Rtree>;
   RtreeView rtv(tree);
 
-  std::vector<std::vector<BoundingBox<dim>>> boxes_in_boxes;
+  std::vector<std::vector<unsigned int>> csrs;
+  std::vector<std::vector<typename Triangulation<2>::active_cell_iterator>>
+    agglomerates;
 
   if (rtv.depth() == 0)
     {
       // The below algorithm does not work for `rtv.depth()==0`, which might
       // happen if the number entries in the tree is too small.
       // In this case, simply return a single bounding box.
-      boxes_in_boxes.resize(1);
-      boxes_in_boxes[0].resize(1);
-      boost::geometry::convert(tree.bounds(), boxes_in_boxes[0][0]);
+      agglomerates.resize(1);
+      agglomerates[0].resize(1);
+      csrs.resize(1);
+      csrs[0].resize(1);
     }
   else
     {
       const unsigned int target_level =
-        std::min<unsigned int>(level, rtv.depth() - 1);
+        std::min<unsigned int>(level, rtv.depth());
 
       NodeVisitor<typename RtreeView::value_type,
                   typename RtreeView::options_type,
                   typename RtreeView::translator_type,
                   typename RtreeView::box_type,
                   typename RtreeView::allocators_type>
-        node_visitor(rtv.translator(), target_level, boxes_in_boxes);
+        node_visitor(rtv.translator(), target_level, agglomerates, csrs);
       rtv.apply_visitor(node_visitor);
     }
+  AssertDimension(agglomerates.size(), csrs.size());
 
-  return boxes_in_boxes;
+  return {csrs, agglomerates};
 }
 
 

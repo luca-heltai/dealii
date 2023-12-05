@@ -90,6 +90,7 @@ namespace SparsityTools
       // use default options for METIS
       idx_t options[METIS_NOPTIONS];
       METIS_SetDefaultOptions(options);
+      options[METIS_OPTION_CONTIG] = 1;
 
       // one more nuisance: we have to copy our own data to arrays that store
       // signed integers :-(
