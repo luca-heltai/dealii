@@ -66,8 +66,8 @@ public:
    */
   void
   operator()(const unsigned int level,
-             VectorType        &dst,
-             const VectorType  &src) const override;
+             VectorType &       dst,
+             const VectorType & src) const override;
 
 private:
   /**
@@ -102,8 +102,8 @@ public:
    * Constructor. Only a reference to these objects is stored, so
    * their lifetime needs to exceed the usage in this class.
    */
-  MGCoarseGridIterativeSolver(SolverType               &solver,
-                              const MatrixType         &matrix,
+  MGCoarseGridIterativeSolver(SolverType &              solver,
+                              const MatrixType &        matrix,
                               const PreconditionerType &precondition);
 
   /**
@@ -111,8 +111,8 @@ public:
    * details.
    */
   void
-  initialize(SolverType               &solver,
-             const MatrixType         &matrix,
+  initialize(SolverType &              solver,
+             const MatrixType &        matrix,
              const PreconditionerType &precondition);
 
   /**
@@ -127,8 +127,8 @@ public:
    */
   virtual void
   operator()(const unsigned int level,
-             VectorType        &dst,
-             const VectorType  &src) const override;
+             VectorType &       dst,
+             const VectorType & src) const override;
 
 private:
   /**
@@ -165,6 +165,87 @@ private:
 
 
 /**
+ * Coarse grid multigrid operator for an iterative solver.
+ *
+ * This class provides a wrapper for a deal.II iterative solver with a given
+ * matrix and preconditioner as a coarse grid operator.
+ */
+template <typename VectorType, typename SolverType, typename PreconditionerType>
+class MGCoarseGridIterativeSolver<VectorType,
+                                  SolverType,
+                                  LinearOperator<VectorType>,
+                                  PreconditionerType>
+  : public MGCoarseGridBase<VectorType>
+{
+public:
+  /**
+   * Default constructor.
+   */
+  MGCoarseGridIterativeSolver();
+
+  /**
+   * Constructor. Only a reference to these objects is stored, so
+   * their lifetime needs to exceed the usage in this class.
+   */
+  MGCoarseGridIterativeSolver(SolverType &                      solver,
+                              const LinearOperator<VectorType> &linear_op,
+                              const PreconditionerType &        precondition);
+
+  /**
+   * Initialize with new data, see the corresponding constructor for more
+   * details.
+   */
+  void
+  initialize(SolverType &                      solver,
+             const LinearOperator<VectorType> &linear_op,
+             const PreconditionerType &        precondition);
+
+  /**
+   * Clear all pointers.
+   */
+  void
+  clear();
+
+  /**
+   * Implementation of the abstract function. Calls the solve method of the
+   * given solver with matrix, vectors, and preconditioner.
+   */
+  virtual void
+  operator()(const unsigned int level,
+             VectorType &       dst,
+             const VectorType & src) const override;
+
+private:
+  /**
+   * Reference to the solver.
+   */
+  SmartPointer<SolverType,
+               MGCoarseGridIterativeSolver<VectorType,
+                                           SolverType,
+                                           LinearOperator<VectorType>,
+                                           PreconditionerType>>
+    solver;
+
+  /**
+   * Reference to the matrix.
+   */
+  std::unique_ptr<const LinearOperator<VectorType>>
+    linear_op;
+
+  /**
+   * Reference to the preconditioner.
+   */
+  SmartPointer<const PreconditionerType,
+               MGCoarseGridIterativeSolver<VectorType,
+                                           SolverType,
+                                           LinearOperator<VectorType>,
+                                           PreconditionerType>>
+    preconditioner;
+};
+
+
+
+/**
  * Coarse grid solver by QR factorization implemented in the class
  * Householder.
  *
@@ -189,8 +270,8 @@ public:
 
   void
   operator()(const unsigned int level,
-             VectorType        &dst,
-             const VectorType  &src) const override;
+             VectorType &       dst,
+             const VectorType & src) const override;
 
 private:
   /**
@@ -222,8 +303,8 @@ public:
 
   void
   operator()(const unsigned int level,
-             VectorType        &dst,
-             const VectorType  &src) const;
+             VectorType &       dst,
+             const VectorType & src) const;
 
   /**
    * Write the singular values to @p deallog.
@@ -279,8 +360,8 @@ MGCoarseGridApplySmoother<VectorType>::clear()
 template <typename VectorType>
 void
 MGCoarseGridApplySmoother<VectorType>::operator()(const unsigned int level,
-                                                  VectorType        &dst,
-                                                  const VectorType  &src) const
+                                                  VectorType &       dst,
+                                                  const VectorType & src) const
 {
   coarse_smooth->apply(level, dst, src);
 }
@@ -310,8 +391,8 @@ MGCoarseGridIterativeSolver<VectorType,
                             SolverType,
                             MatrixType,
                             PreconditionerType>::
-  MGCoarseGridIterativeSolver(SolverType               &solver,
-                              const MatrixType         &matrix,
+  MGCoarseGridIterativeSolver(SolverType &              solver,
+                              const MatrixType &        matrix,
                               const PreconditionerType &preconditioner)
   : solver(&solver, typeid(*this).name())
   , matrix(&matrix, typeid(*this).name())
@@ -329,8 +410,8 @@ MGCoarseGridIterativeSolver<
   VectorType,
   SolverType,
   MatrixType,
-  PreconditionerType>::initialize(SolverType               &solver_,
-                                  const MatrixType         &matrix_,
+  PreconditionerType>::initialize(SolverType &              solver_,
+                                  const MatrixType &        matrix_,
                                   const PreconditionerType &preconditioner_)
 {
   solver         = &solver_;
@@ -369,11 +450,11 @@ namespace internal
                 std::is_same_v<VectorType, typename SolverType::vector_type>,
                 VectorType> * = nullptr>
     void
-    solve(SolverType               &solver,
-          const MatrixType         &matrix,
+    solve(SolverType &              solver,
+          const MatrixType &        matrix,
           const PreconditionerType &preconditioner,
-          VectorType               &dst,
-          const VectorType         &src)
+          VectorType &              dst,
+          const VectorType &        src)
     {
       solver.solve(matrix, dst, src, preconditioner);
     }
@@ -386,11 +467,11 @@ namespace internal
                 !std::is_same_v<VectorType, typename SolverType::vector_type>,
                 VectorType> * = nullptr>
     void
-    solve(SolverType               &solver,
-          const MatrixType         &matrix,
+    solve(SolverType &              solver,
+          const MatrixType &        matrix,
           const PreconditionerType &preconditioner,
-          VectorType               &dst,
-          const VectorType         &src)
+          VectorType &              dst,
+          const VectorType &        src)
     {
       typename SolverType::vector_type src_;
       typename SolverType::vector_type dst_;
@@ -412,12 +493,12 @@ template <typename VectorType,
           typename MatrixType,
           typename PreconditionerType>
 void
-MGCoarseGridIterativeSolver<
-  VectorType,
-  SolverType,
-  MatrixType,
-  PreconditionerType>::operator()(const unsigned int /*level*/,
-                                  VectorType       &dst,
+                       MGCoarseGridIterativeSolver<
+                         VectorType,
+                         SolverType,
+                         MatrixType,
+                         PreconditionerType>::operator()(const unsigned int /*level*/,
+                                  VectorType &      dst,
                                   const VectorType &src) const
 {
   Assert(solver != nullptr, ExcNotInitialized());
@@ -427,6 +508,138 @@ MGCoarseGridIterativeSolver<
   dst = 0;
   internal::MGCoarseGridIterativeSolver::solve(
     *solver, *matrix, *preconditioner, dst, src);
+}
+
+
+
+/* ------------------ Functions for MGCoarseGridIterativeSolver (specialized for
+ * LinearOperator) ------------ */
+
+template <typename VectorType, typename SolverType, typename PreconditionerType>
+MGCoarseGridIterativeSolver<VectorType,
+                            SolverType,
+                            LinearOperator<VectorType>,
+                            PreconditionerType>::MGCoarseGridIterativeSolver()
+  : solver(0, typeid(*this).name())
+  , linear_op(nullptr)
+  , preconditioner(0, typeid(*this).name())
+{}
+
+
+
+template <typename VectorType, typename SolverType, typename PreconditionerType>
+MGCoarseGridIterativeSolver<VectorType,
+                            SolverType,
+                            LinearOperator<VectorType>,
+                            PreconditionerType>::
+  MGCoarseGridIterativeSolver(SolverType &                      solver,
+                              const LinearOperator<VectorType> &linear_op,
+                              const PreconditionerType &        preconditioner)
+  : solver(&solver, typeid(*this).name())
+  , linear_op(std::make_unique<LinearOperator<VectorType>>(linear_op))
+  , preconditioner(&preconditioner, typeid(*this).name())
+{}
+
+
+
+template <typename VectorType, typename SolverType, typename PreconditionerType>
+void
+MGCoarseGridIterativeSolver<
+  VectorType,
+  SolverType,
+  LinearOperator<VectorType>,
+  PreconditionerType>::initialize(SolverType &                      solver_,
+                                  const LinearOperator<VectorType> &linear_op_,
+                                  const PreconditionerType &preconditioner_)
+{
+  solver         = &solver_;
+  linear_op.reset(&linear_op_);
+  preconditioner = &preconditioner_;
+}
+
+
+
+template <typename VectorType, typename SolverType, typename PreconditionerType>
+void
+MGCoarseGridIterativeSolver<VectorType,
+                            SolverType,
+                            LinearOperator<VectorType>,
+                            PreconditionerType>::clear()
+{
+  solver         = 0;
+  linear_op      = nullptr;
+  preconditioner = 0;
+}
+
+
+
+namespace internal
+{
+  namespace MGCoarseGridIterativeSolver
+  {
+    template <typename VectorType,
+              typename SolverType,
+              typename PreconditionerType,
+              std::enable_if_t<
+                std::is_same_v<VectorType, typename SolverType::vector_type>,
+                VectorType> * = nullptr>
+    void
+    solve(SolverType &                      solver,
+          const LinearOperator<VectorType> &linear_op,
+          const PreconditionerType &        preconditioner,
+          VectorType &                      dst,
+          const VectorType &                src)
+    {
+      const auto A_inv = inverse_operator(linear_op, solver, preconditioner);
+      dst              = A_inv * src;
+    }
+
+    template <typename VectorType,
+              typename SolverType,
+              typename PreconditionerType,
+              std::enable_if_t<
+                !std::is_same_v<VectorType, typename SolverType::vector_type>,
+                VectorType> * = nullptr>
+    void
+    solve(SolverType &                      solver,
+          const LinearOperator<VectorType> &linear_op,
+          const PreconditionerType &        preconditioner,
+          VectorType &                      dst,
+          const VectorType &                src)
+    {
+      typename SolverType::vector_type src_;
+      typename SolverType::vector_type dst_;
+
+      src_ = src;
+      dst_ = dst;
+
+      const auto A_inv = inverse_operator(linear_op, solver, preconditioner);
+      dst_             = A_inv * src_;
+
+      dst = dst_;
+    }
+  } // namespace MGCoarseGridIterativeSolver
+} // namespace internal
+
+
+
+template <typename VectorType, typename SolverType, typename PreconditionerType>
+void
+                       MGCoarseGridIterativeSolver<
+                         VectorType,
+                         SolverType,
+                         LinearOperator<VectorType>,
+                         PreconditionerType>::operator()(const unsigned int /*level*/,
+                                  VectorType &      dst,
+                                  const VectorType &src) const
+{
+  Assert(solver != nullptr, ExcNotInitialized());
+  Assert(linear_op != nullptr, ExcNotInitialized());
+  Assert(preconditioner != nullptr, ExcNotInitialized());
+
+  dst = 0;
+  internal::MGCoarseGridIterativeSolver::solve(
+    *solver, *linear_op, *preconditioner, dst, src);
 }
 
 
@@ -457,7 +670,7 @@ template <typename number, typename VectorType>
 void
 MGCoarseGridHouseholder<number, VectorType>::operator()(
   const unsigned int /*level*/,
-  VectorType       &dst,
+  VectorType &      dst,
   const VectorType &src) const
 {
   householder.least_squares(dst, src);
@@ -481,7 +694,7 @@ MGCoarseGridSVD<number, VectorType>::initialize(const FullMatrix<number> &A,
 template <typename number, typename VectorType>
 void
 MGCoarseGridSVD<number, VectorType>::operator()(const unsigned int /*level*/,
-                                                VectorType       &dst,
+                                                VectorType &      dst,
                                                 const VectorType &src) const
 {
   matrix.vmult(dst, src);
