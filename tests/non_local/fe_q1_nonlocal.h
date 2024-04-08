@@ -39,32 +39,31 @@ get_dpo_vector()
 }
 
 template <int dim>
-class FE_Q1_Nonlocal : public FE_Q_Base<TensorProductPolynomials<dim>, dim, dim>
+class FE_Q1_Nonlocal : public FE_Q_Base<dim, dim>
 {
 public:
   FE_Q1_Nonlocal(const Triangulation<dim> &tria)
-    : FE_Q_Base<TensorProductPolynomials<dim>, dim, dim>(
-        TensorProductPolynomials<dim>(
-          Polynomials::generate_complete_Lagrange_basis(
-            QGaussLobatto<1>(2).get_points())),
-        FiniteElementData<dim>(get_dpo_vector<dim>(),
-                               1,
-                               1,
-                               FiniteElementData<dim>::H1),
-        std::vector<bool>(1, false))
+    : FE_Q_Base<dim, dim>(TensorProductPolynomials<dim>(
+                            Polynomials::generate_complete_Lagrange_basis(
+                              QGaussLobatto<1>(2).get_points())),
+                          FiniteElementData<dim>(get_dpo_vector<dim>(),
+                                                 1,
+                                                 1,
+                                                 FiniteElementData<dim>::H1),
+                          std::vector<bool>(1, false))
     , tria(&tria)
   {
-    this->unit_support_points = QTrapez<dim>().get_points();
+    this->unit_support_points = QTrapezoid<dim>().get_points();
   }
 
   virtual std::unique_ptr<FiniteElement<dim>>
-  clone() const override
+  clone() const
   {
     return std::make_unique<FE_Q1_Nonlocal<dim>>(*tria);
   }
 
   virtual std::string
-  get_name() const override
+  get_name() const
   {
     return "FE_Q_Nonlocal<dim>";
   }
@@ -72,7 +71,7 @@ public:
   virtual void
   convert_generalized_support_point_values_to_dof_values(
     const std::vector<Vector<double>> &support_point_values,
-    std::vector<double> &              nodal_values) const override
+    std::vector<double>               &nodal_values) const
   {
     AssertDimension(support_point_values.size(),
                     this->get_unit_support_points().size());
@@ -89,7 +88,7 @@ public:
 
   virtual std::vector<types::global_dof_index>
   get_non_local_dof_indices(
-    const DoFCellAccessor<dim, dim, false> &accessor) const override
+    const DoFCellAccessor<dim, dim, false> &accessor) const
   {
     std::vector<types::global_dof_index> dofs(accessor.n_vertices());
     for (unsigned int i = 0; i < dofs.size(); ++i)
@@ -99,14 +98,14 @@ public:
 
 
   virtual types::global_dof_index
-  n_global_non_local_dofs() const override
+  n_global_non_local_dofs() const
   {
     Assert(tria, ExcInternalError());
     return tria->n_vertices();
   }
 
   virtual std::string
-  get_non_local_id() const override
+  get_non_local_id() const
   {
     return "NonLocal FEQ1";
   }

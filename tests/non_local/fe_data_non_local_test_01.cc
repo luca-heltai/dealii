@@ -19,6 +19,7 @@
 
 
 #include <deal.II/fe/fe_base.h>
+#include <deal.II/fe/fe_data.h>
 
 #include <iostream>
 
