@@ -50,6 +50,8 @@ namespace NonMatching
 }
 template <int dim, int spacedim>
 class FESystem;
+template <int dim, int spacedim, bool>
+class DoFCellAccessor;
 #endif
 
 /**
@@ -2263,6 +2265,58 @@ public:
 
   /** @} */
 
+
+  /**
+   * @name Non local dofs support
+   * @{
+   */
+  /**
+   * Return the non local dof indices associated to the current cell, for
+   * active cell accessors.
+   */
+  virtual std::vector<types::global_dof_index>
+  get_non_local_dof_indices(
+    const DoFCellAccessor<dim, spacedim, false> &accessor) const;
+
+  /**
+   * Return the non local dof indices associated to the current cell, for
+   * level cell accessors.
+   */
+  virtual std::vector<types::global_dof_index>
+  get_non_local_dof_indices(
+    const DoFCellAccessor<dim, spacedim, true> &accessor) const;
+
+  /**
+   * Return the global number of non local dof indices that are required in
+   * addition to the local ones.
+   */
+  virtual types::global_dof_index
+  n_global_non_local_dofs() const;
+
+  /**
+   * Return an identification string that uniquely identifies the non local
+   * behaviour of the finite element space.
+   *
+   * For non local finite element spaces, n_non_local_dofs_per_cell() and
+   * n_global_non_local_dofs() may return a non zero number, meaning that there
+   * are degrees of freedom that are not associated to vertices, edges, faces,
+   * or cells (for example, they may be associated to patches of cells, or be
+   * global non zero basis functions), that are non zero on certain cells.
+   *
+   * In these cases, one usually uses the hp support of the library, and defines
+   * an FECollection where each FiniteElement of the collection has the same non
+   * local behaviour. This id is checked when calling
+   * DoFHandler::distribute_dofs() with an FECollection as argument, and an
+   * assertion is thrown if the ids do not coincide for all FiniteElement
+   * objects of the collection.
+   *
+   * By default, FiniteElement spaces are local, and this function returns the
+   * string "Local FiniteElement space".
+   */
+  virtual std::string
+  get_non_local_id() const;
+  //@}
+
   /**
    * Determine an estimate for the memory consumption (in bytes) of this
    * object.
@@ -3332,8 +3386,55 @@ FiniteElement<dim, spacedim>::get_associated_geometry_primitive(
     return GeometryPrimitive::hex;
 }
 
-#endif
+
+
+// Non local dofs support.
+template <int dim, int spacedim>
+inline std::vector<types::global_dof_index>
+FiniteElement<dim, spacedim>::get_non_local_dof_indices(
+  const DoFCellAccessor<dim, spacedim, true> &) const
+{
+  Assert(this->n_non_local_dofs_per_cell() == 0 &&
+           n_global_non_local_dofs() == 0,
+         ExcPureFunctionCalled());
+  return std::vector<types::global_dof_index>();
+}
+
+
+
+template <int dim, int spacedim>
+inline std::vector<types::global_dof_index>
+FiniteElement<dim, spacedim>::get_non_local_dof_indices(
+  const DoFCellAccessor<dim, spacedim, false> &) const
+{
+  Assert(this->n_non_local_dofs_per_cell() == 0 &&
+           n_global_non_local_dofs() == 0,
+         ExcPureFunctionCalled());
+  return std::vector<types::global_dof_index>();
+}
+
+
+
+template <int dim, int spacedim>
+inline types::global_dof_index
+FiniteElement<dim, spacedim>::n_global_non_local_dofs() const
+{
+  return 0;
+}
+
+
+
+template <int dim, int spacedim>
+inline std::string
+FiniteElement<dim, spacedim>::get_non_local_id() const
+{
+  Assert(this->n_non_local_dofs_per_cell() == 0 &&
+           n_global_non_local_dofs() == 0,
+         ExcPureFunctionCalled());
+  return "Local FiniteElement space";
+}
 
 DEAL_II_NAMESPACE_CLOSE
 
+#endif
 #endif
