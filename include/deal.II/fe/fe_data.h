@@ -191,6 +191,11 @@ namespace internal
      */
     std::vector<std::vector<unsigned int>> dofs_per_object_inclusive;
 
+      /**
+     * Number of nonlocal degrees of freedom per object.
+     */
+    unsigned int non_local_dofs_per_cell;
+
     /**
      * First index of an object.
      */

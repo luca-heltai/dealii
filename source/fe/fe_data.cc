@@ -33,6 +33,7 @@ namespace internal
     result.dofs_per_object_inclusive.resize(4, std::vector<unsigned int>(1));
     result.object_index.resize(4, std::vector<unsigned int>(1));
     result.first_object_index_on_face.resize(3, std::vector<unsigned int>(1));
+    result.non_local_dofs_per_cell = 0;
 
     // dofs_per_vertex
     const unsigned int dofs_per_vertex     = dofs_per_object[0];
@@ -50,6 +51,9 @@ namespace internal
     const unsigned int dofs_per_hex        = dim > 2 ? dofs_per_object[3] : 0;
     result.dofs_per_object_exclusive[3][0] = dofs_per_hex;
 
+    // non_local_dofs
+    const unsigned int non_local_dofs      = dofs_per_object.size() == dim + 2? dofs_per_object[dim + 1] : 0;
+    result.non_local_dofs_per_cell       = non_local_dofs;
 
     // first_line_index
     const unsigned int first_line_index =
@@ -89,7 +93,8 @@ namespace internal
       (cell_type.n_vertices() * dofs_per_vertex +
        cell_type.n_lines() * dofs_per_line +
        (dim == 2 ? 1 : (dim == 3 ? cell_type.n_faces() : 0)) * dofs_per_quad +
-       (dim == 3 ? 1 : 0) * dofs_per_hex);
+       (dim == 3 ? 1 : 0) * dofs_per_hex + 
+       non_local_dofs);
 
     return result;
   }
@@ -167,6 +172,7 @@ FiniteElementData<dim>::FiniteElementData(
   , dofs_per_quad_max(
       *max_element(n_dofs_on_quad.begin(), n_dofs_on_quad.end()))
   , dofs_per_hex(data.dofs_per_object_exclusive[3][0])
+  , non_local_dofs_per_cell(data.non_local_dofs_per_cell)
   , first_line_index(data.object_index[1][0])
   , first_index_of_quads(data.object_index[2])
   , first_quad_index(first_index_of_quads[0])
@@ -180,8 +186,7 @@ FiniteElementData<dim>::FiniteElementData(
   , dofs_per_face_max(
       *max_element(n_dofs_on_face.begin(), n_dofs_on_face.end()))
   , dofs_per_cell(data.dofs_per_object_inclusive[dim][0])
-  , non_local_dofs_per_cell(
-      0) // TBD
+ // TBD
          // dofs_per_object.size() == dim + 2 ? dofs_per_object[dim + 1] : 0)
   // =======
   // const BlockIndices &             block_indices)
