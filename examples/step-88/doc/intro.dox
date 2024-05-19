@@ -68,7 +68,7 @@ The prolongation operation (for interpolation from coarse grid to fine
 grid) is given by the evaluation of finite element solutions at support points
 of the fine mesh within a coarse mesh. How this can be accomplished with
 Utilities::MPI::RemotePointEvaluation and VectorTools::point_values() is
-shown in step-87. The restriction operation is naturually given by the
+shown in step-87. The restriction operation is naturally given by the
 transposed of the prolongation operation.
 
 The class MGTwoLevelTransferNonNested implements the prolongation and
@@ -86,12 +86,27 @@ It can be set up just like MGTwoLevelTransfer, which is limited to
 nested meshes. Once the two-level transfer operators between each
 level are set up, MGTransferMF can be filled with them (see step-75).
 
+<h3>The test case</h3>
+
+For demonstration purposes only, we will solve a classical Poisson problem with
+Dirichlet boundary conditions:
+@f{align*}{
+  -\Delta u &= 1 \qquad && \text{in }\, \Omega,
+  \\
+  u &= u_D       \qquad && \text{on }\, \Gamma = \partial \Omega,
+@f}
+on a given domain $/Omega$.
+
 
 <h3>%Mesh sequence</h3>
 
 In this tutorial, we consider two types of mesh sequences:
-- We create, externally with a mesh generation tool, meshes with different
-  element sizes.
+- We generate $\Omega$ out of a CAD model of a <i> piston </i> with the
+external mesh generator software Coreform CUBIT. The required hierarchy is
+generated during a pre-processing step inside the mesh generator by varying
+iteratively the mesh-size for each grid and finally exporting it in a format that
+can be read by the GridIn class. Such mesh files are given in the grid/ folder of
+the tutorial program.
 - We create the meshes by globally refining a coarse mesh. This results in
   a nested mesh and therefore does not require MGTwoLevelTransferNonNested.
   However, this gives a good comparison to MGTwoLevelTransfer in terms of
