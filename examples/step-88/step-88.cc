@@ -13,19 +13,21 @@
  *
  * ---------------------------------------------------------------------
  *
- * Authors: Marco Feder, SISSA, 2023
- *          Peter Munch, University of Augsburg/Uppsala University, 2023
+ * Author: Marco Feder, (SISSA), 2023
+ *         Peter Munch, University of Augsburg, 2023
  */
 
 // @sect3{Include files}
 
-// The first include files have all been treated in previous examples.
-
+// The first include files have all been treated in previous examples. We
+// include headers related to the FiniteElement space we want to work with, to
+// the TrilinosWrappers for the coarse grid solver, MatrixFree tools for
+// operator evaluation and Multigrid infrastructure.
 #include <deal.II/base/conditional_ostream.h>
 #include <deal.II/base/mpi.h>
 #include <deal.II/base/parameter_handler.h>
 
-#include <deal.II/distributed/shared_tria.h>
+#include <deal.II/distributed/fully_distributed_tria.h>
 
 #include <deal.II/dofs/dof_tools.h>
 
@@ -53,14 +55,154 @@
 #include <deal.II/multigrid/mg_tools.h>
 #include <deal.II/multigrid/multigrid.h>
 
-#include <deal.II/numerics/data_out.h>
-#include <deal.II/numerics/vector_tools.h>
-
-#include <fstream>
-
 // The file most relevant for this tutorial is the one that
 // contain the class MGTwoLevelTransferNonNested.
 #include <deal.II/multigrid/mg_transfer_global_coarsening.h>
+
+#include <deal.II/numerics/data_out.h>
+#include <deal.II/numerics/vector_tools.h>
+
+// This is just C+:
+#include <fstream>
+
+
+// As we want to use as coarse grid solver the Trilinos implementation of AMG,
+// the following class is just a wrapper that transforms a given preconditioner
+// into a coarse grid solver.
+namespace dealii
+{
+  template <class VectorType, class PreconditionerType>
+  class MGCoarseGridApplyPreconditioner : public MGCoarseGridBase<VectorType>
+  {
+  public:
+    /**
+     * Default constructor.
+     */
+    MGCoarseGridApplyPreconditioner();
+
+    /**
+     * Constructor. Store a pointer to the preconditioner for later use.
+     */
+    MGCoarseGridApplyPreconditioner(const PreconditionerType &precondition);
+
+    /**
+     * Clear the pointer.
+     */
+    void clear();
+
+    /**
+     * Initialize new data.
+     */
+    void initialize(const PreconditionerType &precondition);
+
+    /**
+     * Implementation of the abstract function.
+     */
+    virtual void operator()(const unsigned int level,
+                            VectorType        &dst,
+                            const VectorType  &src) const override;
+
+  private:
+    /**
+     * Reference to the preconditioner.
+     */
+    SmartPointer<
+      const PreconditionerType,
+      MGCoarseGridApplyPreconditioner<VectorType, PreconditionerType>>
+      preconditioner;
+  };
+
+
+
+  template <class VectorType, class PreconditionerType>
+  MGCoarseGridApplyPreconditioner<VectorType, PreconditionerType>::
+    MGCoarseGridApplyPreconditioner()
+    : preconditioner(0, typeid(*this).name())
+  {}
+
+
+
+  template <class VectorType, class PreconditionerType>
+  MGCoarseGridApplyPreconditioner<VectorType, PreconditionerType>::
+    MGCoarseGridApplyPreconditioner(const PreconditionerType &preconditioner)
+    : preconditioner(&preconditioner, typeid(*this).name())
+  {}
+
+
+
+  template <class VectorType, class PreconditionerType>
+  void
+  MGCoarseGridApplyPreconditioner<VectorType, PreconditionerType>::initialize(
+    const PreconditionerType &preconditioner_)
+  {
+    preconditioner = &preconditioner_;
+  }
+
+
+
+  template <class VectorType, class PreconditionerType>
+  void MGCoarseGridApplyPreconditioner<VectorType, PreconditionerType>::clear()
+  {
+    preconditioner = 0;
+  }
+
+
+  namespace internal
+  {
+    namespace MGCoarseGridApplyPreconditioner
+    {
+      template <class VectorType,
+                class PreconditionerType,
+                typename std::enable_if<
+                  std::is_same<typename VectorType::value_type, double>::value,
+                  VectorType>::type * = nullptr>
+      void solve(const PreconditionerType preconditioner,
+                 VectorType              &dst,
+                 const VectorType        &src)
+      {
+        // to allow the case that the preconditioner was only set up on a
+        // subset of processes
+        if (preconditioner != nullptr)
+          preconditioner->vmult(dst, src);
+      }
+
+      template <class VectorType,
+                class PreconditionerType,
+                typename std::enable_if<
+                  !std::is_same<typename VectorType::value_type, double>::value,
+                  VectorType>::type * = nullptr>
+      void solve(const PreconditionerType preconditioner,
+                 VectorType              &dst,
+                 const VectorType        &src)
+      {
+        LinearAlgebra::distributed::Vector<double> src_;
+        LinearAlgebra::distributed::Vector<double> dst_;
+
+        src_ = src;
+        dst_ = dst;
+
+        // to allow the case that the preconditioner was only set up on a
+        // subset of processes
+        if (preconditioner != nullptr)
+          preconditioner->vmult(dst_, src_);
+
+        dst = dst_;
+      }
+    } // namespace MGCoarseGridApplyPreconditioner
+  }   // namespace internal
+
+
+  template <class VectorType, class PreconditionerType>
+  void
+  MGCoarseGridApplyPreconditioner<VectorType, PreconditionerType>::operator()(
+    const unsigned int /*level*/,
+    VectorType       &dst,
+    const VectorType &src) const
+  {
+    internal::MGCoarseGridApplyPreconditioner::solve(preconditioner, dst, src);
+  }
+} // namespace dealii
+
 
 // We pack everything that is specific for this program into a namespace
 // of its own.
@@ -177,7 +319,6 @@ namespace Step88
   }
 
 
-
   // Get name of the mesh on the given level. The function replaces "%d"
   // in the mesh-name format.
   std::string Parameters::get_mesh_file_name(const unsigned int level) const
@@ -200,7 +341,6 @@ namespace Step88
                       Patterns::Selection(
                         "hyper_cube|hyper_cube_with_simplices|mesh_file"));
     prm.add_parameter("MeshFileFormat", mesh_file_format);
-    prm.add_parameter("Dimension", dim);
     prm.add_parameter("NGlobalRefinements", n_global_refinements);
     prm.add_parameter("Degree", fe_degree);
 
@@ -217,9 +357,10 @@ namespace Step88
 
 
 
-  // @sect3{Laplace operator}
-  // A basic matrix-free implementation of the Laplace operator. For
-  // more details, see step-75.
+  // The following class only implements the evaluation of the Laplace operator.
+  // We refer to step-37 for an extended discussion on how this is done.
+  // Alternatively, one could also use directly the
+  // MatrixFreeOperators::LaplaceOperator class.
   template <int dim, typename number>
   class LaplaceOperator : public Subscriptor
   {
@@ -433,8 +574,15 @@ namespace Step88
     integrator.integrate_scatter(EvaluationFlags::gradients, dst);
   }
 
-  // @sect3{Laplace problem}
-  // We then define the main class that solves the Laplace problem.
+
+
+  // @sect3{The <code>Step88</code> class template}
+
+  // The main class has the same structure as in all other tutorial
+  // programs, with the obvious exception that no matrix needs to be assembled
+  // in this case. Notice that the create_grids() function return a boolean that
+  // is used to switch at runtime to a nested multigrid scheme if levels are
+  // nested.
   template <int dim>
   class LaplaceProblem
   {
@@ -461,23 +609,32 @@ namespace Step88
     const unsigned int max_level;
     ConditionalOStream pcout;
 
+    // Each level is described by an independent Triangulation object that will
+    // have to be accessed during the setup phase of the multigrid method.
+    // Hence, we store them in a standard vector of shared pointers.
     std::vector<std::shared_ptr<Triangulation<dim>>> triangulations;
 
     std::unique_ptr<FiniteElement<dim>> fe;
     std::unique_ptr<Mapping<dim>>       mapping;
     Quadrature<dim>                     quadrature;
 
+    // The following objects are used to store, on every level of the hierarchy,
+    // its associated DoFHandler, AffineConstraints and the underlying
+    // differential operator.
     MGLevelObject<DoFHandler<dim>>              dof_handlers;
     MGLevelObject<AffineConstraints<Number>>    constraints;
     MGLevelObject<LaplaceOperator<dim, Number>> operators;
 
+    // The next vectors store right-hand-side and solution.
     VectorType rhs;
     VectorType solution;
   };
 
 
 
-  // Constructor.
+  // @sect4{Step88::LaplaceProblem}
+  // This constructor is pretty straightforward: all it does it to initialize
+  // some parameters, the number of levels and parallel output stream.
   template <int dim>
   LaplaceProblem<dim>::LaplaceProblem(const Parameters &params)
     : comm(MPI_COMM_WORLD)
@@ -488,106 +645,95 @@ namespace Step88
   {}
 
 
-
-  // This function creates the grid on each level, sets up
-  // the system, solves the resulting problem, and finally outputs
-  // the result.
-  template <int dim>
-  void LaplaceProblem<dim>::run()
-  {
-    const bool nested_mesh = create_grids();
-    AssertThrow(nested_mesh || params.mg_non_nested, ExcNotImplemented());
-
-    setup_system();
-
-    solve();
-
-    output_results();
-  }
-
-
-
-  // This function creates the mesh sequences.
+  // @sect4{Step88::create_grids}
+  // Next, we fill the hierarchy of levels for the multigrid method. Depending
+  // on the selected type of mesh, we loop through the levels and for each one
+  // we create (or import) a different Triangulation that discretizes the same
+  // geoemtry. This member function returns true if the grid is created with the
+  // GridGenerator namespace, false otherwise.
   template <int dim>
   bool LaplaceProblem<dim>::create_grids()
   {
-    pcout << "Create mesh: " << std::endl;
+    // If the geometry is a simple one such a <code>hyper_cube</code>, we can
+    // just use the GridGenerator namespace. Since the present infrastructure
+    // also support simplex meshes, we allow their usage by using
+    // GridGenerator::convert_hypercube_to_simplex_mesh.
+    pcout << "Creating hierarchy of grids: " << std::endl;
 
-    // create hyper-cube mesh sequence
     if (params.mesh_type == "hyper_cube")
       {
         pcout << " - hyper_cube" << std::endl;
+        for (unsigned int l = min_level; l <= max_level; ++l)
+          {
+            auto triangulation =
+              std::make_shared<parallel::distributed::Triangulation<dim>>(comm);
+            GridGenerator::hyper_cube(*triangulation);
+            triangulation->refine_global(l + 1);
+            triangulations.push_back(triangulation);
+          }
+
+        return true;
+      }
+    else if (params.mesh_type == "hyper_cube_with_simplices")
+      {
+        pcout << " - hyper_cube_with_simplices" << std::endl;
+        Triangulation<dim> dummy;
+        GridGenerator::hyper_cube(dummy);
 
         for (unsigned int l = min_level; l <= max_level; ++l)
           {
             auto triangulation =
-              std::make_shared<parallel::shared::Triangulation<dim>>(comm);
-            GridGenerator::hyper_cube(*triangulation);
+              std::make_shared<parallel::fullydistributed::Triangulation<dim>>(
+                comm);
+            GridGenerator::convert_hypercube_to_simplex_mesh(dummy,
+                                                             *triangulation);
             triangulation->refine_global(l);
             triangulations.push_back(triangulation);
           }
 
-        return true; // nested mesh
+        return true;
       }
-    else
-      // create hyper-cube mesh sequence with simplices
-      if (params.mesh_type == "hyper_cube_with_simplices")
-        {
-          pcout << " - hyper_cube_with_simplices" << std::endl;
 
-          Triangulation<dim> dummy;
-          GridGenerator::hyper_cube(dummy);
-
-          for (unsigned int l = min_level; l <= max_level; ++l)
-            {
-              auto triangulation =
-                std::make_shared<parallel::shared::Triangulation<dim>>(comm);
-              GridGenerator::convert_hypercube_to_simplex_mesh(dummy,
-                                                               *triangulation);
-              triangulation->refine_global(l);
-              triangulations.push_back(triangulation);
-            }
-
-          return true; // nested mesh
-        }
-      else
-        // read mesh for each level
-        if (params.mesh_type == "mesh_file")
+    // By default we will import each level separately by reading it from
+    // externally generated grids. Notice that each triangulation here is
+    // a parallel::distributed::Triangulation independently partitioned.
+    else if (params.mesh_type == "mesh_file")
+      {
+        for (unsigned int l = min_level; l <= max_level; ++l)
           {
-            for (unsigned int l = min_level; l <= max_level; ++l)
-              {
-                auto triangulation =
-                  std::make_shared<parallel::distributed::Triangulation<dim>>(
-                    comm);
+            auto triangulation =
+              std::make_shared<parallel::distributed::Triangulation<dim>>(comm);
 
-                GridIn<dim> grid_in(*triangulation);
+            GridIn<dim> grid_in(*triangulation);
 
-                const auto mesh_file_name = params.get_mesh_file_name(l);
-                pcout << " - read " << mesh_file_name << std::endl;
-                grid_in.read(mesh_file_name, GridIn<dim>::abaqus);
+            const auto mesh_file_name = params.get_mesh_file_name(l);
+            pcout << " - read " << mesh_file_name << std::endl;
+            grid_in.read(mesh_file_name, GridIn<dim>::abaqus);
 
-                triangulations.push_back(triangulation);
-              }
-
-            pcout << std::endl;
-
-            return false; // non-nested mesh
+            triangulations.push_back(triangulation);
           }
 
-    AssertThrow(false, ExcNotImplemented());
+        pcout << std::endl;
 
+        return false; // non-nested mesh
+      }
+    else if (params.mesh_type == "gmesh_journal")
+      {
+        AssertThrow(false, ExcNotImplemented());
+        return false;
+      }
+
+    AssertThrow(false, ExcNotImplemented());
     return true;
   }
 
 
-
-  // This function sets up the system including the ones on the
-  // multigrid levels.
+  // @sect4{Step88::setup_system}
+  // After generating all levels, we can define on each one of them a suitable
+  // FiniteElement space and distribute the DoFs.
   template <int dim>
   void LaplaceProblem<dim>::setup_system()
   {
-    pcout << "Set up system:" << std::endl;
-
     // Create finite element, mapping, and quadrature depending on
     // the mesh type. In the case of hyper-cube meshes, FE_Q,
     // MappingQ, and QGauss are used; in the case of simplex meshes,
@@ -601,8 +747,7 @@ namespace Step88
 
     const auto reference_cell = triangulations.back()->get_reference_cells()[0];
 
-    mapping = reference_cell.template get_default_mapping<dim>(1);
-
+    mapping    = reference_cell.template get_default_mapping<dim>(1);
     quadrature = reference_cell.template get_gauss_type_quadrature<dim>(
       params.fe_degree + 1);
 
@@ -613,26 +758,35 @@ namespace Step88
     constraints.resize(min_level, max_level);
     operators.resize(min_level, max_level);
 
+    // Next, we start looping over all levels:
+    pcout << "Define operators on levels: " << std::endl;
     for (unsigned int l = min_level; l <= max_level; ++l)
       {
+        // We distribute the DoFs on each level in the standard way:
         dof_handlers[l].reinit(*triangulations[l]);
         dof_handlers[l].distribute_dofs(*fe);
 
         pcout << " - number of DoFs: " << dof_handlers[l].n_dofs() << std::endl;
 
+        // Constraints are handled in the usual way. Since we chose homogeneous
+        // Dirichlet boundary conditions, we directly call
+        // DoFTools::make_zero_boundary_constraints() in order to enforce the
+        // solution to be zero on the whole boundary.
         constraints[l].reinit(
           DoFTools::extract_locally_relevant_dofs(dof_handlers[l]));
         DoFTools::make_zero_boundary_constraints(dof_handlers[l],
                                                  constraints[l]);
         constraints[l].close();
 
+        // Finally, we conclude the setup with the evaluation of the
+        // LaplaceOperator on the present level.
         operators[l].reinit(*mapping,
                             dof_handlers[l],
                             constraints[l],
                             quadrature);
       }
 
-    // Intialize vectors and set up right-hand-side vector.
+    // Intialize vectors and set up right-hand-side vector on the finest level.
     operators.back().initialize_dof_vector(solution);
     operators.back().initialize_dof_vector(rhs);
 
@@ -648,10 +802,13 @@ namespace Step88
 
 
 
-  // Solve the laplace problem with multigrid.
+  // @sect4{Step88::solve}
+  // We are now ready to initialize the intergrid transfer operators,
+  // smoothers and preconditioner.
   template <int dim>
   void LaplaceProblem<dim>::solve()
   {
+    // We define some useful aliases for better code readability:
     using LevelMatrixType            = LaplaceOperator<dim, Number>;
     using SmootherPreconditionerType = DiagonalMatrix<VectorType>;
     using SmootherType               = PreconditionChebyshev<LevelMatrixType,
@@ -660,16 +817,20 @@ namespace Step88
     using MGTransferType             = MGTransferMF<dim, Number>;
     using PreconditionerType = PreconditionMG<dim, VectorType, MGTransferType>;
 
-    // Initialize multigrid transfer operator. For this purpose, we initialize
-    // two-level transfer operators between each neighboring level. In
-    // the non-nested case, we use MGTwoLevelTransferNonNested and, in the
-    // case of the nested case, we use MGTwoLevelTransfer. Both classes
-    // inherit from the class MGTwoLevelTransferBase.
+    // We store a vector of pointers to two-level transfer operators.
+    // Since we only know at runtime the actual type of transfer (depending on
+    // the nested or non-nested nature of the hierarchy), we use the base
+    // class MGTwoLevelTransferBase. In order to setup the transfer operator
+    // from one level to the next, it is sufficient to call the
+    // MGTwoLevelTransferNonNested::reinit() (or
+    // MGTwoLevelTransfer::reinit_geometric_transfer() in case levels are
+    // nested). The only difference between the two interfaces is that the
+    // latter does not take Mapping arguments.
     MGLevelObject<std::shared_ptr<const MGTwoLevelTransferBase<VectorType>>>
       transfers(min_level, max_level);
 
     for (unsigned int l = min_level; l < max_level; ++l)
-      if (params.mg_non_nested) // non-nested case
+      if (params.mg_non_nested)
         {
           auto transfer =
             std::make_shared<MGTwoLevelTransferNonNested<dim, VectorType>>();
@@ -683,7 +844,7 @@ namespace Step88
 
           transfers[l + 1] = transfer;
         }
-      else // nested case
+      else
         {
           auto transfer =
             std::make_shared<MGTwoLevelTransfer<dim, VectorType>>();
@@ -696,6 +857,10 @@ namespace Step88
           transfers[l + 1] = transfer;
         }
 
+    pcout << "Built transfer operators between levels: " << std::endl;
+
+    // After the setup of transfer operators, we can initialize multigrid
+    // operators, smoothers and related data structures:
     std::vector<std::shared_ptr<const Utilities::MPI::Partitioner>>
       partitioners;
 
@@ -730,6 +895,8 @@ namespace Step88
       mg_smoother;
     mg_smoother.initialize(operators, smoother_data);
 
+    // As coarse-grid solver we use the algebraic multigrid (AMG)
+    // preconditioner based on the Trilinos ML implementation.
     TrilinosWrappers::PreconditionAMG precondition_amg;
     precondition_amg.initialize(operators[min_level].get_system_matrix());
 
@@ -737,12 +904,14 @@ namespace Step88
                                     TrilinosWrappers::PreconditionAMG>
       mg_coarse(precondition_amg);
 
+    // Finally, we can initialize the Multigrid object and use it to
+    // precondition our conjugate-gradient solver. Parameters related to the
+    // CG algorithm are read from the parameter files.
     Multigrid<VectorType> mg(
       mg_matrix, mg_coarse, mg_transfer, mg_smoother, mg_smoother);
 
     PreconditionerType preconditioner(dof_handlers.back(), mg, mg_transfer);
 
-    // Finally, solve the system.
     ReductionControl solver_control(params.solver_max_iterations,
                                     params.solver_abs_tolerance,
                                     params.solver_rel_tolerance);
@@ -750,14 +919,15 @@ namespace Step88
     SolverCG<VectorType>(solver_control)
       .solve(operators.back(), solution, rhs, preconditioner);
 
-    pcout << "Solved in " << solver_control.last_step() << " steps."
+    pcout << "Solved in " << solver_control.last_step() << " iterations."
           << std::endl;
   }
 
 
 
-  // Output results. Here, we output the solution on the
-  // finest mesh and we output the mesh on each level.
+  // @sect4{Step88::output_results}
+  // Here, we output the solution on the finest mesh. This is fairly standard
+  // and done in many tutorial programs, so we will not comment this.
   template <int dim>
   void LaplaceProblem<dim>::output_results()
   {
@@ -767,7 +937,6 @@ namespace Step88
     data_out.build_patches(*mapping);
 
     data_out.write_vtu_in_parallel("solution.vtu", comm);
-
 
     for (unsigned int l = 0; l < triangulations.size(); ++l)
       {
@@ -780,12 +949,25 @@ namespace Step88
       }
   }
 
+
+
+  // The run function simply calls all other methods in the
+  // correct order.
+  template <int dim>
+  void LaplaceProblem<dim>::run()
+  {
+    const bool nested_mesh = create_grids();
+    AssertThrow(nested_mesh || params.mg_non_nested, ExcNotImplemented());
+
+    setup_system();
+    solve();
+    output_results();
+  }
+
 } // namespace Step88
 
-// @sect3{Driver}
-//
-// Finally, the driver of the program reads the parameters
-// and solves the Laplace problem.
+
+
 int main(int argc, char *argv[])
 {
   try
@@ -798,26 +980,10 @@ int main(int argc, char *argv[])
       Parameters prm;
       if (argc > 1)
         prm.parse(std::string(argv[1]));
-      else
-        {
-          prm.print();
-          return 0;
-        }
 
-      if (prm.dim == 2)
-        {
-          LaplaceProblem<2> laplace_problem(prm);
-          laplace_problem.run();
-        }
-      else if (prm.dim == 3)
-        {
-          LaplaceProblem<3> laplace_problem(prm);
-          laplace_problem.run();
-        }
-      else
-        {
-          AssertThrow(false, ExcNotImplemented());
-        }
+      AssertThrow(prm.dim == 3, ExcNotImplemented());
+      LaplaceProblem<3> laplace_problem(prm);
+      laplace_problem.run();
     }
   catch (const std::exception &exc)
     {
