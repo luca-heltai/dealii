@@ -24,7 +24,7 @@
 #
 if(DEAL_II_WITH_CGAL)
   enable_if_supported(_flag "-Wno-misleading-indentation")
-  set_property(SOURCE "grid_generator_cgal.cc" "grid_tools.cc"
+  set_property(SOURCE "grid_generator_cgal.cc" "grid_in_cgal.cc" "grid_tools.cc"
     APPEND PROPERTY COMPILE_OPTIONS "${_flag}"
     )
 endif()
@@ -50,6 +50,7 @@ set(_separate_src
   grid_generator_from_name.cc
   grid_generator_pipe_junction.cc
   grid_in.cc
+  grid_in_cgal.cc
   grid_out.cc
   grid_tools.cc
   grid_tools_cache.cc

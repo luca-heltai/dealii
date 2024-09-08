@@ -21,7 +21,7 @@
 #include <deal.II/base/exceptions.h>
 #include <deal.II/base/point.h>
 #include <deal.II/base/smartpointer.h>
-
+#include <deal.II/cgal/additional_data.h>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -414,6 +414,12 @@ public:
    */
   void
   read_vtk(std::istream &in);
+
+
+  void
+  read_inr(const std::string &                    filename,
+           const CGALWrappers::AdditionalData<3> &data =
+             CGALWrappers::AdditionalData<3>{});
 
   /**
    * Read grid data from a unstructured vtu file, saved by deal.II using
