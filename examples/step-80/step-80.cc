@@ -1842,7 +1842,8 @@ namespace Step80
     // The issue is that solid_current_position.block(0) is distributed
     // according to the solid mesh, but particles are distributed according
     // to the fluid mesh. We need an intermediate vector with locally_relevant
-    // index sets that match the particle distribution.
+    // index sets that match the particle distribution. We follow what was done
+    // in step-70 for this.
     const IndexSet locally_owned_particle_coords =
       solid_particle_handler.locally_owned_particle_ids().tensor_product(
         complete_index_set(spacedim));
