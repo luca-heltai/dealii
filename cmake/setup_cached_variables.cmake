@@ -364,7 +364,7 @@ mark_as_advanced(DEAL_II_WITH_CXX20_MODULE)
 
 option(DEAL_II_DOXYGEN_USE_MATHJAX
   "If set to ON, doxygen documentation is generated using mathjax"
-  OFF
+  ON
   )
 mark_as_advanced(DEAL_II_DOXYGEN_USE_MATHJAX)
 

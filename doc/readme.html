@@ -342,10 +342,10 @@
         images.
     </p>
 
-    <p> Finally, the default for locally installed documentation is to render formulas as images. You can force formulas
-        to be displayed via the MathJax system by adding <code>-DDEAL_II_DOXYGEN_USE_MATHJAX=ON</code> to the CMake call
-        above. These formulas
-        are then rendered natively by the browser. With <code>-DDEAL_II_DOXYGEN_USE_ONLINE_MATHJAX=OFF</code> CMake will
+    <p> Finally, the default for locally installed documentation is to render formulas via the MathJax system
+        so that they are rendered natively by the browser. You can switch back to rendering formulas as image files
+        by adding <code>-DDEAL_II_DOXYGEN_USE_MATHJAX=OFF</code> to the CMake call above.
+        With <code>-DDEAL_II_DOXYGEN_USE_ONLINE_MATHJAX=OFF</code> CMake will
         try to find a local installation of MathJax scripts, otherwise the online version of the scripts will be used in
         the documentation.
     </p>
