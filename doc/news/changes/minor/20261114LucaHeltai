@@ -1,0 +1,6 @@
+New: SparseDirectMUMPS provides separate analyze() and factorize() operations
+for inspecting memory estimates and reusing symbolic analysis for matrices with
+unchanged sparsity and distribution. get_infog() exposes read-only MUMPS global
+information. Numerical zeros are retained in serial matrix sparsity patterns.
+<br>
+(Luca Heltai, 2026/11/14)
