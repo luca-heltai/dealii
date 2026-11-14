@@ -24,7 +24,9 @@
 #include <deal.II/lac/vector.h>
 
 #include <complex>
+#include <string>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 #ifdef DEAL_II_WITH_UMFPACK
@@ -898,7 +900,11 @@ namespace
 
 SparseDirectMUMPS::SparseDirectMUMPS(const AdditionalData &data,
                                      const MPI_Comm       &communicator)
-  : additional_data(data)
+  : analysis_available(false)
+  , factorization_available(false)
+  , n(0)
+  , nnz(0)
+  , additional_data(data)
   , mpi_communicator(communicator)
 {
   // Initialize MUMPS instance:
@@ -969,12 +975,17 @@ SparseDirectMUMPS::initialize_matrix(const Matrix &matrix)
 
   if constexpr (std::is_same_v<Matrix, SparseMatrix<double>>)
     {
+      id.icntl[17] = 0; // centralized matrix
+      id.icntl[19] = 0; // centralized right-hand side
+      id.icntl[20] = 0; // centralized solution
+      locally_owned_rows.clear();
+
       // Serial matrix: hand over matrix to MUMPS as centralized assembled
       // matrix
       if (Utilities::MPI::this_mpi_process(mpi_communicator) == 0)
         {
           // number of nonzero elements in matrix
-          nnz = matrix.n_actually_nonzero_elements();
+          nnz = matrix.n_nonzero_elements();
 
           // representation of the matrix
           a = std::make_unique<double[]>(nnz);
@@ -996,7 +1007,7 @@ SparseDirectMUMPS::initialize_matrix(const Matrix &matrix)
                   for (typename Matrix::const_iterator ptr = matrix.begin(row);
                        ptr != matrix.end(row);
                        ++ptr)
-                    if (std::abs(ptr->value()) > 0.0 && ptr->column() >= row)
+                    if (ptr->column() >= row)
                       {
                         a[n_non_zero_elements]   = ptr->value();
                         irn[n_non_zero_elements] = row + 1;
@@ -1013,13 +1024,12 @@ SparseDirectMUMPS::initialize_matrix(const Matrix &matrix)
                   for (typename Matrix::const_iterator ptr = matrix.begin(row);
                        ptr != matrix.end(row);
                        ++ptr)
-                    if (std::abs(ptr->value()) > 0.0)
-                      {
-                        a[n_non_zero_elements]   = ptr->value();
-                        irn[n_non_zero_elements] = row + 1;
-                        jcn[n_non_zero_elements] = ptr->column() + 1;
-                        ++n_non_zero_elements;
-                      }
+                    {
+                      a[n_non_zero_elements]   = ptr->value();
+                      irn[n_non_zero_elements] = row + 1;
+                      jcn[n_non_zero_elements] = ptr->column() + 1;
+                      ++n_non_zero_elements;
+                    }
                 }
             }
           id.n   = n;
@@ -1426,12 +1436,11 @@ SparseDirectMUMPS::copy_solution(Vector<double> &vector) const
 {
   Assert(n == vector.size(),
          ExcMessage("Matrix size and solution vector length must be equal."));
-  Assert(n == rhs.size(),
-         ExcMessage("Class not initialized with a rhs vector."));
-
   // Copy solution into the given vector
   if (Utilities::MPI::this_mpi_process(mpi_communicator) == 0)
     {
+      Assert(n == rhs.size(),
+             ExcMessage("Class not initialized with a rhs vector."));
       for (size_type i = 0; i < n; ++i)
         vector(i) = rhs[i];
 
@@ -1445,13 +1454,75 @@ template <class Matrix>
 void
 SparseDirectMUMPS::initialize(const Matrix &matrix)
 {
-  // Initialize MUMPS instance:
+  analysis_available = factorization_available = false;
   initialize_matrix(matrix);
 
-  // Start analysis + factorization
+  // Start analysis + factorization.
   id.job = 4;
   dmumps_c(&id);
   check_error();
+  analysis_available = factorization_available = true;
+}
+
+
+
+template <class Matrix>
+void
+SparseDirectMUMPS::analyze(const Matrix &matrix)
+{
+  analysis_available = factorization_available = false;
+  initialize_matrix(matrix);
+  id.job = 1;
+  dmumps_c(&id);
+  check_error();
+  analysis_available = true;
+}
+
+
+
+template <class Matrix>
+void
+SparseDirectMUMPS::factorize(const Matrix &matrix)
+{
+  AssertThrow(analysis_available, ExcNotInitialized());
+  analysis_available = factorization_available = false;
+
+  const auto old_n    = n;
+  const auto old_mode = id.icntl[17];
+  const auto old_rows = locally_owned_rows;
+  const auto old_count =
+    old_mode == 3 ?
+      id.nnz_loc :
+      (Utilities::MPI::this_mpi_process(mpi_communicator) == 0 ? id.nnz : 0);
+  auto old_irn = std::move(irn);
+  auto old_jcn = std::move(jcn);
+
+  initialize_matrix(matrix);
+  const auto new_count =
+    id.icntl[17] == 3 ?
+      id.nnz_loc :
+      (Utilities::MPI::this_mpi_process(mpi_communicator) == 0 ? id.nnz : 0);
+  bool same_pattern = old_n == n && old_mode == id.icntl[17] &&
+                      old_rows == locally_owned_rows && old_count == new_count;
+  if (same_pattern)
+    for (types::mumps_nnz i = 0; i < new_count; ++i)
+      if (old_irn[i] != irn[i] || old_jcn[i] != jcn[i])
+        {
+          same_pattern = false;
+          break;
+        }
+  AssertThrow(Utilities::MPI::min(static_cast<int>(same_pattern),
+                                  mpi_communicator) == 1,
+              ExcMessage("The MUMPS matrix sparsity pattern or distribution "
+                         "has changed. Call analyze() again."));
+
+  old_irn.reset();
+  old_jcn.reset();
+  analysis_available = true;
+  id.job             = 2;
+  dmumps_c(&id);
+  check_error();
+  factorization_available = true;
 }
 
 
@@ -1470,8 +1541,7 @@ template <typename VectorType>
 void
 SparseDirectMUMPS::vmult(VectorType &dst, const VectorType &src) const
 {
-  // Check that the matrix has at least one nonzero element:
-  Assert(nnz != 0, ExcNotInitialized());
+  AssertThrow(factorization_available, ExcNotInitialized());
   Assert(n == dst.size(), ExcMessage("Destination vector has the wrong size."));
   Assert(n == src.size(), ExcMessage("Source vector has the wrong size."));
 
@@ -1621,8 +1691,7 @@ template <typename VectorType>
 void
 SparseDirectMUMPS::Tvmult(VectorType &dst, const VectorType &src) const
 {
-  // The matrix has at least one nonzero element:
-  Assert(nnz != 0, ExcNotInitialized());
+  AssertThrow(factorization_available, ExcNotInitialized());
   Assert(n == dst.size(), ExcMessage("Destination vector has the wrong size."));
   Assert(n == src.size(), ExcMessage("Source vector has the wrong size."));
 
@@ -1638,6 +1707,14 @@ types::mumps_index *
 SparseDirectMUMPS::get_icntl()
 {
   return id.icntl;
+}
+
+
+
+const types::mumps_index *
+SparseDirectMUMPS::get_infog() const
+{
+  return id.infog;
 }
 
 
@@ -1714,8 +1791,10 @@ InstantiateMUMPSMatVec(TrilinosWrappers::MPI::Vector)
     InstantiateMUMPSMatVec(Vector<double>)
       InstantiateMUMPSMatVec(LinearAlgebra::distributed::Vector<double>)
 
-#  define InstantiateMUMPS(MATRIX) \
-    template void SparseDirectMUMPS::initialize(const MATRIX &);
+#  define InstantiateMUMPS(MATRIX)                               \
+    template void SparseDirectMUMPS::initialize(const MATRIX &); \
+    template void SparseDirectMUMPS::analyze(const MATRIX &);    \
+    template void SparseDirectMUMPS::factorize(const MATRIX &);
 
         InstantiateMUMPS(SparseMatrix<double>)
           InstantiateMUMPS(SparseMatrix<float>)

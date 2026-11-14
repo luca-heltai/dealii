@@ -602,6 +602,43 @@ public:
   initialize(const Matrix &matrix);
 
   /**
+   * Perform the symbolic analysis of @p matrix without factorizing it.
+   * This is a collective operation on the communicator passed to the
+   * constructor. The matrix is copied and need not remain alive afterwards.
+   *
+   * The estimates in get_infog() are available after this call. For example,
+   * INFOG(16) estimates the maximum memory per process for an in-core,
+   * full-rank factorization, in megabytes. The memory limit ICNTL(23) can
+   * then be set through get_icntl() before calling factorize(). Consult the
+   * MUMPS documentation for other factorization modes and memory estimates.
+   * Any previous numerical factorization is invalidated by this operation.
+   */
+  template <class Matrix>
+  void
+  analyze(const Matrix &matrix);
+
+  /**
+   * Compute a numerical factorization using the symbolic analysis from the
+   * last successful analyze() or initialize() call. This is a collective
+   * operation on the communicator passed to the constructor.
+   *
+   * The matrix must have the same dimensions, sparsity pattern of the entries
+   * passed to MUMPS, and distribution among MPI processes as the analyzed
+   * matrix. For symmetric factorizations only the upper triangle is used.
+   * Its values may change, including entries that become zero. A changed
+   * pattern or distribution throws an exception on all ranks and requires a
+   * new analysis.
+   * The matrix is copied and need not remain alive after this call.
+   *
+   * Analysis-dependent MUMPS control parameters must remain unchanged since
+   * the analysis. The MUMPS documentation specifies which parameters may be
+   * changed before numerical factorization.
+   */
+  template <class Matrix>
+  void
+  factorize(const Matrix &matrix);
+
+  /**
    * Apply the inverse of the matrix to the input vector <tt>src</tt> and store
    * the solution in the output vector <tt>dst</tt>.
    */
@@ -636,6 +673,19 @@ public:
   types::mumps_index *
   get_icntl();
 
+  /**
+   * Return the read-only INFOG integer array from MUMPS. Its entries use
+   * zero-based C++ indexing and the integer type of the MUMPS installation.
+   * MUMPS documents their meaning using one-based indices. The global
+   * information, including memory estimates after analyze() and memory used
+   * after factorize(), is available on all ranks.
+   *
+   * Ownership remains with this object. The entries may change after each
+   * MUMPS operation; the pointer remains valid for the lifetime of this object.
+   */
+  const types::mumps_index *
+  get_infog() const;
+
 private:
 #ifdef DEAL_II_WITH_MUMPS
   /**
@@ -644,6 +694,16 @@ private:
    */
   void
   check_error() const;
+
+  /**
+   * Whether a successful symbolic analysis is available.
+   */
+  bool analysis_available;
+
+  /**
+   * Whether a successful numerical factorization is available.
+   */
+  bool factorization_available;
 
   /**
    * MUMPS solver state.
