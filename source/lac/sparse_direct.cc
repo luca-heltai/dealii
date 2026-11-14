@@ -13,8 +13,10 @@
 
 #include <deal.II/base/memory_consumption.h>
 #include <deal.II/base/numbers.h>
+#include <deal.II/base/scope_exit.h>
 
 #include <deal.II/lac/block_sparse_matrix.h>
+#include <deal.II/lac/exceptions.h>
 #include <deal.II/lac/la_parallel_vector.h>
 #include <deal.II/lac/sparse_direct.h>
 #include <deal.II/lac/sparse_matrix.h>
@@ -869,6 +871,31 @@ SparseDirectUMFPACK::n() const
 
 #ifdef DEAL_II_WITH_MUMPS
 
+#  ifdef DEAL_II_WITH_PETSC
+namespace
+{
+  // PETSc extraction routines are local. Agree on their outcome before any
+  // rank enters a collective MUMPS job, retaining the local native code.
+  void
+  check_collective_petsc_error(const PetscErrorCode error, const MPI_Comm comm)
+  {
+    const unsigned int origin =
+      Utilities::MPI::min(error != 0 ? Utilities::MPI::this_mpi_process(comm) :
+                                       numbers::invalid_unsigned_int,
+                          comm);
+    if (origin != numbers::invalid_unsigned_int)
+      {
+        const int global_error =
+          Utilities::MPI::broadcast(comm, static_cast<int>(error), origin);
+        AssertThrow(false,
+                    LACExceptions::ExcPETScError(
+                      error != 0 ? static_cast<int>(error) : global_error));
+      }
+  }
+} // namespace
+#  endif
+
+
 SparseDirectMUMPS::SparseDirectMUMPS(const AdditionalData &data,
                                      const MPI_Comm       &communicator)
   : additional_data(data)
@@ -895,6 +922,7 @@ SparseDirectMUMPS::SparseDirectMUMPS(const AdditionalData &data,
 
   id.comm_fortran = (MUMPS_INT)MPI_Comm_c2f(mpi_communicator);
   dmumps_c(&id);
+  check_error();
 
   if (additional_data.output_details == false)
     {
@@ -1015,6 +1043,20 @@ SparseDirectMUMPS::initialize_matrix(const Matrix &matrix)
                   ExcMessage("The matrix communicator must match the MUMPS "
                              "communicator."));
 
+#  ifdef DEAL_II_WITH_PETSC
+      if constexpr (std::is_same_v<Matrix, PETScWrappers::MPI::SparseMatrix>)
+        {
+          // Check local assembly state before querying global matrix data.
+          PetscBool      assembled = PETSC_FALSE;
+          PetscErrorCode error =
+            MatAssembled(const_cast<Matrix &>(matrix).petsc_matrix(),
+                         &assembled);
+          if (error == 0 && !assembled)
+            error = PETSC_ERR_ARG_WRONGSTATE;
+          check_collective_petsc_error(error, mpi_communicator);
+        }
+#  endif
+
       // Distributed matrix case
       id.icntl[17]               = 3; // distributed matrix assembly
       id.nnz                     = matrix.n_nonzero_elements();
@@ -1047,8 +1089,10 @@ SparseDirectMUMPS::initialize_matrix(const Matrix &matrix)
           Mat &petsc_matrix =
             const_cast<PETScWrappers::MPI::SparseMatrix &>(matrix)
               .petsc_matrix();
-          MatInfo info;
-          MatGetInfo(petsc_matrix, MAT_LOCAL, &info);
+          MatInfo              info;
+          const PetscErrorCode error =
+            MatGetInfo(petsc_matrix, MAT_LOCAL, &info);
+          check_collective_petsc_error(error, mpi_communicator);
           local_non_zeros = (size_type)info.nz_used;
 #  endif
         }
@@ -1071,14 +1115,17 @@ SparseDirectMUMPS::initialize_matrix(const Matrix &matrix)
                 const_cast<PETScWrappers::MPI::SparseMatrix &>(matrix)
                   .petsc_matrix();
 
-              PetscInt rstart, rend;
-              MatGetOwnershipRange(petsc_matrix, &rstart, &rend);
-              for (PetscInt i = rstart; i < rend; i++)
+              PetscInt       rstart = 0, rend = 0;
+              PetscErrorCode error =
+                MatGetOwnershipRange(petsc_matrix, &rstart, &rend);
+              for (PetscInt i = rstart; error == 0 && i < rend; i++)
                 {
                   PetscInt           n_cols;
                   const PetscInt    *cols;
                   const PetscScalar *values;
-                  MatGetRow(petsc_matrix, i, &n_cols, &cols, &values);
+                  error = MatGetRow(petsc_matrix, i, &n_cols, &cols, &values);
+                  if (error != 0)
+                    break;
 
                   for (PetscInt j = 0; j < n_cols; j++)
                     {
@@ -1092,7 +1139,10 @@ SparseDirectMUMPS::initialize_matrix(const Matrix &matrix)
                           n_non_zero_local++;
                         }
                     }
-                  MatRestoreRow(petsc_matrix, i, &n_cols, &cols, &values);
+                  error =
+                    MatRestoreRow(petsc_matrix, i, &n_cols, &cols, &values);
+                  if (error != 0)
+                    break;
 
                   // Store the row index for the rhs vector
                   const types::global_cell_index local_index =
@@ -1100,6 +1150,7 @@ SparseDirectMUMPS::initialize_matrix(const Matrix &matrix)
                   irhs_loc[local_index] = i + 1;
                 }
 
+              check_collective_petsc_error(error, mpi_communicator);
               id.a_loc = a.get();
 #  endif
             }
@@ -1209,14 +1260,17 @@ SparseDirectMUMPS::initialize_matrix(const Matrix &matrix)
                 const_cast<PETScWrappers::MPI::SparseMatrix &>(matrix)
                   .petsc_matrix();
 
-              PetscInt rstart, rend;
-              MatGetOwnershipRange(petsc_matrix, &rstart, &rend);
-              for (PetscInt i = rstart; i < rend; i++)
+              PetscInt       rstart = 0, rend = 0;
+              PetscErrorCode error =
+                MatGetOwnershipRange(petsc_matrix, &rstart, &rend);
+              for (PetscInt i = rstart; error == 0 && i < rend; i++)
                 {
                   PetscInt           n_cols;
                   const PetscInt    *cols;
                   const PetscScalar *values;
-                  MatGetRow(petsc_matrix, i, &n_cols, &cols, &values);
+                  error = MatGetRow(petsc_matrix, i, &n_cols, &cols, &values);
+                  if (error != 0)
+                    break;
 
                   for (PetscInt j = 0; j < n_cols; j++)
                     {
@@ -1227,7 +1281,10 @@ SparseDirectMUMPS::initialize_matrix(const Matrix &matrix)
                       // Count local non-zeros
                       n_non_zero_local++;
                     }
-                  MatRestoreRow(petsc_matrix, i, &n_cols, &cols, &values);
+                  error =
+                    MatRestoreRow(petsc_matrix, i, &n_cols, &cols, &values);
+                  if (error != 0)
+                    break;
 
                   // Store the row index for the rhs vector
                   const types::global_cell_index local_index =
@@ -1235,6 +1292,7 @@ SparseDirectMUMPS::initialize_matrix(const Matrix &matrix)
                   irhs_loc[local_index] = i + 1;
                 }
 
+              check_collective_petsc_error(error, mpi_communicator);
               id.a_loc = a.get();
 #  endif
             }
@@ -1393,8 +1451,19 @@ SparseDirectMUMPS::initialize(const Matrix &matrix)
   // Start analysis + factorization
   id.job = 4;
   dmumps_c(&id);
+  check_error();
 }
 
+
+
+void
+SparseDirectMUMPS::check_error() const
+{
+  AssertThrow(id.infog[0] >= 0,
+              ExcMessage("MUMPS failed in job " + std::to_string(id.job) +
+                         " with INFOG(1)=" + std::to_string(id.infog[0]) +
+                         ", INFOG(2)=" + std::to_string(id.infog[1])));
+}
 
 
 template <typename VectorType>
@@ -1417,6 +1486,7 @@ SparseDirectMUMPS::vmult(VectorType &dst, const VectorType &src) const
       // Start solver
       id.job = 3;
       dmumps_c(&id);
+      check_error();
       copy_solution(dst);
     }
   else if constexpr (
@@ -1426,6 +1496,12 @@ SparseDirectMUMPS::vmult(VectorType &dst, const VectorType &src) const
     std::is_same_v<VectorType, PETScWrappers::MPI::Vector> ||
     std::is_same_v<VectorType, LinearAlgebra::distributed::Vector<double>>)
     {
+      if (Utilities::MPI::this_mpi_process(mpi_communicator) == 0)
+        {
+          rhs.resize(id.lrhs_loc);
+          id.rhs = rhs.data();
+        }
+
 #  ifdef DEAL_II_WITH_TRILINOS
       if constexpr (std::is_same_v<VectorType, TrilinosWrappers::MPI::Vector>)
         {
@@ -1444,14 +1520,23 @@ SparseDirectMUMPS::vmult(VectorType &dst, const VectorType &src) const
       else if constexpr (std::is_same_v<VectorType, PETScWrappers::MPI::Vector>)
         {
 #  ifdef DEAL_II_WITH_PETSC
-          PetscScalar *local_array;
-          VecGetArray(
-            const_cast<PETScWrappers::MPI::Vector &>(src).petsc_vector(),
-            &local_array);
-          id.rhs_loc = local_array;
-          VecRestoreArray(
-            const_cast<PETScWrappers::MPI::Vector &>(src).petsc_vector(),
-            &local_array);
+          const Vec petsc_src =
+            const_cast<PETScWrappers::MPI::Vector &>(src).petsc_vector();
+          const PetscScalar   *local_array      = nullptr;
+          bool                 restore_on_error = false;
+          const ScopeExit      release_failed_view([&]() {
+            if (restore_on_error)
+              VecRestoreArrayRead(petsc_src, &local_array);
+          });
+          const PetscErrorCode error = VecGetArrayRead(petsc_src, &local_array);
+          restore_on_error           = (error == 0);
+          check_collective_petsc_error(error, mpi_communicator);
+          // MUMPS reads the distributed RHS and writes the centralized
+          // solution into id.rhs. Its C interface does not express constness.
+          id.rhs_loc = const_cast<PetscScalar *>(local_array);
+          // Keep the view until the MUMPS call below; the guard only releases
+          // views on ranks where acquisition succeeded if a peer failed.
+          restore_on_error = false;
 #  endif
         }
       else
@@ -1459,15 +1544,23 @@ SparseDirectMUMPS::vmult(VectorType &dst, const VectorType &src) const
 
 
 
-      if (Utilities::MPI::this_mpi_process(mpi_communicator) == 0)
-        {
-          rhs.resize(id.lrhs_loc);
-          id.rhs = rhs.data();
-        }
-
       // Start solver
       id.job = 3;
       dmumps_c(&id);
+#  ifdef DEAL_II_WITH_PETSC
+      if constexpr (std::is_same_v<VectorType, PETScWrappers::MPI::Vector>)
+        {
+          const PetscScalar   *local_array = id.rhs_loc;
+          const PetscErrorCode error       = VecRestoreArrayRead(
+            const_cast<PETScWrappers::MPI::Vector &>(src).petsc_vector(),
+            &local_array);
+          // Prefer the MUMPS failure if restoring the input view also failed.
+          check_error();
+          check_collective_petsc_error(error, mpi_communicator);
+        }
+      else
+#  endif
+        check_error();
 
       // Copy solution into the given vector
       // For MUMPS with centralized solution (icntl[20]=0), the solution is only
@@ -1484,7 +1577,9 @@ SparseDirectMUMPS::vmult(VectorType &dst, const VectorType &src) const
         Utilities::MPI::gather(mpi_communicator, local_size, 0);
       const std::vector<types::global_dof_index> displs =
         Utilities::MPI::gather(mpi_communicator,
-                               locally_owned.nth_index_in_set(0),
+                               local_size == 0 ?
+                                 0 :
+                                 locally_owned.nth_index_in_set(0),
                                0);
 
       // create a vector of vectors to send the local parts to each process
@@ -1531,9 +1626,10 @@ SparseDirectMUMPS::Tvmult(VectorType &dst, const VectorType &src) const
   Assert(n == dst.size(), ExcMessage("Destination vector has the wrong size."));
   Assert(n == src.size(), ExcMessage("Source vector has the wrong size."));
 
+  // Reset transpose mode even when the solve reports a fatal MUMPS error.
+  const ScopeExit reset_transpose_mode([this]() { id.icntl[8] = 1; });
   id.icntl[8] = 2; // transpose
   vmult(dst, src);
-  id.icntl[8] = 1; // reset to default
 }
 
 

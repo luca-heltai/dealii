@@ -461,6 +461,10 @@ private:
  * matrix coming in may have either symmetric or nonsymmetric sparsity
  * pattern.
  *
+ * Fatal MUMPS errors during initialization, factorization, or solution throw
+ * an exception containing the native INFOG(1) and INFOG(2) values on all ranks.
+ * A failed factorization or solve does not produce an accepted solution.
+ *
  * @note This class is useable if and only if a working installation of <a
  * href="https://mumps-solver.org">MUMPS</a> exists on your system and was
  * detected during configuration of <code>deal.II</code>.
@@ -634,6 +638,16 @@ public:
 
 private:
 #ifdef DEAL_II_WITH_MUMPS
+  /**
+   * Check the global MUMPS status before using a factorization or solution.
+   * All ranks receive the same INFOG status from MUMPS.
+   */
+  void
+  check_error() const;
+
+  /**
+   * MUMPS solver state.
+   */
   mutable DMUMPS_STRUC_C id;
 
 #endif // DEAL_II_WITH_MUMPS
